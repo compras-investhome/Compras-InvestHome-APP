@@ -290,9 +290,8 @@
 
     <!-- Firebase Config debe cargarse primero -->
     <script>
-        // Leer configuración desde variables de entorno o usar valores por defecto
-        // En Vercel, puedes configurar estas variables en Settings → Environment Variables
-        window.firebaseConfigFromEnv = {
+        // Configuración de Firebase
+        window.firebaseConfig = {
             apiKey: "AIzaSyCiJJs1yGliDeXjNQjFEb4ZbaQEk6WqLjg",
             authDomain: "compras-investhome.firebaseapp.com",
             projectId: "compras-investhome",
@@ -301,7 +300,6 @@
             appId: "1:904947165686:web:aa503961c7768e05227fd7"
         };
     </script>
-    <script src="firebase-config.js"></script>
     <!-- Database y App como módulos ES6 -->
     <script type="module" src="database.js"></script>
     <script type="module" src="app.js"></script>
