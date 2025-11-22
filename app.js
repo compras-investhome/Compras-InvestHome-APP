@@ -11,19 +11,46 @@ let searchResults = [];
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
-    await db.init();
-    await db.initDefaultData();
-    
-    // Verificar si hay sesión activa
-    const sesion = await db.getSesion();
-    if (sesion) {
-        currentUser = sesion.persona;
-        currentObra = sesion.obra;
-        showView('main');
-        loadTiendas();
-        updateCartCount();
-    } else {
-        showView('login');
+    try {
+        await db.init();
+        await db.initDefaultData();
+        
+        // Verificar si hay sesión activa
+        const sesion = await db.getSesion();
+        if (sesion) {
+            currentUser = sesion.persona;
+            currentObra = sesion.obra;
+            showView('main');
+            loadTiendas();
+            updateCartCount();
+        } else {
+            // Intentar cargar desde localStorage como respaldo
+            const savedUser = localStorage.getItem('currentUser');
+            const savedObra = localStorage.getItem('currentObra');
+            if (savedUser && savedObra) {
+                currentUser = savedUser;
+                currentObra = savedObra;
+                showView('main');
+                loadTiendas();
+                updateCartCount();
+            } else {
+                showView('login');
+            }
+        }
+    } catch (error) {
+        console.error('Error al inicializar Firebase:', error);
+        // Intentar cargar desde localStorage
+        const savedUser = localStorage.getItem('currentUser');
+        const savedObra = localStorage.getItem('currentObra');
+        if (savedUser && savedObra) {
+            currentUser = savedUser;
+            currentObra = savedObra;
+            showView('main');
+            loadTiendas();
+            updateCartCount();
+        } else {
+            showView('login');
+        }
     }
 
     setupEventListeners();
@@ -137,17 +164,31 @@ async function handleLogin() {
         return;
     }
 
-    currentUser = persona;
-    currentObra = obra;
-    await db.saveSesion(persona, obra);
-    
-    // Actualizar sidebar
-    document.getElementById('sidebar-usuario').textContent = persona;
-    document.getElementById('sidebar-obra').textContent = obra;
+    try {
+        currentUser = persona;
+        currentObra = obra;
+        
+        // Intentar guardar sesión (puede fallar si Firebase no está configurado)
+        try {
+            await db.saveSesion(persona, obra);
+        } catch (error) {
+            console.warn('No se pudo guardar la sesión en Firebase:', error);
+            // Continuar aunque falle, usando localStorage como respaldo
+            localStorage.setItem('currentUser', persona);
+            localStorage.setItem('currentObra', obra);
+        }
+        
+        // Actualizar sidebar
+        document.getElementById('sidebar-usuario').textContent = persona;
+        document.getElementById('sidebar-obra').textContent = obra;
 
-    showView('main');
-    loadTiendas();
-    updateCartCount();
+        showView('main');
+        loadTiendas();
+        updateCartCount();
+    } catch (error) {
+        console.error('Error en login:', error);
+        alert('Error al iniciar sesión. Por favor, inténtalo de nuevo.');
+    }
 }
 
 // Navegación de Vistas

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Compras InvestHome
 
 Aplicación web para la gestión de compras del departamento de compras de InvestHome.
@@ -306,3 +307,7 @@ Si aparece `firebase-config.js`, NO hagas commit hasta añadirlo al `.gitignore`
 ## Licencia
 
 Uso interno de InvestHome.
+=======
+# compras-investhome
+Aplicación web para la gestión de compras del departamento de compras de InvestHome
+>>>>>>> f6a61815cfe76aeb865dd295ec54b7e11093d113

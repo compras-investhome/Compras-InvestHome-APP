@@ -30,7 +30,18 @@ class Database {
 
         // Verificar que firebaseConfig esté disponible
         if (!window.firebaseConfig) {
-            throw new Error('Firebase no está configurado. Por favor, configura firebase-config.js con tus credenciales.');
+            const errorMsg = 'Firebase no está configurado. Por favor, configura firebase-config.js con tus credenciales.';
+            console.error(errorMsg);
+            // No lanzar error, permitir que la app funcione sin Firebase (modo offline)
+            throw new Error(errorMsg);
+        }
+
+        // Verificar que las credenciales no sean las de ejemplo
+        if (window.firebaseConfig.apiKey === 'TU_API_KEY' || 
+            window.firebaseConfig.projectId === 'TU_PROJECT_ID') {
+            const errorMsg = 'Firebase no está configurado correctamente. Por favor, reemplaza los valores de ejemplo en firebase-config.js';
+            console.error(errorMsg);
+            throw new Error(errorMsg);
         }
 
         // Inicializar Firebase
