@@ -102,9 +102,7 @@
             appId: "1:904947165686:web:aa503961c7768e05227fd7"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
+        let app, db;
         const statusDiv = document.getElementById('status');
         const logDiv = document.getElementById('log');
 
@@ -119,6 +117,18 @@
             statusDiv.textContent = message;
             statusDiv.className = `status ${type}`;
             statusDiv.style.display = 'block';
+        }
+
+        // Inicializar Firebase
+        try {
+            log('Inicializando Firebase...');
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            log('✓ Firebase inicializado correctamente');
+        } catch (error) {
+            log(`❌ Error al inicializar Firebase: ${error.message}`, 'error');
+            showStatus('Error al inicializar Firebase: ' + error.message, 'error');
+            console.error('Error completo:', error);
         }
 
         async function checkStatus() {
@@ -148,7 +158,15 @@
         }
 
         async function initDatabase() {
+            log('=== Botón clickeado ===');
             const btn = document.getElementById('btn-init');
+            
+            if (!db) {
+                log('❌ Error: Firebase no está inicializado', 'error');
+                showStatus('Error: Firebase no está inicializado. Recarga la página.', 'error');
+                return;
+            }
+
             btn.disabled = true;
             log('Iniciando inicialización de base de datos...');
             showStatus('Inicializando...', 'info');
@@ -291,13 +309,39 @@
         }
 
         // Añadir event listeners cuando el DOM esté listo
-        document.getElementById('btn-init').addEventListener('click', initDatabase);
-        document.getElementById('btn-check').addEventListener('click', checkStatus);
+        log('Añadiendo event listeners...');
+        const btnInit = document.getElementById('btn-init');
+        const btnCheck = document.getElementById('btn-check');
+        
+        if (btnInit) {
+            btnInit.addEventListener('click', () => {
+                log('Botón "Inicializar Base de Datos" clickeado');
+                initDatabase();
+            });
+            log('✓ Event listener añadido a btn-init');
+        } else {
+            log('❌ Error: No se encontró el botón btn-init');
+        }
+        
+        if (btnCheck) {
+            btnCheck.addEventListener('click', () => {
+                log('Botón "Verificar Estado" clickeado');
+                checkStatus();
+            });
+            log('✓ Event listener añadido a btn-check');
+        } else {
+            log('❌ Error: No se encontró el botón btn-check');
+        }
 
         // Verificar estado al cargar
         log('Página cargada. Listo para inicializar base de datos.');
         showStatus('Listo. Haz clic en "Inicializar Base de Datos" para comenzar.', 'info');
-        checkStatus();
+        
+        if (db) {
+            checkStatus();
+        } else {
+            log('⚠️ Firebase no está inicializado, no se puede verificar el estado');
+        }
     </script>
 </body>
 </html>
