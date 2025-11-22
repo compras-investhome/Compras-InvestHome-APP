@@ -83,20 +83,6 @@
         <div id="log" class="log"></div>
     </div>
 
-    <script>
-        // Configuración de Firebase (debe coincidir con la de index.html)
-        // IMPORTANTE: Reemplaza estos valores con los mismos que tienes en index.html
-        // Si en index.html tienes las credenciales reales, cópialas aquí también
-        window.firebaseConfigFromEnv = {
-            apiKey: "AIzaSyCiJJs1yGliDeXjNQjFEb4ZbaQEk6WqLjg",
-            authDomain: "compras-investhome.firebaseapp.com",
-            projectId: "compras-investhome",
-            storageBucket: "compras-investhome.firebasestorage.app",
-            messagingSenderId: "904947165686",
-            appId: "1:904947165686:web:aa503961c7768e05227fd7"
-        };
-    </script>
-    <script src="firebase-config.js"></script>
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { 
@@ -106,7 +92,17 @@
             getDocs 
         } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-        const app = initializeApp(window.firebaseConfig);
+        // Configuración de Firebase (debe coincidir con la de index.html)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCiJJs1yGliDeXjNQjFEb4ZbaQEk6WqLjg",
+            authDomain: "compras-investhome.firebaseapp.com",
+            projectId: "compras-investhome",
+            storageBucket: "compras-investhome.firebasestorage.app",
+            messagingSenderId: "904947165686",
+            appId: "1:904947165686:web:aa503961c7768e05227fd7"
+        };
+
+        const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
         const statusDiv = document.getElementById('status');
@@ -155,8 +151,13 @@
             const btn = document.getElementById('btn-init');
             btn.disabled = true;
             log('Iniciando inicialización de base de datos...');
+            showStatus('Inicializando...', 'info');
 
             try {
+                // Verificar que Firebase esté configurado
+                if (!firebaseConfig || firebaseConfig.apiKey === "TU_API_KEY") {
+                    throw new Error('Firebase no está configurado. Por favor, configura las credenciales en init-database.html');
+                }
                 // Verificar si ya hay datos
                 const tiendasSnapshot = await getDocs(collection(db, 'tiendas'));
                 if (tiendasSnapshot.size > 0) {
@@ -289,10 +290,13 @@
             }
         }
 
+        // Añadir event listeners cuando el DOM esté listo
         document.getElementById('btn-init').addEventListener('click', initDatabase);
         document.getElementById('btn-check').addEventListener('click', checkStatus);
 
         // Verificar estado al cargar
+        log('Página cargada. Listo para inicializar base de datos.');
+        showStatus('Listo. Haz clic en "Inicializar Base de Datos" para comenzar.', 'info');
         checkStatus();
     </script>
 </body>
