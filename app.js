@@ -2274,17 +2274,17 @@ function openModalExcel() {
             <strong>Formato del Excel:</strong><br>
             <strong>Columna A:</strong> Categoría (obligatorio) - Se repetirá para cada producto de esa categoría<br>
             <strong>Columna B:</strong> Designación del artículo (obligatorio)<br>
-            <strong>Columna C:</strong> EAN (opcional)<br>
-            <strong>Columna D:</strong> Nombre del artículo (obligatorio)<br>
+            <strong>Columna C:</strong> Referencia (opcional)<br>
+            <strong>Columna D:</strong> Código EAN (opcional)<br>
             <strong>Columna E:</strong> Descripción (opcional)<br>
             <strong>Columna F:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
             <strong>Columna G:</strong> URL de la foto (opcional)<br>
             <br>
             <strong>Ejemplo:</strong><br>
-            | Categoría | Designación | EAN | Nombre | Descripción | Precio | Foto |<br>
-            | Ferretería | TORN-M6-20 | 1234567890123 | Tornillo M6x20 | Tornillo acero | 0.15 | https://... |<br>
+            | Categoría | Designación | Referencia | EAN | Descripción | Precio | Foto |<br>
+            | Ferretería | TORN-M6-20 | REF-001 | 1234567890123 | Tornillo acero | 0.15 | https://... |<br>
             <br>
-            <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada. Las categorías se crearán automáticamente si no existen.
+            <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada. Las categorías se crearán automáticamente si no existen. Solo son obligatorias las columnas A (Categoría) y B (Designación).
         `;
     } else {
         titulo.textContent = 'Importar Productos desde Excel';
@@ -2389,18 +2389,23 @@ async function procesarExcel() {
             let designacion = null;
             let ean = null;
             
+            let referencia = null;
+            
             if (excelImportMode === 'categorias') {
-                // Modo categorías: A = Categoría, B = Designación, C = EAN, D = Nombre, E = Descripción, F = Precio, G = Foto
+                // Modo categorías: A = Categoría, B = Designación, C = Referencia, D = EAN, E = Descripción, F = Precio, G = Foto
                 const categoriaNombre = row[0] ? String(row[0]).trim() : null;
                 designacion = row[1] ? String(row[1]).trim() : null;
-                ean = row[2] ? String(row[2]).trim() : null;
-                nombre = row[3] ? String(row[3]).trim() : null;
+                referencia = row[2] ? String(row[2]).trim() : null;
+                ean = row[3] ? String(row[3]).trim() : null;
                 
-                if (!categoriaNombre || !designacion || !nombre) {
+                if (!categoriaNombre || !designacion) {
                     productosConError++;
-                    errores.push(`Fila ${i + 1}: Falta la categoría, designación o nombre del artículo`);
+                    errores.push(`Fila ${i + 1}: Falta la categoría o designación del artículo (obligatorias)`);
                     continue;
                 }
+                
+                // Usar designación como nombre si no hay nombre específico
+                nombre = designacion;
                 
                 // Buscar o crear categoría
                 if (!categoriasMap[categoriaNombre]) {
@@ -2473,6 +2478,7 @@ async function procesarExcel() {
                     categoriaId: categoriaId,
                     tiendaId: excelImportMode === 'categorias' ? currentTiendaAdmin.id : currentCategoriaAdmin.tiendaId,
                     designacion: designacion || null,
+                    referencia: referencia || null,
                     ean: ean || null,
                     nombre: nombre,
                     descripcion: descripcion || null,
