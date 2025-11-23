@@ -2701,7 +2701,8 @@ window.toggleObraSection = function(obraId) {
 
 async function loadCuentasContabilidad() {
     const tiendas = await db.getAll('tiendas');
-    const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta && t.limiteCuenta);
+    // Incluir tiendas con cuenta (con o sin límite)
+    const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta);
     
     const container = document.getElementById('cuentas-contabilidad-list');
     const emptyState = document.getElementById('cuentas-contabilidad-empty');
@@ -2827,7 +2828,8 @@ async function createCuentaContabilidadCard(tienda, gastado) {
         !p.transferenciaPDF // No mostrar los que ya tienen PDF de pago (ya están pagados)
     );
     
-    const porcentaje = (gastado / tienda.limiteCuenta) * 100;
+    // Calcular porcentaje solo si tiene límite
+    const porcentaje = tienda.limiteCuenta ? (gastado / tienda.limiteCuenta) * 100 : 0;
     const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
     
     // Ordenar pedidos por fecha
@@ -2920,9 +2922,11 @@ async function createCuentaContabilidadCard(tienda, gastado) {
         `;
     }
     
-    card.innerHTML = `
-        <div style="padding: 1.5rem;">
-            <h3 style="margin-bottom: 1rem;">${tienda.nombre}</h3>
+    // HTML diferente según si tiene límite o no
+    let infoHtml = '';
+    if (tienda.limiteCuenta) {
+        // Tienda con límite
+        infoHtml = `
             <div style="margin-bottom: 0.5rem;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                     <span>Límite:</span>
@@ -2947,6 +2951,30 @@ async function createCuentaContabilidadCard(tienda, gastado) {
             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;">
                 ${porcentaje.toFixed(1)}% utilizado
             </p>
+        `;
+    } else {
+        // Tienda sin límite
+        infoHtml = `
+            <div style="margin-bottom: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Gastado:</span>
+                    <strong style="color: var(--text-primary);">
+                        ${gastado.toFixed(2)}€
+                    </strong>
+                </div>
+                <div style="padding: 0.75rem; background: #d1fae5; border-radius: 8px; text-align: center;">
+                    <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin: 0;">
+                        ✓ Cuenta sin límite de gasto
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+    
+    card.innerHTML = `
+        <div style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1rem;">${tienda.nombre}</h3>
+            ${infoHtml}
             ${pedidosHtml}
         </div>
     `;
