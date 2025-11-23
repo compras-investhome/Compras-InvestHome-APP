@@ -1128,7 +1128,8 @@ function switchTabUsuarios(tab) {
     const tipoMap = {
         'tecnicos': 'Técnico',
         'encargados': 'Encargado',
-        'tiendas': 'Tienda'
+        'tiendas': 'Tienda',
+        'contabilidad': 'Contabilidad'
     };
     loadUsuarios(tipoMap[tab]);
 }
