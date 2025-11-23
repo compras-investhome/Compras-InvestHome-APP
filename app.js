@@ -569,6 +569,16 @@ function showView(viewName) {
         view.classList.remove('active');
     });
     document.getElementById(`view-${viewName}`).classList.add('active');
+    
+    // Asegurar que el botón de búsqueda esté visible en la vista principal para técnicos/encargados
+    const searchBtn = document.getElementById('btn-search');
+    if (searchBtn) {
+        if (viewName === 'main' && (currentUserType === 'Técnico' || currentUserType === 'Encargado')) {
+            searchBtn.style.display = 'flex';
+        } else if (viewName === 'main') {
+            searchBtn.style.display = 'flex';
+        }
+    }
 }
 
 // Cargar Tiendas
@@ -1077,6 +1087,13 @@ function createPedidoCard(pedido, tienda) {
         fecha = 'Fecha no disponible';
     }
     
+    // Calcular precio total del pedido
+    const precioTotalPedido = pedido.items.reduce((total, item) => {
+        const precioItem = item.precio || 0;
+        const cantidad = item.cantidad || 0;
+        return total + (precioItem * cantidad);
+    }, 0);
+    
     card.innerHTML = `
         <div class="pedido-header">
             <div>
@@ -1086,17 +1103,35 @@ function createPedidoCard(pedido, tienda) {
             <span class="pedido-estado ${estadoClass}">${pedido.estado}</span>
         </div>
         <div class="pedido-items">
-            ${pedido.items.map((item, index) => `
-                <div class="pedido-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-color); border-radius: 6px; margin-bottom: 0.5rem;">
+            ${pedido.items.map((item, index) => {
+                const foto = item.foto ? `<img src="${item.foto}" alt="${item.nombre}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; margin-right: 0.75rem;" onerror="this.style.display='none'">` : '';
+                const designacion = item.designacion ? `<strong>${item.designacion}</strong>` : '';
+                const precioUnitario = item.precio || 0;
+                const cantidad = item.cantidad || 0;
+                const precioTotalLinea = precioUnitario * cantidad;
+                
+                return `
+                <div class="pedido-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem;">
+                    ${foto}
                     <div style="flex: 1;">
-                        <span class="pedido-item-nombre">${item.nombre}${item.descripcion ? ` (${item.descripcion})` : ''}</span>
-                        <span class="pedido-item-cantidad">x${item.cantidad}</span>
+                        ${designacion ? `<div style="font-weight: 600; margin-bottom: 0.25rem;">${designacion}</div>` : ''}
+                        <div style="font-size: 0.875rem; color: var(--text-primary);">${item.nombre}</div>
+                        ${item.descripcion ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${item.descripcion}</div>` : ''}
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);">Cantidad: <strong>x${cantidad}</strong></span>
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);">Precio unitario: <strong>${precioUnitario.toFixed(2)} €</strong></span>
+                            ${cantidad > 1 ? `<span style="font-size: 0.875rem; color: var(--primary-color); font-weight: 600;">Total línea: ${precioTotalLinea.toFixed(2)} €</span>` : ''}
+                        </div>
                     </div>
                     <button class="btn-solicitar-anulacion-item" onclick="solicitarAnulacionItem('${pedido.id}', ${index})" title="Solicitar anulación de este artículo">
                         🗑️
                     </button>
                 </div>
-            `).join('')}
+            `;
+            }).join('')}
+        </div>
+        <div style="padding: 1rem; background: var(--primary-color-light); border-radius: 8px; margin-top: 1rem; text-align: right;">
+            <strong style="font-size: 1.125rem; color: var(--primary-color);">Total del pedido: ${precioTotalPedido.toFixed(2)} €</strong>
         </div>
         <div class="pedido-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
             <button class="btn btn-secondary" onclick="solicitarAnulacionPedido('${pedido.id}')" style="flex: 1;">
@@ -1591,6 +1626,9 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
                 const designacion = item.designacion ? `<strong>${item.designacion}</strong>` : '';
                 const referencia = item.referencia ? `<span style="color: var(--text-secondary); font-size: 0.875rem;">Ref: ${item.referencia}</span>` : '';
                 const ean = item.ean ? `<span style="color: var(--text-secondary); font-size: 0.875rem;">EAN: ${item.ean}</span>` : '';
+                const precioUnitario = item.precio || 0;
+                const cantidad = item.cantidad || 0;
+                const precioTotalLinea = precioUnitario * cantidad;
                 
                 return `
                 <div class="pedido-item ${!isCerrado ? 'draggable-item' : ''}" 
@@ -1601,19 +1639,35 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
                      style="${!isCerrado ? 'cursor: move;' : ''} display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem;">
                     ${foto}
                     <div style="flex: 1;">
-                        ${designacion ? `<div>${designacion}</div>` : ''}
+                        ${designacion ? `<div style="font-weight: 600; margin-bottom: 0.25rem;">${designacion}</div>` : ''}
                         <div style="font-size: 0.875rem; color: var(--text-primary);">${item.nombre}</div>
                         ${item.descripcion ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${item.descripcion}</div>` : ''}
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap;">
                             ${referencia}
                             ${ean}
                         </div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);">Cantidad: <strong>x${cantidad}</strong></span>
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);">Precio unitario: <strong>${precioUnitario.toFixed(2)} €</strong></span>
+                            ${cantidad > 1 ? `<span style="font-size: 0.875rem; color: var(--primary-color); font-weight: 600;">Total línea: ${precioTotalLinea.toFixed(2)} €</span>` : ''}
+                        </div>
                     </div>
-                    <span class="pedido-item-cantidad" style="font-weight: 600; color: var(--primary-color);">x${item.cantidad}</span>
                 </div>
             `;
             }).join('')}
         </div>
+        ${(() => {
+            const precioTotalPedido = pedido.items.reduce((total, item) => {
+                const precioItem = item.precio || 0;
+                const cantidad = item.cantidad || 0;
+                return total + (precioItem * cantidad);
+            }, 0);
+            return `
+            <div style="padding: 1rem; background: var(--primary-color-light); border-radius: 8px; margin-top: 1rem; text-align: right;">
+                <strong style="font-size: 1.125rem; color: var(--primary-color);">Total del pedido: ${precioTotalPedido.toFixed(2)} €</strong>
+            </div>
+            `;
+        })()}
         ${pedido.estado === 'Entregado' && !pedido.albaran && !isCerrado ? `
             <div class="file-upload">
                 <label for="albaran-${pedido.id}" class="file-upload-label">

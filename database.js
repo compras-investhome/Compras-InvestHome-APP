@@ -283,7 +283,10 @@ class Database {
         const lowerQuery = queryText.toLowerCase();
         return allProductos.filter(producto => 
             producto.nombre?.toLowerCase().includes(lowerQuery) ||
-            producto.descripcion?.toLowerCase().includes(lowerQuery)
+            producto.descripcion?.toLowerCase().includes(lowerQuery) ||
+            producto.designacion?.toLowerCase().includes(lowerQuery) ||
+            producto.ean?.toLowerCase().includes(lowerQuery) ||
+            producto.referencia?.toLowerCase().includes(lowerQuery)
         );
     }
 
