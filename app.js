@@ -2151,17 +2151,17 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
             </div>
             `;
         })()}
-        ${pedido.estado === 'Entregado' && !pedido.albaran && !isCerrado ? `
-            <div class="file-upload">
-                <label for="albaran-${pedido.id}" class="file-upload-label">
+        ${!isCerrado ? `
+            <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                <label for="albaran-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
                     📎 Adjuntar Albarán/Factura
                 </label>
-                <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran('${pedido.id}', this.files[0])">
+                <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran('${pedido.id}', this.files[0])" style="width: 100%;">
             </div>
         ` : ''}
         ${pedido.albaran ? `
-            <div class="pedido-albaran">
-                <a href="${pedido.albaran}" target="_blank" download>
+            <div class="pedido-albaran" style="margin-top: 1rem;">
+                <a href="${pedido.albaran}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
                     📄 Ver Albarán/Factura
                 </a>
             </div>
@@ -2710,6 +2710,14 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
             <div style="margin-top: 1rem;">
                 <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none;">
                     📄 Ver PDF de Transferencia
+                </a>
+            </div>
+        ` : ''}
+        ${pedido.albaran ? `
+            <div style="margin-top: 1rem;">
+                <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Albarán/Factura:</p>
+                <a href="${pedido.albaran}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                    📄 Ver/Descargar Albarán/Factura
                 </a>
             </div>
         ` : ''}
