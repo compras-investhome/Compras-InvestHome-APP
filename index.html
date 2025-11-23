@@ -289,7 +289,8 @@
         </header>
 
         <div class="tabs">
-            <button class="tab-btn active" data-tab="pedidos-contabilidad">Pedidos</button>
+            <button class="tab-btn active" data-tab="pedidos-contabilidad">Pedidos Pendientes</button>
+            <button class="tab-btn" data-tab="pedidos-pagados-contabilidad">Pedidos Pagados</button>
             <button class="tab-btn" data-tab="cuentas-contabilidad">Cuentas</button>
         </div>
 
@@ -300,6 +301,14 @@
                 </div>
                 <div id="pedidos-contabilidad-empty" class="empty-state" style="display: none;">
                     <p>No hay pedidos pendientes</p>
+                </div>
+            </div>
+            <div id="pedidos-pagados-contabilidad" class="tab-content">
+                <div id="pedidos-pagados-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos pagados se cargarán dinámicamente -->
+                </div>
+                <div id="pedidos-pagados-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos pagados</p>
                 </div>
             </div>
             <div id="cuentas-contabilidad" class="tab-content">

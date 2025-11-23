@@ -399,7 +399,7 @@ function setupEventListeners() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const tab = e.currentTarget.dataset.tab;
-            if (tab === 'pedidos-contabilidad' || tab === 'cuentas-contabilidad') {
+            if (tab === 'pedidos-contabilidad' || tab === 'pedidos-pagados-contabilidad' || tab === 'cuentas-contabilidad') {
                 switchTabContabilidad(tab);
             } else {
                 switchTab(tab);
@@ -1085,12 +1085,9 @@ async function finalizarPedido() {
         if (!tienda.tieneCuenta) {
             // Sin cuenta: Pendiente de pago por defecto
             estadoPago = 'Pendiente de pago';
-        } else if (!tienda.limiteCuenta) {
-            // Sin límite: Pago A cuenta automático
-            estadoPago = 'Pago A cuenta';
         } else {
-            // Con límite: Pendiente de pago por defecto (la tienda decidirá)
-            estadoPago = 'Pendiente de pago';
+            // Con cuenta (con o sin límite): Sin Asignar por defecto
+            estadoPago = 'Sin Asignar';
         }
         
         const pedido = {
@@ -2031,7 +2028,7 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
     
     // Generar HTML para estado de pago
     let estadoPagoHtml = '';
-    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    const estadoPago = pedido.estadoPago || 'Sin Asignar';
     
     if (!tienda || !tienda.tieneCuenta) {
         // Sin cuenta: desplegable con Pendiente de pago y Pagado
@@ -2044,25 +2041,32 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
                 </select>
             </div>
         `;
-    } else if (!tienda.limiteCuenta) {
-        // Sin límite: etiqueta azul "Pago A cuenta"
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Pago A cuenta</span>
-            </div>
-        `;
     } else {
-        // Con límite: desplegable con Pendiente de pago, Pago A cuenta, Pagado
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Estado de Pago:</label>
-                <select class="estado-pago-select" onchange="updateEstadoPago('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
-                    <option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>
-                    <option value="Pagado" ${estadoPago === 'Pagado' ? 'selected' : ''}>Pagado</option>
-                </select>
-            </div>
-        `;
+        // Con cuenta (con o sin límite): desplegable con Sin Asignar, Pendiente de pago, Pago A cuenta
+        // Si está pagado, mostrar etiqueta verde y PDF
+        if (estadoPago === 'Pagado') {
+            estadoPagoHtml = `
+                <div style="margin-top: 0.5rem;">
+                    <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
+                    ${pedido.transferenciaPDF ? `
+                        <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                            📄 Ver PDF de Transferencia
+                        </a>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            estadoPagoHtml = `
+                <div style="margin-top: 0.5rem;">
+                    <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Estado de Pago:</label>
+                    <select class="estado-pago-select" onchange="updateEstadoPago('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                        <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
+                        <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
+                        <option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>
+                    </select>
+                </div>
+            `;
+        }
     }
     
     card.innerHTML = `
@@ -2489,6 +2493,9 @@ function switchTabContabilidad(tab) {
     if (tab === 'pedidos-contabilidad') {
         document.getElementById('pedidos-contabilidad').classList.add('active');
         loadPedidosContabilidad();
+    } else if (tab === 'pedidos-pagados-contabilidad') {
+        document.getElementById('pedidos-pagados-contabilidad').classList.add('active');
+        loadPedidosPagadosContabilidad();
     } else if (tab === 'cuentas-contabilidad') {
         document.getElementById('cuentas-contabilidad').classList.add('active');
         loadCuentasContabilidad();
@@ -2527,6 +2534,92 @@ async function loadPedidosContabilidad() {
     }
 }
 
+async function loadPedidosPagadosContabilidad() {
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosPagados = todosPedidos.filter(p => 
+        p.estadoPago === 'Pagado' && p.transferenciaPDF
+    );
+    
+    const container = document.getElementById('pedidos-pagados-contabilidad-list');
+    const emptyState = document.getElementById('pedidos-pagados-contabilidad-empty');
+    
+    if (pedidosPagados.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    // Agrupar por obra
+    const pedidosPorObra = {};
+    for (const pedido of pedidosPagados) {
+        const obraId = pedido.obraId || 'sin-obra';
+        const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Sin obra';
+        
+        if (!pedidosPorObra[obraId]) {
+            pedidosPorObra[obraId] = {
+                nombre: obraNombre,
+                pedidos: []
+            };
+        }
+        pedidosPorObra[obraId].pedidos.push(pedido);
+    }
+    
+    // Ordenar pedidos por fecha dentro de cada obra
+    for (const obraId in pedidosPorObra) {
+        pedidosPorObra[obraId].pedidos.sort((a, b) => {
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+            return fechaB - fechaA;
+        });
+    }
+    
+    // Crear secciones por obra
+    for (const obraId in pedidosPorObra) {
+        const obra = pedidosPorObra[obraId];
+        
+        const obraSection = document.createElement('div');
+        obraSection.className = 'obra-section';
+        obraSection.innerHTML = `
+            <div class="obra-header" style="padding: 1rem; background: var(--primary-color-light); border-radius: 8px; margin-bottom: 1rem; cursor: pointer;" onclick="toggleObraSection('${obraId}')">
+                <h3 style="margin: 0; display: flex; align-items: center; justify-content: space-between;">
+                    <span>${obra.nombre}</span>
+                    <span class="toggle-icon" id="toggle-${obraId}">▼</span>
+                </h3>
+                <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: var(--text-secondary);">
+                    ${obra.pedidos.length} pedido${obra.pedidos.length !== 1 ? 's' : ''} pagado${obra.pedidos.length !== 1 ? 's' : ''}
+                </p>
+            </div>
+            <div class="obra-content" id="obra-content-${obraId}" style="display: block;">
+        `;
+        
+        const obraContent = obraSection.querySelector(`#obra-content-${obraId}`);
+        
+        for (const pedido of obra.pedidos) {
+            const card = await createPedidoContabilidadCard(pedido, true);
+            obraContent.appendChild(card);
+        }
+        
+        obraSection.appendChild(obraContent);
+        container.appendChild(obraSection);
+    }
+}
+
+window.toggleObraSection = function(obraId) {
+    const content = document.getElementById(`obra-content-${obraId}`);
+    const toggle = document.getElementById(`toggle-${obraId}`);
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        toggle.textContent = '▶';
+    }
+}
+
 async function loadCuentasContabilidad() {
     const tiendas = await db.getAll('tiendas');
     const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta && t.limiteCuenta);
@@ -2550,7 +2643,7 @@ async function loadCuentasContabilidad() {
     }
 }
 
-async function createPedidoContabilidadCard(pedido) {
+async function createPedidoContabilidadCard(pedido, isPagado = false) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card';
     
@@ -2605,7 +2698,7 @@ async function createPedidoContabilidadCard(pedido) {
                 </p>
             </div>
         </div>
-        ${estadoPago === 'Pendiente de pago' ? `
+        ${!isPagado && estadoPago === 'Pendiente de pago' ? `
             <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
                 <label for="transferencia-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
                     📎 Adjuntar PDF de Transferencia
@@ -2613,7 +2706,7 @@ async function createPedidoContabilidadCard(pedido) {
                 <input type="file" id="transferencia-${pedido.id}" accept=".pdf" onchange="uploadTransferencia('${pedido.id}', this.files[0])" style="width: 100%;">
             </div>
         ` : ''}
-        ${pedido.transferenciaPDF ? `
+        ${isPagado && pedido.transferenciaPDF ? `
             <div style="margin-top: 1rem;">
                 <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none;">
                     📄 Ver PDF de Transferencia
@@ -2689,6 +2782,11 @@ window.uploadTransferencia = async function(pedidoId, file) {
         
         await showAlert('PDF de transferencia adjuntado y pedido marcado como pagado', 'Éxito');
         loadPedidosContabilidad();
+        // Si estamos en la pestaña de pagados, recargarla también
+        const tabActivo = document.querySelector('.tab-btn.active[data-tab]');
+        if (tabActivo && tabActivo.dataset.tab === 'pedidos-pagados-contabilidad') {
+            loadPedidosPagadosContabilidad();
+        }
     } catch (error) {
         console.error('Error al subir transferencia:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
