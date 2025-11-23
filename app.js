@@ -1135,9 +1135,14 @@ function createPedidoCard(pedido, tienda) {
                             ${cantidad > 1 ? `<span style="font-size: 0.875rem; color: var(--primary-color); font-weight: 600;">Total línea: ${precioTotalLinea.toFixed(2)} €</span>` : ''}
                         </div>
                     </div>
-                    <button class="btn-solicitar-anulacion-item" onclick="solicitarAnulacionItem('${pedido.id}', ${index})" title="Solicitar anulación de este artículo">
-                        🗑️
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-solicitar-anulacion-item" onclick="solicitarModificacionCantidad('${pedido.id}', ${index}, ${cantidad})" title="Solicitar modificación de cantidad">
+                            ✏️
+                        </button>
+                        <button class="btn-solicitar-anulacion-item" onclick="solicitarAnulacionItem('${pedido.id}', ${index})" title="Solicitar anulación de este artículo">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
             `;
             }).join('')}
@@ -1173,6 +1178,54 @@ window.toggleObraPedidos = function(obraId) {
     } else {
         content.style.display = 'none';
         toggle.textContent = '▼';
+    }
+};
+
+// Solicitudes de Modificación de Cantidad
+window.solicitarModificacionCantidad = async function(pedidoId, itemIndex, cantidadActual) {
+    const nuevaCantidadStr = prompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad que desea solicitar:`, cantidadActual);
+    
+    if (nuevaCantidadStr === null) return; // Usuario canceló
+    
+    const nuevaCantidad = parseInt(nuevaCantidadStr);
+    
+    if (isNaN(nuevaCantidad) || nuevaCantidad < 0) {
+        alert('Por favor, ingrese una cantidad válida');
+        return;
+    }
+    
+    if (nuevaCantidad === cantidadActual) {
+        alert('La cantidad solicitada es igual a la actual');
+        return;
+    }
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            alert('Error: No se pudo encontrar el artículo');
+            return;
+        }
+        
+        const item = pedido.items[itemIndex];
+        const solicitud = {
+            pedidoId: pedidoId,
+            tiendaId: pedido.tiendaId,
+            userId: pedido.userId,
+            tipo: 'modificacion',
+            itemIndex: itemIndex,
+            item: item,
+            cantidadActual: cantidadActual,
+            cantidadSolicitada: nuevaCantidad,
+            estado: 'Pendiente',
+            fecha: new Date()
+        };
+        
+        await db.add('solicitudesModificacion', solicitud);
+        alert('Solicitud de modificación de cantidad enviada a la tienda');
+        loadMisPedidos();
+    } catch (error) {
+        console.error('Error al solicitar modificación:', error);
+        alert('Error al solicitar modificación: ' + error.message);
     }
 };
 
@@ -1435,11 +1488,19 @@ async function loadSolicitudesAnulacion() {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const solicitudes = await db.getSolicitudesAnulacionByTienda(tiendaId);
+    const solicitudesAnulacion = await db.getSolicitudesAnulacionByTienda(tiendaId);
+    const solicitudesModificacion = await db.getSolicitudesModificacionByTienda(tiendaId);
+    
+    // Combinar ambas solicitudes
+    const todasSolicitudes = [
+        ...solicitudesAnulacion.map(s => ({ ...s, tipoSolicitud: 'anulacion' })),
+        ...solicitudesModificacion.map(s => ({ ...s, tipoSolicitud: 'modificacion' }))
+    ];
+    
     const container = document.getElementById('solicitudes-list');
     const emptyState = document.getElementById('solicitudes-empty');
     
-    if (solicitudes.length === 0) {
+    if (todasSolicitudes.length === 0) {
         container.innerHTML = '';
         emptyState.style.display = 'block';
         return;
@@ -1449,20 +1510,87 @@ async function loadSolicitudesAnulacion() {
     container.innerHTML = '';
     
     // Ordenar por fecha (más recientes primero)
-    solicitudes.sort((a, b) => {
+    todasSolicitudes.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    for (const solicitud of solicitudes) {
+    for (const solicitud of todasSolicitudes) {
         const pedido = await db.get('pedidos', solicitud.pedidoId);
         if (!pedido) continue;
         
         const usuario = await db.get('usuarios', solicitud.userId);
-        const card = createSolicitudCard(solicitud, pedido, usuario);
+        const card = solicitud.tipoSolicitud === 'modificacion' 
+            ? createSolicitudModificacionCard(solicitud, pedido, usuario)
+            : createSolicitudCard(solicitud, pedido, usuario);
         container.appendChild(card);
     }
+}
+
+function createSolicitudModificacionCard(solicitud, pedido, usuario) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card';
+    
+    let fecha;
+    let fechaObj;
+    if (solicitud.fecha && solicitud.fecha.toDate) {
+        fechaObj = solicitud.fecha.toDate();
+    } else if (solicitud.fecha) {
+        fechaObj = new Date(solicitud.fecha);
+    } else if (solicitud.createdAt && solicitud.createdAt.toDate) {
+        fechaObj = solicitud.createdAt.toDate();
+    } else if (solicitud.createdAt) {
+        fechaObj = new Date(solicitud.createdAt);
+    } else {
+        fechaObj = new Date();
+    }
+    
+    const dia = fechaObj.getDate().toString().padStart(2, '0');
+    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+    const año = fechaObj.getFullYear();
+    fecha = `${dia}/${mes}/${año}`;
+    
+    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    
+    const telefonoUsuario = usuario?.telefono || pedido.obraTelefono || 'No disponible';
+    const usuarioNombre = usuario ? usuario.username : pedido.persona;
+    
+    card.innerHTML = `
+        <div class="pedido-gestion-header">
+            <div class="pedido-gestion-info">
+                <h4>Solicitud de Modificación de Cantidad</h4>
+                <p><strong>Usuario:</strong> ${usuarioNombre}${telefonoUsuario !== 'No disponible' ? ` | Tel: ${telefonoUsuario}` : ''}</p>
+                <p><strong>Obra:</strong> ${obraNombre}</p>
+                <p><strong>Pedido:</strong> #${pedido.id}</p>
+                <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
+            </div>
+            <span class="pedido-estado estado-pendiente">Pendiente</span>
+        </div>
+        <div class="pedido-items">
+            <div class="pedido-item" style="padding: 0.75rem; background: var(--bg-color); border-radius: 8px;">
+                <p><strong>Solicitud:</strong> Modificar cantidad de artículo</p>
+                <div style="margin-top: 0.5rem;">
+                    <strong>${solicitud.item.nombre}</strong>
+                    ${solicitud.item.descripcion ? `<p style="font-size: 0.875rem; color: var(--text-secondary);">${solicitud.item.descripcion}</p>` : ''}
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        Cantidad actual: <strong>x${solicitud.cantidadActual}</strong><br>
+                        Cantidad solicitada: <strong>x${solicitud.cantidadSolicitada}</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="pedido-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button class="btn btn-danger" onclick="rechazarSolicitudModificacion('${solicitud.id}')" style="flex: 1;">
+                Rechazar
+            </button>
+            <button class="btn btn-primary" onclick="aceptarSolicitudModificacion('${solicitud.id}')" style="flex: 1;">
+                Aceptar
+            </button>
+        </div>
+    `;
+    
+    return card;
 }
 
 function createSolicitudCard(solicitud, pedido, usuario) {
@@ -1490,12 +1618,14 @@ function createSolicitudCard(solicitud, pedido, usuario) {
     fecha = `${dia}/${mes}/${año}`;
     
     const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const telefonoUsuario = usuario?.telefono || pedido.obraTelefono || 'No disponible';
+    const usuarioNombre = usuario ? usuario.username : pedido.persona;
     
     card.innerHTML = `
         <div class="pedido-gestion-header">
             <div class="pedido-gestion-info">
                 <h4>Solicitud de Anulación</h4>
-                <p><strong>Usuario:</strong> ${usuario ? usuario.username : pedido.persona}</p>
+                <p><strong>Usuario:</strong> ${usuarioNombre}${telefonoUsuario !== 'No disponible' ? ` | Tel: ${telefonoUsuario}` : ''}</p>
                 <p><strong>Obra:</strong> ${obraNombre}</p>
                 <p><strong>Pedido:</strong> #${pedido.id}</p>
                 <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
@@ -1597,6 +1727,72 @@ window.rechazarSolicitudAnulacion = async function(solicitudId) {
     }
 };
 
+window.aceptarSolicitudModificacion = async function(solicitudId) {
+    if (!confirm('¿Está seguro de aceptar esta solicitud de modificación de cantidad?')) return;
+    
+    try {
+        const solicitud = await db.get('solicitudesModificacion', solicitudId);
+        if (!solicitud) {
+            alert('Error: No se pudo encontrar la solicitud');
+            return;
+        }
+        
+        const pedido = await db.get('pedidos', solicitud.pedidoId);
+        if (!pedido || !pedido.items || solicitud.itemIndex >= pedido.items.length) {
+            alert('Error: No se pudo encontrar el pedido o el artículo');
+            return;
+        }
+        
+        // Actualizar la cantidad del artículo
+        pedido.items[solicitud.itemIndex].cantidad = solicitud.cantidadSolicitada;
+        
+        // Si la cantidad es 0, eliminar el artículo
+        if (solicitud.cantidadSolicitada === 0) {
+            pedido.items.splice(solicitud.itemIndex, 1);
+            if (pedido.items.length === 0) {
+                await db.delete('pedidos', solicitud.pedidoId);
+            } else {
+                await db.update('pedidos', pedido);
+            }
+        } else {
+            await db.update('pedidos', pedido);
+        }
+        
+        // Marcar solicitud como aceptada
+        solicitud.estado = 'Aceptada';
+        await db.update('solicitudesModificacion', solicitud);
+        
+        alert('Solicitud aceptada. Cantidad actualizada.');
+        loadSolicitudesAnulacion();
+        loadPedidosEnCurso();
+    } catch (error) {
+        console.error('Error al aceptar solicitud:', error);
+        alert('Error al aceptar solicitud: ' + error.message);
+    }
+};
+
+window.rechazarSolicitudModificacion = async function(solicitudId) {
+    if (!confirm('¿Está seguro de rechazar esta solicitud de modificación?')) return;
+    
+    try {
+        const solicitud = await db.get('solicitudesModificacion', solicitudId);
+        if (!solicitud) {
+            alert('Error: No se pudo encontrar la solicitud');
+            return;
+        }
+        
+        // Marcar solicitud como rechazada
+        solicitud.estado = 'Rechazada';
+        await db.update('solicitudesModificacion', solicitud);
+        
+        alert('Solicitud rechazada');
+        loadSolicitudesAnulacion();
+    } catch (error) {
+        console.error('Error al rechazar solicitud:', error);
+        alert('Error al rechazar solicitud: ' + error.message);
+    }
+};
+
 function createPedidoGestionCard(pedido, isCerrado = false) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card';
@@ -1688,6 +1884,9 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
                     </div>
                     ${!isCerrado ? `
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button class="btn-icon-small" onclick="duplicarLineaPedido('${pedido.id}', ${index})" title="Duplicar línea">
+                                📋
+                            </button>
                             <button class="btn-icon-small" onclick="editarCantidadItem('${pedido.id}', ${index}, ${cantidad})" title="Editar cantidad">
                                 ✏️
                             </button>
@@ -1839,6 +2038,35 @@ window.handleDrop = async function(event, targetPedidoId) {
     }
     
     return false;
+};
+
+window.duplicarLineaPedido = async function(pedidoId, itemIndex) {
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            alert('Error: No se pudo encontrar el artículo');
+            return;
+        }
+        
+        const item = pedido.items[itemIndex];
+        
+        // Crear una copia del artículo
+        const itemDuplicado = {
+            ...item,
+            cantidad: item.cantidad || 1
+        };
+        
+        // Agregar el artículo duplicado al mismo pedido
+        pedido.items.push(itemDuplicado);
+        await db.update('pedidos', pedido);
+        
+        // Recargar pedidos
+        loadPedidosEnCurso();
+        alert('Línea duplicada. Puede ajustar la cantidad y arrastrarla a otro pedido si es necesario.');
+    } catch (error) {
+        console.error('Error al duplicar línea:', error);
+        alert('Error al duplicar la línea: ' + error.message);
+    }
 };
 
 window.eliminarItemPedido = async function(pedidoId, itemIndex) {

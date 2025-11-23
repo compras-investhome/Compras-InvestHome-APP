@@ -361,6 +361,19 @@ class Database {
         }));
     }
 
+    async getSolicitudesModificacionByTienda(tiendaId) {
+        const q = query(
+            collection(this.db, 'solicitudesModificacion'),
+            where('tiendaId', '==', tiendaId),
+            where('estado', '==', 'Pendiente')
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    }
+
     async getPedidosByTienda(tiendaId) {
         try {
             // Intentar con orderBy primero
