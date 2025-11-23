@@ -679,6 +679,12 @@ function showView(viewName) {
 async function loadTiendas() {
     let tiendas = await db.getAll('tiendas');
     
+    // Debug: verificar logos de todas las tiendas
+    console.log('Tiendas cargadas:', tiendas.length);
+    tiendas.forEach(t => {
+        console.log(`Tienda: ${t.nombre}, Logo: ${t.logo ? 'Sí (' + (t.logo.length || 0) + ' chars)' : 'No'}`);
+    });
+    
     // Si no es administrador, filtrar solo tiendas activas
     if (currentUserType !== 'Administrador' && currentUserType !== 'Contabilidad') {
         tiendas = tiendas.filter(t => t.activa !== false);
@@ -720,11 +726,22 @@ function createTiendaCard(tienda) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
     
+    // Debug: verificar si el logo existe
+    console.log('Tienda:', tienda.nombre, 'Logo:', tienda.logo ? 'Sí tiene logo' : 'No tiene logo', 'Logo completo:', tienda.logo);
+    
     // Mostrar logo si existe, si no mostrar icono
     let imagenHtml = '';
-    if (tienda.logo) {
+    // Verificar si el logo existe y no es null, undefined o string vacío
+    const tieneLogo = tienda.logo && 
+                      typeof tienda.logo === 'string' && 
+                      tienda.logo.trim() !== '' && 
+                      tienda.logo !== 'null' && 
+                      tienda.logo !== 'undefined' &&
+                      (tienda.logo.startsWith('data:image/') || tienda.logo.startsWith('http'));
+    
+    if (tieneLogo) {
         imagenHtml = `
-            <img src="${tienda.logo}" alt="${tienda.nombre}" class="tienda-card-logo" onerror="this.style.display='none'; this.parentElement.querySelector('.tienda-card-icon').style.display='flex';">
+            <img src="${tienda.logo}" alt="${tienda.nombre}" class="tienda-card-logo" onerror="console.error('Error al cargar logo de ${tienda.nombre}'); this.style.display='none'; const icon = this.parentElement.querySelector('.tienda-card-icon'); if(icon) icon.style.display='flex';">
             <div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>
         `;
     } else {
@@ -2999,11 +3016,14 @@ async function guardarTienda() {
         
         // Si hay un archivo nuevo, convertirlo a base64
         if (logoFileInput.files.length > 0) {
+            console.log('Guardando nuevo logo para tienda:', nombre);
             logo = await fileToBase64(logoFileInput.files[0]);
+            console.log('Logo convertido a base64, longitud:', logo ? logo.length : 0);
         } else if (editingTiendaId) {
             // Si estamos editando y no hay archivo nuevo, mantener el logo existente
             const tiendaExistente = await db.get('tiendas', editingTiendaId);
             logo = tiendaExistente?.logo || null;
+            console.log('Manteniendo logo existente para tienda:', nombre, 'Logo existe:', !!logo);
         }
 
         const tiendaData = {
@@ -3021,11 +3041,15 @@ async function guardarTienda() {
             password: password
         };
 
+        console.log('Guardando tienda con logo:', !!tiendaData.logo, 'Logo length:', tiendaData.logo ? tiendaData.logo.length : 0);
+
         if (editingTiendaId) {
             tiendaData.id = editingTiendaId;
             await db.update('tiendas', tiendaData);
+            console.log('Tienda actualizada. ID:', editingTiendaId);
         } else {
-            await db.add('tiendas', tiendaData);
+            const nuevoId = await db.add('tiendas', tiendaData);
+            console.log('Tienda creada. ID:', nuevoId);
         }
 
         closeAllModals();
