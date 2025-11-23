@@ -151,10 +151,13 @@ function setupEventListeners() {
     
     // Listeners para importación Excel
     document.getElementById('btn-importar-excel')?.addEventListener('click', () => {
-        document.getElementById('modal-importar-excel').classList.add('active');
-        document.getElementById('excel-file-input').value = '';
-        document.getElementById('excel-import-status').style.display = 'none';
-        document.getElementById('btn-procesar-excel').disabled = true;
+        excelImportMode = 'productos';
+        openModalExcel();
+    });
+    
+    document.getElementById('btn-importar-excel-categorias')?.addEventListener('click', () => {
+        excelImportMode = 'categorias';
+        openModalExcel();
     });
     
     document.getElementById('btn-cancelar-excel')?.addEventListener('click', closeAllModals);
@@ -1484,6 +1487,7 @@ let editingCategoriaId = null;
 let editingProductoId = null;
 let currentTiendaAdmin = null;
 let currentCategoriaAdmin = null;
+let excelImportMode = 'productos'; // 'productos' o 'categorias'
 
 // Cargar tiendas para administración
 async function loadTiendasAdmin() {
@@ -2113,6 +2117,52 @@ function fileToBase64(file) {
 
 // ========== IMPORTACIÓN DE EXCEL ==========
 
+function openModalExcel() {
+    const modal = document.getElementById('modal-importar-excel');
+    const titulo = document.getElementById('modal-excel-titulo');
+    const instructions = document.getElementById('excel-instructions');
+    const fileInput = document.getElementById('excel-file-input');
+    const statusDiv = document.getElementById('excel-import-status');
+    const btnProcesar = document.getElementById('btn-procesar-excel');
+    
+    fileInput.value = '';
+    statusDiv.style.display = 'none';
+    btnProcesar.disabled = true;
+    
+    if (excelImportMode === 'categorias') {
+        titulo.textContent = 'Importar Categorías y Productos desde Excel';
+        instructions.innerHTML = `
+            <strong>Formato del Excel:</strong><br>
+            <strong>Columna A:</strong> Categoría (obligatorio) - Se repetirá para cada producto de esa categoría<br>
+            <strong>Columna B:</strong> Designación del artículo (obligatorio)<br>
+            <strong>Columna C:</strong> Descripción (opcional)<br>
+            <strong>Columna D:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
+            <strong>Columna E:</strong> URL de la foto (opcional)<br>
+            <br>
+            <strong>Ejemplo:</strong><br>
+            | Categoría | Designación | Descripción | Precio | Foto |<br>
+            | Ferretería | Tornillo M6x20 | Tornillo acero | 0.15 | https://... |<br>
+            | Ferretería | Tuerca M6 | Tuerca hexagonal | 0.10 | https://... |<br>
+            | Pinturas | Pintura Blanca | Pintura 5L | 25.99 | https://... |<br>
+            <br>
+            <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada. Las categorías se crearán automáticamente si no existen.
+        `;
+    } else {
+        titulo.textContent = 'Importar Productos desde Excel';
+        instructions.innerHTML = `
+            <strong>Formato del Excel:</strong><br>
+            <strong>Columna A:</strong> Designación del artículo (obligatorio)<br>
+            <strong>Columna B:</strong> Descripción (opcional)<br>
+            <strong>Columna C:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
+            <strong>Columna D:</strong> URL de la foto (opcional)<br>
+            <br>
+            <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada. Los productos se crearán en la categoría actualmente seleccionada.
+        `;
+    }
+    
+    modal.classList.add('active');
+}
+
 async function procesarExcel() {
     const fileInput = document.getElementById('excel-file-input');
     const statusDiv = document.getElementById('excel-import-status');
@@ -2124,8 +2174,13 @@ async function procesarExcel() {
         return;
     }
     
-    if (!currentCategoriaAdmin) {
+    if (excelImportMode === 'productos' && !currentCategoriaAdmin) {
         alert('Error: No hay categoría seleccionada');
+        return;
+    }
+    
+    if (excelImportMode === 'categorias' && !currentTiendaAdmin) {
+        alert('Error: No hay tienda seleccionada');
         return;
     }
     
@@ -2163,52 +2218,111 @@ async function procesarExcel() {
         let startRow = 0;
         if (jsonData.length > 0) {
             const firstRow = jsonData[0];
-            // Si la primera fila parece ser encabezados (texto en todas las columnas), empezar desde la segunda
-            if (firstRow[0] && typeof firstRow[0] === 'string' && 
-                (firstRow[0].toLowerCase().includes('designación') || 
-                 firstRow[0].toLowerCase().includes('nombre') ||
-                 firstRow[0].toLowerCase().includes('artículo'))) {
+            const firstCell = firstRow[0] ? String(firstRow[0]).toLowerCase() : '';
+            // Detectar encabezados
+            if (firstCell.includes('categoría') || firstCell.includes('categoria') ||
+                firstCell.includes('designación') || firstCell.includes('designacion') ||
+                firstCell.includes('nombre') || firstCell.includes('artículo') ||
+                firstCell.includes('articulo')) {
                 startRow = 1;
             }
         }
         
         let productosCreados = 0;
+        let categoriasCreadas = 0;
         let productosConError = 0;
         const errores = [];
+        const categoriasMap = {}; // Cache de categorías por nombre
         
-        messageP.textContent = `Procesando ${jsonData.length - startRow} productos...`;
+        messageP.textContent = `Procesando ${jsonData.length - startRow} filas...`;
         
         for (let i = startRow; i < jsonData.length; i++) {
             const row = jsonData[i];
             
-            // Columna A: Designación del artículo (obligatorio)
-            const nombre = row[0] ? String(row[0]).trim() : null;
-            if (!nombre) {
-                productosConError++;
-                errores.push(`Fila ${i + 1}: Falta la designación del artículo`);
-                continue;
-            }
-            
-            // Columna B: Descripción (opcional)
-            const descripcion = row[1] ? String(row[1]).trim() : null;
-            
-            // Columna C: Precio (opcional)
+            let categoriaId = null;
+            let nombre = null;
+            let descripcion = null;
             let precio = null;
-            if (row[2] !== null && row[2] !== undefined && row[2] !== '') {
-                const precioStr = String(row[2]).replace(',', '.');
-                precio = parseFloat(precioStr);
-                if (isNaN(precio)) {
-                    precio = null;
-                }
-            }
+            let foto = null;
             
-            // Columna D: URL de la foto (opcional)
-            const foto = row[3] ? String(row[3]).trim() : null;
+            if (excelImportMode === 'categorias') {
+                // Modo categorías: Columna A = Categoría, B = Nombre, C = Descripción, D = Precio, E = Foto
+                const categoriaNombre = row[0] ? String(row[0]).trim() : null;
+                nombre = row[1] ? String(row[1]).trim() : null;
+                
+                if (!categoriaNombre || !nombre) {
+                    productosConError++;
+                    errores.push(`Fila ${i + 1}: Falta la categoría o el nombre del artículo`);
+                    continue;
+                }
+                
+                // Buscar o crear categoría
+                if (!categoriasMap[categoriaNombre]) {
+                    // Buscar si ya existe
+                    const categorias = await db.getCategoriasByTienda(currentTiendaAdmin.id);
+                    const categoriaExistente = categorias.find(c => c.nombre === categoriaNombre);
+                    
+                    if (categoriaExistente) {
+                        categoriasMap[categoriaNombre] = categoriaExistente.id;
+                    } else {
+                        // Crear nueva categoría
+                        const nuevaCategoria = {
+                            tiendaId: currentTiendaAdmin.id,
+                            nombre: categoriaNombre
+                        };
+                        const categoriaIdNueva = await db.add('categorias', nuevaCategoria);
+                        categoriasMap[categoriaNombre] = categoriaIdNueva;
+                        categoriasCreadas++;
+                    }
+                }
+                categoriaId = categoriasMap[categoriaNombre];
+                
+                // Columna C: Descripción (opcional)
+                descripcion = row[2] ? String(row[2]).trim() : null;
+                
+                // Columna D: Precio (opcional)
+                if (row[3] !== null && row[3] !== undefined && row[3] !== '') {
+                    const precioStr = String(row[3]).replace(',', '.');
+                    precio = parseFloat(precioStr);
+                    if (isNaN(precio)) {
+                        precio = null;
+                    }
+                }
+                
+                // Columna E: URL de la foto (opcional)
+                foto = row[4] ? String(row[4]).trim() : null;
+                
+            } else {
+                // Modo productos: Columna A = Nombre, B = Descripción, C = Precio, D = Foto
+                nombre = row[0] ? String(row[0]).trim() : null;
+                if (!nombre) {
+                    productosConError++;
+                    errores.push(`Fila ${i + 1}: Falta la designación del artículo`);
+                    continue;
+                }
+                
+                categoriaId = currentCategoriaAdmin.id;
+                
+                // Columna B: Descripción (opcional)
+                descripcion = row[1] ? String(row[1]).trim() : null;
+                
+                // Columna C: Precio (opcional)
+                if (row[2] !== null && row[2] !== undefined && row[2] !== '') {
+                    const precioStr = String(row[2]).replace(',', '.');
+                    precio = parseFloat(precioStr);
+                    if (isNaN(precio)) {
+                        precio = null;
+                    }
+                }
+                
+                // Columna D: URL de la foto (opcional)
+                foto = row[3] ? String(row[3]).trim() : null;
+            }
             
             try {
                 const productoData = {
-                    categoriaId: currentCategoriaAdmin.id,
-                    tiendaId: currentCategoriaAdmin.tiendaId,
+                    categoriaId: categoriaId,
+                    tiendaId: excelImportMode === 'categorias' ? currentTiendaAdmin.id : currentCategoriaAdmin.tiendaId,
                     nombre: nombre,
                     descripcion: descripcion || null,
                     precio: precio,
@@ -2225,6 +2339,9 @@ async function procesarExcel() {
         
         // Mostrar resultado
         let mensaje = `✅ Importación completada:\n`;
+        if (excelImportMode === 'categorias') {
+            mensaje += `- Categorías creadas: ${categoriasCreadas}\n`;
+        }
         mensaje += `- Productos creados: ${productosCreados}\n`;
         if (productosConError > 0) {
             mensaje += `- Errores: ${productosConError}\n`;
@@ -2241,9 +2358,13 @@ async function procesarExcel() {
         
         messageP.textContent = mensaje;
         
-        // Recargar productos
+        // Recargar datos
         setTimeout(() => {
-            loadProductosAdmin(currentCategoriaAdmin.id);
+            if (excelImportMode === 'categorias') {
+                loadCategoriasAdmin(currentTiendaAdmin.id);
+            } else {
+                loadProductosAdmin(currentCategoriaAdmin.id);
+            }
             closeAllModals();
         }, 2000);
         

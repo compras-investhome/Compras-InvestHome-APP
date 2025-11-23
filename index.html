@@ -359,12 +359,21 @@
                 </svg>
             </button>
             <h2 id="categorias-tienda-header">Categorías</h2>
-            <button id="btn-nueva-categoria" class="icon-btn" aria-label="Nueva Categoría" title="Nueva Categoría">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-            </button>
+            <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-importar-excel-categorias" class="icon-btn" aria-label="Importar Excel" title="Importar desde Excel">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+                <button id="btn-nueva-categoria" class="icon-btn" aria-label="Nueva Categoría" title="Nueva Categoría">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <main class="main-content">
@@ -714,23 +723,17 @@
     <!-- Modal: Importar Excel -->
     <div id="modal-importar-excel" class="modal">
         <div class="modal-overlay"></div>
-        <div class="modal-content">
+        <div class="modal-content modal-large">
             <div class="modal-header">
-                <h3>Importar Productos desde Excel</h3>
+                <h3 id="modal-excel-titulo">Importar desde Excel</h3>
                 <button class="icon-btn btn-close-modal">✕</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
                     <label>Selecciona el archivo Excel (.xlsx)</label>
                     <input type="file" id="excel-file-input" accept=".xlsx,.xls" class="form-input">
-                    <small style="color: var(--text-secondary); font-size: 0.875rem; display: block; margin-top: 0.5rem;">
-                        <strong>Formato del Excel:</strong><br>
-                        <strong>Columna A:</strong> Designación del artículo (obligatorio)<br>
-                        <strong>Columna B:</strong> Descripción (opcional)<br>
-                        <strong>Columna C:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
-                        <strong>Columna D:</strong> URL de la foto (opcional)<br>
-                        <br>
-                        <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada.
+                    <small id="excel-instructions" style="color: var(--text-secondary); font-size: 0.875rem; display: block; margin-top: 0.5rem;">
+                        <!-- Las instrucciones se actualizarán dinámicamente -->
                     </small>
                 </div>
                 <div id="excel-import-status" style="display: none; margin-top: 1rem; padding: 1rem; background-color: var(--bg-color); border-radius: 8px;">
