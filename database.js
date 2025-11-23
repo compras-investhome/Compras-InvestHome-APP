@@ -214,10 +214,20 @@ class Database {
 
     // Operaciones CRUD genéricas
     async add(storeName, data) {
-        const docRef = await addDoc(collection(this.db, storeName), {
+        const docData = {
             ...data,
             createdAt: serverTimestamp()
-        });
+        };
+        
+        // Si es un pedido y tiene fecha como Date, usar serverTimestamp para fecha
+        if (storeName === 'pedidos' && data.fecha instanceof Date) {
+            docData.fecha = serverTimestamp();
+        } else if (storeName === 'pedidos' && !data.fecha) {
+            // Si no tiene fecha, usar serverTimestamp
+            docData.fecha = serverTimestamp();
+        }
+        
+        const docRef = await addDoc(collection(this.db, storeName), docData);
         return docRef.id;
     }
 
@@ -317,6 +327,19 @@ class Database {
         const q = query(
             collection(this.db, 'pedidos'),
             where('userId', '==', userId)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    }
+
+    async getPedidosByObra(obraId) {
+        // Obtener todos los pedidos de una obra específica
+        const q = query(
+            collection(this.db, 'pedidos'),
+            where('obraId', '==', obraId)
         );
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({

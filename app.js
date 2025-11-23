@@ -992,7 +992,7 @@ async function finalizarPedido() {
 
 // Mis Pedidos
 async function loadMisPedidos() {
-    if (!currentUser) {
+    if (!currentUser || !currentObra) {
         const container = document.getElementById('pedidos-list');
         const emptyState = document.getElementById('pedidos-empty');
         container.innerHTML = '';
@@ -1000,8 +1000,9 @@ async function loadMisPedidos() {
         return;
     }
     
-    // Obtener todos los pedidos del usuario (no completados)
-    const todosPedidos = await db.getAllPedidosByUser(currentUser.id);
+    // Obtener todos los pedidos de la obra actual (no completados)
+    // Esto permite que cualquier técnico/encargado de la obra vea y gestione todos los pedidos
+    const todosPedidos = await db.getPedidosByObra(currentObra.id);
     const pedidosNoCompletados = todosPedidos.filter(p => p.estado !== 'Completado');
     
     const container = document.getElementById('pedidos-list');
@@ -1079,13 +1080,24 @@ function createPedidoCard(pedido, tienda) {
     const estadoClass = `estado-${pedido.estado.toLowerCase().replace(' ', '-')}`;
     // Firestore devuelve fechas como Timestamp, convertir si es necesario
     let fecha;
+    let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
-        fecha = pedido.fecha.toDate().toLocaleString('es-ES');
+        fechaObj = pedido.fecha.toDate();
     } else if (pedido.fecha) {
-        fecha = new Date(pedido.fecha).toLocaleString('es-ES');
+        fechaObj = new Date(pedido.fecha);
+    } else if (pedido.createdAt && pedido.createdAt.toDate) {
+        fechaObj = pedido.createdAt.toDate();
+    } else if (pedido.createdAt) {
+        fechaObj = new Date(pedido.createdAt);
     } else {
-        fecha = 'Fecha no disponible';
+        fechaObj = new Date(); // Usar fecha actual como fallback
     }
+    
+    // Formatear como día/mes/año
+    const dia = fechaObj.getDate().toString().padStart(2, '0');
+    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+    const año = fechaObj.getFullYear();
+    fecha = `${dia}/${mes}/${año}`;
     
     // Calcular precio total del pedido
     const precioTotalPedido = pedido.items.reduce((total, item) => {
@@ -1458,13 +1470,24 @@ function createSolicitudCard(solicitud, pedido, usuario) {
     card.className = 'pedido-gestion-card';
     
     let fecha;
+    let fechaObj;
     if (solicitud.fecha && solicitud.fecha.toDate) {
-        fecha = solicitud.fecha.toDate().toLocaleString('es-ES');
+        fechaObj = solicitud.fecha.toDate();
     } else if (solicitud.fecha) {
-        fecha = new Date(solicitud.fecha).toLocaleString('es-ES');
+        fechaObj = new Date(solicitud.fecha);
+    } else if (solicitud.createdAt && solicitud.createdAt.toDate) {
+        fechaObj = solicitud.createdAt.toDate();
+    } else if (solicitud.createdAt) {
+        fechaObj = new Date(solicitud.createdAt);
     } else {
-        fecha = 'Fecha no disponible';
+        fechaObj = new Date(); // Usar fecha actual como fallback
     }
+    
+    // Formatear como día/mes/año
+    const dia = fechaObj.getDate().toString().padStart(2, '0');
+    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+    const año = fechaObj.getFullYear();
+    fecha = `${dia}/${mes}/${año}`;
     
     const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
     
@@ -1579,13 +1602,24 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
     card.className = 'pedido-gestion-card';
     
     let fecha;
+    let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
-        fecha = pedido.fecha.toDate().toLocaleString('es-ES');
+        fechaObj = pedido.fecha.toDate();
     } else if (pedido.fecha) {
-        fecha = new Date(pedido.fecha).toLocaleString('es-ES');
+        fechaObj = new Date(pedido.fecha);
+    } else if (pedido.createdAt && pedido.createdAt.toDate) {
+        fechaObj = pedido.createdAt.toDate();
+    } else if (pedido.createdAt) {
+        fechaObj = new Date(pedido.createdAt);
     } else {
-        fecha = 'Fecha no disponible';
+        fechaObj = new Date(); // Usar fecha actual como fallback
     }
+    
+    // Formatear como día/mes/año
+    const dia = fechaObj.getDate().toString().padStart(2, '0');
+    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+    const año = fechaObj.getFullYear();
+    fecha = `${dia}/${mes}/${año}`;
     
     const estados = ['Nuevo', 'Preparando', 'Preparado', 'En ruta', 'Entregado', 'Completado'];
     
