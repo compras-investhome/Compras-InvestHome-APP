@@ -1445,8 +1445,8 @@ async function calcularGastadoCuenta(tiendaId) {
     
     for (const pedido of pedidos) {
         // Contar pedidos con estadoPago = 'Pago A cuenta' que tengan documento del sistema y no estén completados
-        // El gastado se suma cuando la tienda marca como "Pago A cuenta" y adjunta el documento del sistema
-        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.pedidoSistemaPDF) {
+        // NO contar los que tienen transferenciaPDF porque ya están pagados (se descuentan del gastado)
+        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.pedidoSistemaPDF && !pedido.transferenciaPDF) {
             const totalPedido = pedido.items.reduce((total, item) => {
                 const precioItem = item.precio || 0;
                 const cantidad = item.cantidad || 0;
@@ -2055,8 +2055,8 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
         }
     } else {
         // Con cuenta (con o sin límite): desplegable con Sin Asignar, Pendiente de pago, Pago A cuenta
-        // Si está pagado, mostrar etiqueta verde y PDF
-        if (estadoPago === 'Pagado') {
+        // Si está pagado (tiene transferenciaPDF), mostrar etiqueta verde y PDF (sin desplegable)
+        if (estadoPago === 'Pagado' || pedido.transferenciaPDF) {
             estadoPagoHtml = `
                 <div style="margin-top: 0.5rem;">
                     <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
@@ -2985,9 +2985,23 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         const transferenciaPDF = await fileToBase64(file);
         
         pedido.transferenciaPDF = transferenciaPDF;
+        pedido.estadoPago = 'Pagado'; // Cambiar el estado a "Pagado"
         await db.update('pedidos', pedido);
         
-        await showAlert('PDF del pago adjuntado correctamente. El límite de la cuenta se ha actualizado.', 'Éxito');
+        // Actualizar el badge de la tienda si tiene límite
+        const tienda = await db.get('tiendas', tiendaId);
+        if (tienda && tienda.limiteCuenta) {
+            const gastado = await calcularGastadoCuenta(tiendaId);
+            // Si estamos en la vista de la tienda, actualizar el badge
+            if (currentTienda && currentTienda.id === tiendaId) {
+                const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
+                if (cuentaBadge) {
+                    cuentaBadge.textContent = `Cuenta ${tienda.limiteCuenta}€ / Gastado ${gastado.toFixed(2)}€`;
+                }
+            }
+        }
+        
+        await showAlert('PDF del pago adjuntado correctamente. El pedido se ha marcado como pagado y se ha descontado del gastado de la cuenta.', 'Éxito');
         loadCuentasContabilidad();
     } catch (error) {
         console.error('Error al subir pago de cuenta:', error);
@@ -3013,9 +3027,25 @@ window.uploadTransferencia = async function(pedidoId, file) {
         // Convertir archivo a base64
         const transferenciaPDF = await fileToBase64(file);
         
+        // Guardar el estado anterior antes de cambiarlo
+        const estadoAnterior = pedido.estadoPago;
+        
         pedido.transferenciaPDF = transferenciaPDF;
         pedido.estadoPago = 'Pagado';
         await db.update('pedidos', pedido);
+        
+        // Si el pedido era "Pago A cuenta", actualizar el badge de la tienda
+        const tienda = await db.get('tiendas', pedido.tiendaId);
+        if (tienda && tienda.limiteCuenta && estadoAnterior === 'Pago A cuenta') {
+            const gastado = await calcularGastadoCuenta(tienda.id);
+            // Si estamos en la vista de la tienda, actualizar el badge
+            if (currentTienda && currentTienda.id === tienda.id) {
+                const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
+                if (cuentaBadge) {
+                    cuentaBadge.textContent = `Cuenta ${tienda.limiteCuenta}€ / Gastado ${gastado.toFixed(2)}€`;
+                }
+            }
+        }
         
         await showAlert('PDF de transferencia adjuntado y pedido marcado como pagado', 'Éxito');
         loadPedidosContabilidad();
