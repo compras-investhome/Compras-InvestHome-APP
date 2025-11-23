@@ -992,7 +992,7 @@ async function finalizarPedido() {
 
 // Mis Pedidos
 async function loadMisPedidos() {
-    if (!currentUser || !currentObra) {
+    if (!currentUser) {
         const container = document.getElementById('pedidos-list');
         const emptyState = document.getElementById('pedidos-empty');
         container.innerHTML = '';
@@ -1000,9 +1000,9 @@ async function loadMisPedidos() {
         return;
     }
     
-    // Obtener todos los pedidos de la obra actual (no completados)
-    // Esto permite que cualquier técnico/encargado de la obra vea y gestione todos los pedidos
-    const todosPedidos = await db.getPedidosByObra(currentObra.id);
+    // Obtener TODOS los pedidos de TODAS las obras (excepto completados)
+    // Esto permite que cualquier técnico/encargado vea y gestione todos los pedidos de todas las obras
+    const todosPedidos = await db.getAll('pedidos');
     const pedidosNoCompletados = todosPedidos.filter(p => p.estado !== 'Completado');
     
     const container = document.getElementById('pedidos-list');
@@ -1686,6 +1686,16 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
                             ${cantidad > 1 ? `<span style="font-size: 0.875rem; color: var(--primary-color); font-weight: 600;">Total línea: ${precioTotalLinea.toFixed(2)} €</span>` : ''}
                         </div>
                     </div>
+                    ${!isCerrado ? `
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <button class="btn-icon-small" onclick="editarCantidadItem('${pedido.id}', ${index}, ${cantidad})" title="Editar cantidad">
+                                ✏️
+                            </button>
+                            <button class="btn-icon-small" onclick="eliminarItemPedido('${pedido.id}', ${index})" title="Eliminar artículo">
+                                🗑️
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
             `;
             }).join('')}
@@ -1829,6 +1839,129 @@ window.handleDrop = async function(event, targetPedidoId) {
     }
     
     return false;
+};
+
+window.eliminarItemPedido = async function(pedidoId, itemIndex) {
+    if (!confirm('¿Está seguro de eliminar este artículo del pedido?')) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            alert('Error: No se pudo encontrar el artículo');
+            return;
+        }
+        
+        // Eliminar el artículo
+        pedido.items.splice(itemIndex, 1);
+        
+        // Si el pedido queda sin items, eliminarlo
+        if (pedido.items.length === 0) {
+            await db.delete('pedidos', pedidoId);
+        } else {
+            await db.update('pedidos', pedido);
+        }
+        
+        // Recargar pedidos
+        loadPedidosEnCurso();
+        alert('Artículo eliminado del pedido');
+    } catch (error) {
+        console.error('Error al eliminar artículo:', error);
+        alert('Error al eliminar el artículo: ' + error.message);
+    }
+};
+
+window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) {
+    const nuevaCantidadStr = prompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad:`, cantidadActual);
+    
+    if (nuevaCantidadStr === null) return; // Usuario canceló
+    
+    const nuevaCantidad = parseInt(nuevaCantidadStr);
+    
+    if (isNaN(nuevaCantidad) || nuevaCantidad < 0) {
+        alert('Por favor, ingrese una cantidad válida');
+        return;
+    }
+    
+    if (nuevaCantidad === cantidadActual) {
+        return; // No hay cambios
+    }
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            alert('Error: No se pudo encontrar el artículo');
+            return;
+        }
+        
+        const item = pedido.items[itemIndex];
+        const cantidadFaltante = cantidadActual - nuevaCantidad;
+        
+        if (nuevaCantidad === 0) {
+            // Si la cantidad es 0, eliminar el artículo
+            if (confirm('¿Eliminar este artículo del pedido?')) {
+                pedido.items.splice(itemIndex, 1);
+                
+                if (pedido.items.length === 0) {
+                    await db.delete('pedidos', pedidoId);
+                } else {
+                    await db.update('pedidos', pedido);
+                }
+                
+                loadPedidosEnCurso();
+                alert('Artículo eliminado del pedido');
+            }
+            return;
+        }
+        
+        // Actualizar cantidad
+        item.cantidad = nuevaCantidad;
+        
+        // Si se redujo la cantidad, preguntar si crear nuevo pedido con la cantidad faltante
+        if (cantidadFaltante > 0) {
+            const crearNuevoPedido = confirm(
+                `Se reducirá la cantidad de ${cantidadActual} a ${nuevaCantidad}.\n\n` +
+                `¿Desea crear un nuevo pedido con la cantidad faltante (${cantidadFaltante} unidades) que llegará más tarde?`
+            );
+            
+            if (crearNuevoPedido) {
+                // Crear nuevo pedido con la cantidad faltante
+                const itemFaltante = {
+                    ...item,
+                    cantidad: cantidadFaltante
+                };
+                
+                const nuevoPedido = {
+                    tiendaId: pedido.tiendaId,
+                    userId: pedido.userId,
+                    persona: pedido.persona,
+                    obraId: pedido.obraId,
+                    obraNombreComercial: pedido.obraNombreComercial,
+                    obraDireccionGoogleMaps: pedido.obraDireccionGoogleMaps || '',
+                    obraEncargado: pedido.obraEncargado || '',
+                    obraTelefono: pedido.obraTelefono || '',
+                    items: [itemFaltante],
+                    estado: 'Nuevo',
+                    albaran: null
+                };
+                
+                await db.add('pedidos', nuevoPedido);
+            }
+        }
+        
+        // Actualizar pedido original
+        if (pedido.items.length === 0) {
+            await db.delete('pedidos', pedidoId);
+        } else {
+            await db.update('pedidos', pedido);
+        }
+        
+        // Recargar pedidos
+        loadPedidosEnCurso();
+        alert('Cantidad actualizada correctamente');
+    } catch (error) {
+        console.error('Error al editar cantidad:', error);
+        alert('Error al editar la cantidad: ' + error.message);
+    }
 };
 
 window.updateEstadoPedido = async function(pedidoId, nuevoEstado) {
