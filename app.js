@@ -128,6 +128,10 @@ function setupEventListeners() {
         document.getElementById('sidebar').classList.add('active');
     });
 
+    document.getElementById('btn-menu-admin')?.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.add('active');
+    });
+
     document.getElementById('btn-close-sidebar').addEventListener('click', () => {
         document.getElementById('sidebar').classList.remove('active');
     });
@@ -196,6 +200,9 @@ function setupEventListeners() {
 
     // Logout
     document.getElementById('btn-logout').addEventListener('click', async () => {
+        // Cerrar sidebar si está abierto
+        document.getElementById('sidebar').classList.remove('active');
+        
         await db.clearSesion();
         currentUser = null;
         currentUserType = null;
