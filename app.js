@@ -1083,7 +1083,7 @@ async function finalizarPedido() {
         // Determinar estadoPago según tipo de cuenta
         let estadoPago = null;
         if (!tienda.tieneCuenta) {
-            // Sin cuenta: Pendiente de pago por defecto
+            // Sin cuenta: Pendiente de pago por defecto (siempre)
             estadoPago = 'Pendiente de pago';
         } else {
             // Con cuenta (con o sin límite): Sin Asignar por defecto
@@ -1113,7 +1113,8 @@ async function finalizarPedido() {
             estado: 'Nuevo',
             estadoPago: estadoPago,
             albaran: null,
-            transferenciaPDF: null
+            transferenciaPDF: null,
+            pedidoSistemaPDF: null // PDF/captura del pedido del sistema de la tienda
         };
         
         await db.add('pedidos', pedido);
@@ -2031,16 +2032,26 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
     const estadoPago = pedido.estadoPago || 'Sin Asignar';
     
     if (!tienda || !tienda.tieneCuenta) {
-        // Sin cuenta: desplegable con Pendiente de pago y Pagado
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Estado de Pago:</label>
-                <select class="estado-pago-select" onchange="updateEstadoPago('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
-                    <option value="Pagado" ${estadoPago === 'Pagado' ? 'selected' : ''}>Pagado</option>
-                </select>
-            </div>
-        `;
+        // Sin cuenta: siempre "Pendiente de pago" con etiqueta roja (sin desplegable)
+        // Si está pagado, mostrar etiqueta verde "Pagado" con PDF de transferencia
+        if (estadoPago === 'Pagado') {
+            estadoPagoHtml = `
+                <div style="margin-top: 0.5rem;">
+                    <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
+                    ${pedido.transferenciaPDF ? `
+                        <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                            📄 Ver PDF de Transferencia
+                        </a>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            estadoPagoHtml = `
+                <div style="margin-top: 0.5rem;">
+                    <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #ef4444; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Pendiente de pago</span>
+                </div>
+            `;
+        }
     } else {
         // Con cuenta (con o sin límite): desplegable con Sin Asignar, Pendiente de pago, Pago A cuenta
         // Si está pagado, mostrar etiqueta verde y PDF
@@ -2152,12 +2163,38 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
             `;
         })()}
         ${!isCerrado ? `
-            <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                <label for="albaran-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
-                    📎 Adjuntar Albarán/Factura
-                </label>
-                <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran('${pedido.id}', this.files[0])" style="width: 100%;">
-            </div>
+            ${!tienda || !tienda.tieneCuenta ? `
+                ${!pedido.pedidoSistemaPDF ? `
+                    <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                        <label for="pedido-sistema-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                            📎 Adjuntar Captura/PDF del Pedido del Sistema (con el pago real)
+                        </label>
+                        <input type="file" id="pedido-sistema-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoSistema('${pedido.id}', this.files[0])" style="width: 100%;">
+                    </div>
+                ` : `
+                    <div style="margin-top: 1rem; padding: 1rem; background: var(--success-color-light); border-radius: 8px;">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600;">Documento del pedido del sistema adjuntado:</p>
+                        <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                            📄 Ver/Descargar Documento
+                        </a>
+                    </div>
+                `}
+                ${pedido.estadoPago === 'Pagado' ? `
+                    <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                        <label for="albaran-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
+                            📎 Adjuntar Albarán/Factura
+                        </label>
+                        <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran('${pedido.id}', this.files[0])" style="width: 100%;">
+                    </div>
+                ` : ''}
+            ` : `
+                <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                    <label for="albaran-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
+                        📎 Adjuntar Albarán/Factura
+                    </label>
+                    <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran('${pedido.id}', this.files[0])" style="width: 100%;">
+                </div>
+            `}
         ` : ''}
         ${pedido.albaran ? `
             <div class="pedido-albaran" style="margin-top: 1rem;">
@@ -2504,15 +2541,28 @@ function switchTabContabilidad(tab) {
 
 async function loadPedidosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
-    const pedidosPendientes = todosPedidos.filter(p => 
-        p.estado !== 'Completado' && 
-        (p.estadoPago === 'Pendiente de pago' || p.estadoPago === 'Pago A cuenta')
-    );
+    
+    // Filtrar pedidos pendientes: si no tiene cuenta, debe tener pedidoSistemaPDF
+    const pedidosFiltrados = [];
+    for (const pedido of todosPedidos) {
+        if (pedido.estado === 'Completado' || pedido.estadoPago !== 'Pendiente de pago') continue;
+        
+        const tienda = await db.get('tiendas', pedido.tiendaId);
+        if (!tienda || !tienda.tieneCuenta) {
+            // Sin cuenta: solo si tiene pedidoSistemaPDF
+            if (pedido.pedidoSistemaPDF) {
+                pedidosFiltrados.push(pedido);
+            }
+        } else {
+            // Con cuenta: siempre mostrar si está pendiente
+            pedidosFiltrados.push(pedido);
+        }
+    }
     
     const container = document.getElementById('pedidos-contabilidad-list');
     const emptyState = document.getElementById('pedidos-contabilidad-empty');
     
-    if (pedidosPendientes.length === 0) {
+    if (pedidosFiltrados.length === 0) {
         container.innerHTML = '';
         emptyState.style.display = 'block';
         return;
@@ -2522,13 +2572,13 @@ async function loadPedidosContabilidad() {
     container.innerHTML = '';
     
     // Ordenar por fecha
-    pedidosPendientes.sort((a, b) => {
+    pedidosFiltrados.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    for (const pedido of pedidosPendientes) {
+    for (const pedido of pedidosFiltrados) {
         const card = await createPedidoContabilidadCard(pedido);
         container.appendChild(card);
     }
@@ -2800,6 +2850,30 @@ window.uploadTransferencia = async function(pedidoId, file) {
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
     }
 };
+
+window.uploadPedidoSistema = async function(pedidoId, file) {
+    if (!file) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        // Convertir archivo a base64
+        const pedidoSistemaPDF = await fileToBase64(file);
+        
+        pedido.pedidoSistemaPDF = pedidoSistemaPDF;
+        await db.update('pedidos', pedido);
+        
+        await showAlert('Documento del pedido del sistema adjuntado correctamente', 'Éxito');
+        loadPedidosEnCurso();
+    } catch (error) {
+        console.error('Error al subir documento del sistema:', error);
+        await showAlert('Error al subir el documento: ' + error.message, 'Error');
+    }
+}
 
 window.uploadAlbaran = async function(pedidoId, file) {
     if (!file) return;
