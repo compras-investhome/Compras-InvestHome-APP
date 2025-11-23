@@ -3,11 +3,14 @@
 import { db } from './database.js';
 
 let currentUser = null;
+let currentUserType = null;
 let currentObra = null;
 let currentTienda = null;
 let currentCategoria = null;
 let carrito = [];
 let searchResults = [];
+let editingUsuarioId = null;
+let editingObraId = null;
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
@@ -16,50 +19,105 @@ document.addEventListener('DOMContentLoaded', async () => {
         await db.initDefaultData();
         
         // Verificar si hay sesión activa
-        const sesion = await db.getSesion();
-        if (sesion) {
-            currentUser = sesion.persona;
-            currentObra = sesion.obra;
-            showView('main');
-            loadTiendas();
-            updateCartCount();
-        } else {
-            // Intentar cargar desde localStorage como respaldo
-            const savedUser = localStorage.getItem('currentUser');
-            const savedObra = localStorage.getItem('currentObra');
-            if (savedUser && savedObra) {
-                currentUser = savedUser;
-                currentObra = savedObra;
-                showView('main');
-                loadTiendas();
-                updateCartCount();
+        const sesion = await db.getSesionCompleta();
+        if (sesion && sesion.userId) {
+            const usuario = await db.get('usuarios', sesion.userId);
+            if (usuario) {
+                currentUser = usuario;
+                currentUserType = usuario.tipo;
+                currentObra = sesion.obraId ? await db.get('obras', sesion.obraId) : null;
+                currentTienda = sesion.tiendaId ? await db.get('tiendas', sesion.tiendaId) : null;
+                redirectByUserType();
             } else {
                 showView('login');
             }
-        }
-    } catch (error) {
-        console.error('Error al inicializar Firebase:', error);
-        // Intentar cargar desde localStorage
-        const savedUser = localStorage.getItem('currentUser');
-        const savedObra = localStorage.getItem('currentObra');
-        if (savedUser && savedObra) {
-            currentUser = savedUser;
-            currentObra = savedObra;
-            showView('main');
-            loadTiendas();
-            updateCartCount();
         } else {
             showView('login');
         }
+    } catch (error) {
+        console.error('Error al inicializar Firebase:', error);
+        showView('login');
     }
 
     setupEventListeners();
+    setupLoginListeners();
 });
 
 // Event Listeners
 function setupEventListeners() {
-    // Login
-    document.getElementById('btn-login').addEventListener('click', handleLogin);
+    // Login (manejado en setupLoginListeners)
+    
+    // Navegación admin
+    document.getElementById('btn-admin')?.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.remove('active');
+        showView('admin');
+    });
+
+    // Admin menu cards
+    document.querySelectorAll('.admin-menu-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const action = e.currentTarget.dataset.action;
+            if (action === 'usuarios') {
+                showView('admin-usuarios');
+                loadUsuarios('Técnico');
+            } else if (action === 'obras') {
+                showView('admin-obras');
+                loadObras();
+            }
+        });
+    });
+
+    // Tabs de usuarios
+    document.querySelectorAll('#view-admin-usuarios .tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = e.currentTarget.dataset.tab;
+            switchTabUsuarios(tab);
+        });
+    });
+
+    // Botones de administración
+    document.getElementById('btn-nuevo-usuario')?.addEventListener('click', () => {
+        openModalUsuario();
+    });
+
+    document.getElementById('btn-nueva-obra')?.addEventListener('click', () => {
+        openModalObra();
+    });
+
+    // Modales
+    document.querySelectorAll('.btn-close-modal').forEach(btn => {
+        btn.addEventListener('click', closeAllModals);
+    });
+
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', closeAllModals);
+    });
+
+    document.getElementById('btn-cancelar-usuario')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-cancelar-obra')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-guardar-usuario')?.addEventListener('click', guardarUsuario);
+    document.getElementById('btn-guardar-obra')?.addEventListener('click', guardarObra);
+
+    // Listener para tipo de usuario en modal
+    const modalTipoUsuario = document.getElementById('modal-usuario-tipo');
+    if (modalTipoUsuario) {
+        modalTipoUsuario.addEventListener('change', async (e) => {
+            if (e.target.value === 'Tienda') {
+                document.getElementById('modal-usuario-tienda-group').style.display = 'block';
+                const tiendas = await db.getAll('tiendas');
+                const selectTienda = document.getElementById('modal-usuario-tienda');
+                selectTienda.innerHTML = '<option value="">Seleccione una tienda</option>';
+                tiendas.forEach(tienda => {
+                    const option = document.createElement('option');
+                    option.value = tienda.id;
+                    option.textContent = tienda.nombre;
+                    selectTienda.appendChild(option);
+                });
+            } else {
+                document.getElementById('modal-usuario-tienda-group').style.display = 'none';
+            }
+        });
+    }
 
     // Navegación
     document.getElementById('btn-menu').addEventListener('click', () => {
@@ -140,8 +198,17 @@ function setupEventListeners() {
     document.getElementById('btn-logout').addEventListener('click', async () => {
         await db.clearSesion();
         currentUser = null;
+        currentUserType = null;
         currentObra = null;
+        currentTienda = null;
         carrito = [];
+        // Limpiar formulario de login
+        document.getElementById('select-tipo-usuario').value = '';
+        document.getElementById('select-usuario').value = '';
+        document.getElementById('select-obra').value = '';
+        document.getElementById('select-tienda').value = '';
+        document.getElementById('input-password').value = '';
+        updateLoginForm('');
         showView('login');
     });
 
@@ -154,41 +221,246 @@ function setupEventListeners() {
     });
 }
 
+// Setup Login Listeners
+function setupLoginListeners() {
+    const selectTipoUsuario = document.getElementById('select-tipo-usuario');
+    const btnLogin = document.getElementById('btn-login');
+
+    selectTipoUsuario.addEventListener('change', async (e) => {
+        const tipo = e.target.value;
+        updateLoginForm(tipo);
+    });
+
+    btnLogin.addEventListener('click', handleLogin);
+}
+
+// Actualizar formulario de login según tipo de usuario
+async function updateLoginForm(tipoUsuario) {
+    const formGroupUsuario = document.getElementById('form-group-usuario');
+    const formGroupObra = document.getElementById('form-group-obra');
+    const formGroupTienda = document.getElementById('form-group-tienda');
+    const formGroupPassword = document.getElementById('form-group-password');
+    const selectUsuario = document.getElementById('select-usuario');
+    const selectObra = document.getElementById('select-obra');
+    const selectTienda = document.getElementById('select-tienda');
+    const errorDiv = document.getElementById('login-error');
+
+    // Ocultar todos los campos
+    formGroupUsuario.style.display = 'none';
+    formGroupObra.style.display = 'none';
+    formGroupTienda.style.display = 'none';
+    formGroupPassword.style.display = 'none';
+    errorDiv.style.display = 'none';
+
+    if (!tipoUsuario) return;
+
+    // Mostrar campo de contraseña para todos
+    formGroupPassword.style.display = 'block';
+
+    if (tipoUsuario === 'Administrador' || tipoUsuario === 'Contabilidad') {
+        // Usuario + Contraseña
+        const usuarios = await db.getUsuariosByTipo(tipoUsuario);
+        selectUsuario.innerHTML = '<option value="">Seleccione un usuario</option>';
+        usuarios.forEach(usuario => {
+            const option = document.createElement('option');
+            option.value = usuario.id;
+            option.textContent = usuario.username;
+            selectUsuario.appendChild(option);
+        });
+        // Si solo hay un usuario, seleccionarlo automáticamente
+        if (usuarios.length === 1) {
+            selectUsuario.value = usuarios[0].id;
+        }
+        formGroupUsuario.style.display = 'block';
+    } else if (tipoUsuario === 'Técnico' || tipoUsuario === 'Encargado') {
+        // Usuario + Obra + Contraseña
+        formGroupUsuario.style.display = 'block';
+        formGroupObra.style.display = 'block';
+        
+        // Cargar usuarios de ese tipo
+        const usuarios = await db.getUsuariosByTipo(tipoUsuario);
+        selectUsuario.innerHTML = '<option value="">Seleccione un usuario</option>';
+        usuarios.forEach(usuario => {
+            const option = document.createElement('option');
+            option.value = usuario.id;
+            option.textContent = usuario.username;
+            selectUsuario.appendChild(option);
+        });
+
+        // Cargar obras
+        const obras = await db.getAllObras();
+        selectObra.innerHTML = '<option value="">Seleccione una obra</option>';
+        obras.forEach(obra => {
+            const option = document.createElement('option');
+            option.value = obra.id;
+            option.textContent = obra.nombreComercial;
+            selectObra.appendChild(option);
+        });
+    } else if (tipoUsuario === 'Tienda') {
+        // Tienda + Contraseña
+        formGroupTienda.style.display = 'block';
+        
+        // Cargar usuarios de tipo Tienda
+        const usuarios = await db.getUsuariosByTipo('Tienda');
+        selectUsuario.innerHTML = '<option value="">Seleccione un usuario</option>';
+        usuarios.forEach(usuario => {
+            const option = document.createElement('option');
+            option.value = usuario.id;
+            option.textContent = usuario.username;
+            option.dataset.tiendaId = usuario.tiendaId;
+            selectUsuario.appendChild(option);
+        });
+        formGroupUsuario.style.display = 'block';
+
+        // Actualizar select de tienda cuando se selecciona usuario
+        selectUsuario.addEventListener('change', (e) => {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            if (selectedOption.dataset.tiendaId) {
+                selectTienda.value = selectedOption.dataset.tiendaId;
+            }
+        });
+    }
+}
+
 // Manejo de Login
 async function handleLogin() {
-    const persona = document.getElementById('select-persona').value;
-    const obra = document.getElementById('select-obra').value;
+    const tipoUsuario = document.getElementById('select-tipo-usuario').value;
+    const userId = document.getElementById('select-usuario').value;
+    const obraId = document.getElementById('select-obra').value;
+    const tiendaId = document.getElementById('select-tienda').value;
+    const password = document.getElementById('input-password').value;
+    const errorDiv = document.getElementById('login-error');
 
-    if (!persona || !obra) {
-        alert('Por favor, seleccione ambas opciones');
+    errorDiv.style.display = 'none';
+
+    // Validaciones
+    if (!tipoUsuario) {
+        showError('Por favor, seleccione un tipo de usuario');
+        return;
+    }
+
+    if (!userId) {
+        showError('Por favor, seleccione un usuario');
+        return;
+    }
+
+    if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+        showError('Por favor, ingrese una contraseña de 4 dígitos');
+        return;
+    }
+
+    if ((tipoUsuario === 'Técnico' || tipoUsuario === 'Encargado') && !obraId) {
+        showError('Por favor, seleccione una obra');
+        return;
+    }
+
+    if (tipoUsuario === 'Tienda' && !tiendaId) {
+        showError('Por favor, seleccione una tienda');
         return;
     }
 
     try {
-        currentUser = persona;
-        currentObra = obra;
+        // Verificar usuario y contraseña
+        const usuario = await db.get('usuarios', userId);
+        if (!usuario) {
+            showError('Usuario no encontrado');
+            return;
+        }
+
+        if (usuario.password !== password) {
+            showError('Contraseña incorrecta');
+            return;
+        }
+
+        if (usuario.tipo !== tipoUsuario) {
+            showError('Tipo de usuario no coincide');
+            return;
+        }
+
+        // Si es Tienda, verificar que la tienda coincida
+        if (tipoUsuario === 'Tienda' && usuario.tiendaId !== tiendaId) {
+            showError('La tienda no coincide con el usuario');
+            return;
+        }
+
+        // Guardar sesión
+        currentUser = usuario;
+        currentUserType = usuario.tipo;
         
-        // Intentar guardar sesión (puede fallar si Firebase no está configurado)
-        try {
-            await db.saveSesion(persona, obra);
-        } catch (error) {
-            console.warn('No se pudo guardar la sesión en Firebase:', error);
-            // Continuar aunque falle, usando localStorage como respaldo
-            localStorage.setItem('currentUser', persona);
-            localStorage.setItem('currentObra', obra);
+        if (obraId) {
+            currentObra = await db.get('obras', obraId);
         }
         
-        // Actualizar sidebar
-        document.getElementById('sidebar-usuario').textContent = persona;
-        document.getElementById('sidebar-obra').textContent = obra;
+        if (tiendaId) {
+            currentTienda = await db.get('tiendas', tiendaId);
+        }
 
+        await db.saveSesionCompleta({
+            userId: usuario.id,
+            obraId: obraId || null,
+            tiendaId: tiendaId || null
+        });
+
+        // Actualizar sidebar
+        updateSidebar();
+
+        // Redirigir según tipo de usuario
+        redirectByUserType();
+    } catch (error) {
+        console.error('Error en login:', error);
+        showError('Error al iniciar sesión. Por favor, inténtalo de nuevo.');
+    }
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('login-error');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+}
+
+function redirectByUserType() {
+    if (currentUserType === 'Administrador') {
+        showView('admin');
+    } else if (currentUserType === 'Contabilidad') {
+        // TODO: Implementar vista de contabilidad
+        showView('main');
+        loadTiendas();
+    } else if (currentUserType === 'Técnico' || currentUserType === 'Encargado') {
         showView('main');
         loadTiendas();
         updateCartCount();
-    } catch (error) {
-        console.error('Error en login:', error);
-        alert('Error al iniciar sesión. Por favor, inténtalo de nuevo.');
+    } else if (currentUserType === 'Tienda') {
+        showGestionTienda();
     }
+}
+
+function updateSidebar() {
+    document.getElementById('sidebar-usuario').textContent = currentUser.username;
+    document.getElementById('sidebar-tipo').textContent = currentUserType;
+    
+    const obraInfo = document.getElementById('sidebar-obra-info');
+    const tiendaInfo = document.getElementById('sidebar-tienda-info');
+    
+    if (currentObra) {
+        obraInfo.style.display = 'block';
+        document.getElementById('sidebar-obra').textContent = currentObra.nombreComercial;
+    } else {
+        obraInfo.style.display = 'none';
+    }
+    
+    if (currentTienda) {
+        tiendaInfo.style.display = 'block';
+        document.getElementById('sidebar-tienda').textContent = currentTienda.nombre;
+    } else {
+        tiendaInfo.style.display = 'none';
+    }
+
+    // Mostrar/ocultar botones según tipo de usuario
+    const btnAdmin = document.getElementById('btn-admin');
+    const btnGestionTienda = document.getElementById('btn-gestion-tienda');
+    
+    if (btnAdmin) btnAdmin.style.display = currentUserType === 'Administrador' ? 'block' : 'none';
+    if (btnGestionTienda) btnGestionTienda.style.display = currentUserType === 'Tienda' ? 'block' : 'none';
 }
 
 // Navegación de Vistas
@@ -446,6 +718,11 @@ window.removeCarritoItem = function(productoId) {
 async function finalizarPedido() {
     if (carrito.length === 0) return;
     
+    if (!currentObra) {
+        alert('No se ha seleccionado una obra');
+        return;
+    }
+    
     // Agrupar por tienda
     const itemsPorTienda = {};
     for (const item of carrito) {
@@ -460,9 +737,14 @@ async function finalizarPedido() {
     // La fecha se establecerá automáticamente con serverTimestamp() en Firestore
     for (const [tiendaId, items] of Object.entries(itemsPorTienda)) {
         const pedido = {
-            tiendaId: tiendaId, // Firestore acepta strings
-            persona: currentUser,
-            obra: currentObra,
+            tiendaId: tiendaId,
+            userId: currentUser.id,
+            persona: currentUser.username,
+            obraId: currentObra.id,
+            obraNombreComercial: currentObra.nombreComercial,
+            obraDireccionGoogleMaps: currentObra.direccionGoogleMaps || '',
+            obraEncargado: currentObra.encargado || '',
+            obraTelefono: currentObra.telefonoEncargado || '',
             items: items.map(item => ({
                 productoId: item.productoId,
                 nombre: item.producto.nombre,
@@ -488,7 +770,15 @@ async function finalizarPedido() {
 
 // Mis Pedidos
 async function loadMisPedidos() {
-    const pedidos = await db.getPedidosByUser(currentUser, currentObra);
+    if (!currentUser || !currentObra) {
+        const container = document.getElementById('pedidos-list');
+        const emptyState = document.getElementById('pedidos-empty');
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    const pedidos = await db.getPedidosByUser(currentUser.id, currentObra.id);
     const container = document.getElementById('pedidos-list');
     const emptyState = document.getElementById('pedidos-empty');
     
@@ -502,7 +792,6 @@ async function loadMisPedidos() {
     container.innerHTML = '';
     
     // Ordenar por fecha (más recientes primero)
-    // Firestore ya ordena con orderBy, pero por si acaso
     pedidos.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
@@ -562,20 +851,12 @@ function createPedidoCard(pedido, tienda) {
 
 // Gestión de Tienda
 async function showGestionTienda() {
-    // Por ahora, mostrar la primera tienda como ejemplo
-    // En producción, esto debería permitir seleccionar la tienda
-    const tiendas = await db.getAll('tiendas');
-    if (tiendas.length === 0) {
-        alert('No hay tiendas disponibles');
+    if (!currentTienda) {
+        alert('No hay tienda asociada');
         return;
     }
     
-    // Por simplicidad, usar la primera tienda
-    // En producción, debería haber un selector o login de tienda
-    const tienda = tiendas[0];
-    currentTienda = tienda;
-    
-    document.getElementById('gestion-tienda-nombre').textContent = `Gestión - ${tienda.nombre}`;
+    document.getElementById('gestion-tienda-nombre').textContent = `Gestión - ${currentTienda.nombre}`;
     showView('gestion-tienda');
     switchTab('en-curso');
 }
@@ -618,7 +899,11 @@ async function loadPedidosEnCurso() {
     emptyState.style.display = 'none';
     container.innerHTML = '';
     
-    pedidosEnCurso.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    pedidosEnCurso.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
     
     for (const pedido of pedidosEnCurso) {
         const card = createPedidoGestionCard(pedido);
@@ -643,7 +928,11 @@ async function loadPedidosCerrados() {
     emptyState.style.display = 'none';
     container.innerHTML = '';
     
-    pedidosCerrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    pedidosCerrados.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
     
     for (const pedido of pedidosCerrados) {
         const card = createPedidoGestionCard(pedido, true);
@@ -655,18 +944,40 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card';
     
-    const fecha = new Date(pedido.fecha).toLocaleString('es-ES');
+    let fecha;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fecha = pedido.fecha.toDate().toLocaleString('es-ES');
+    } else if (pedido.fecha) {
+        fecha = new Date(pedido.fecha).toLocaleString('es-ES');
+    } else {
+        fecha = 'Fecha no disponible';
+    }
+    
     const estados = ['Nuevo', 'Preparando', 'Preparado', 'En ruta', 'Entregado', 'Completado'];
+    
+    // Información de la obra
+    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraDireccion = pedido.obraDireccionGoogleMaps || '';
+    const obraEncargado = pedido.obraEncargado || '';
+    const obraTelefono = pedido.obraTelefono || '';
+    
+    // Crear enlace clickable para el nombre de la obra si hay dirección
+    const obraNombreHtml = obraDireccion 
+        ? `<a href="${obraDireccion}" target="_blank" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">${obraNombre}</a>`
+        : obraNombre;
     
     card.innerHTML = `
         <div class="pedido-gestion-header">
             <div class="pedido-gestion-info">
                 <h4>Pedido #${pedido.id}</h4>
-                <p>${pedido.persona} | ${pedido.obra}</p>
+                <p><strong>Usuario:</strong> ${pedido.persona}</p>
+                <p><strong>Obra:</strong> ${obraNombreHtml}</p>
+                ${obraDireccion ? `<p style="font-size: 0.75rem; color: var(--text-secondary);"><a href="${obraDireccion}" target="_blank" style="color: var(--primary-color);">📍 Ver en Google Maps</a></p>` : ''}
+                ${obraEncargado ? `<p style="font-size: 0.875rem;"><strong>Encargado:</strong> ${obraEncargado}${obraTelefono ? ` | Tel: ${obraTelefono}` : ''}</p>` : ''}
                 <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
             </div>
             ${!isCerrado ? `
-                <select class="estado-select" onchange="updateEstadoPedido(${pedido.id}, this.value)">
+                <select class="estado-select" onchange="updateEstadoPedido('${pedido.id}', this.value)">
                     ${estados.map(estado => `
                         <option value="${estado}" ${pedido.estado === estado ? 'selected' : ''}>${estado}</option>
                     `).join('')}
@@ -688,7 +999,7 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
                 <label for="albaran-${pedido.id}" class="file-upload-label">
                     📎 Adjuntar Albarán/Factura
                 </label>
-                <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran(${pedido.id}, this.files[0])">
+                <input type="file" id="albaran-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadAlbaran('${pedido.id}', this.files[0])">
             </div>
         ` : ''}
         ${pedido.albaran ? `
@@ -705,6 +1016,8 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
 
 window.updateEstadoPedido = async function(pedidoId, nuevoEstado) {
     const pedido = await db.get('pedidos', pedidoId);
+    if (!pedido) return;
+    
     pedido.estado = nuevoEstado;
     
     // Si se marca como Completado, mover a cerrados
@@ -725,6 +1038,8 @@ window.uploadAlbaran = async function(pedidoId, file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) return;
+        
         pedido.albaran = e.target.result;
         await db.update('pedidos', pedido);
         loadPedidosEnCurso();
@@ -735,7 +1050,10 @@ window.uploadAlbaran = async function(pedidoId, file) {
 // Botones de navegación atrás
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => {
-        if (currentCategoria) {
+        const view = document.querySelector('.view.active');
+        if (view.id === 'view-admin-usuarios' || view.id === 'view-admin-obras') {
+            showView('admin');
+        } else if (currentCategoria) {
             // Volver a categorías
             currentCategoria = null;
             showView('categorias');
@@ -752,4 +1070,281 @@ document.querySelectorAll('.btn-back').forEach(btn => {
         }
     });
 });
+
+// ========== FUNCIONES DE ADMINISTRACIÓN ==========
+
+// Gestión de Usuarios
+async function loadUsuarios(tipo) {
+    const usuarios = await db.getUsuariosByTipo(tipo);
+    const container = document.getElementById('usuarios-list');
+    const emptyState = document.getElementById('usuarios-empty');
+
+    if (usuarios.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+
+    usuarios.forEach(usuario => {
+        const card = createUsuarioCard(usuario);
+        container.appendChild(card);
+    });
+}
+
+function createUsuarioCard(usuario) {
+    const card = document.createElement('div');
+    card.className = 'usuario-card';
+    card.innerHTML = `
+        <div class="usuario-info">
+            <h4>${usuario.username}</h4>
+            <p>Tipo: ${usuario.tipo}${usuario.tiendaId ? ' | Tienda asociada' : ''}</p>
+        </div>
+        <div class="usuario-actions">
+            <button class="btn-icon" onclick="editarUsuario('${usuario.id}')" title="Editar">✏️</button>
+            <button class="btn-icon danger" onclick="eliminarUsuario('${usuario.id}')" title="Eliminar">🗑️</button>
+        </div>
+    `;
+    return card;
+}
+
+function switchTabUsuarios(tab) {
+    document.querySelectorAll('#view-admin-usuarios .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tab) {
+            btn.classList.add('active');
+        }
+    });
+
+    const tipoMap = {
+        'tecnicos': 'Técnico',
+        'encargados': 'Encargado',
+        'tiendas': 'Tienda'
+    };
+    loadUsuarios(tipoMap[tab]);
+}
+
+window.editarUsuario = async function(usuarioId) {
+    const usuario = await db.get('usuarios', usuarioId);
+    if (!usuario) return;
+
+    editingUsuarioId = usuarioId;
+    document.getElementById('modal-usuario-titulo').textContent = 'Editar Usuario';
+    document.getElementById('modal-usuario-nombre').value = usuario.username;
+    document.getElementById('modal-usuario-tipo').value = usuario.tipo;
+    document.getElementById('modal-usuario-password').value = '';
+    
+    if (usuario.tipo === 'Tienda') {
+        document.getElementById('modal-usuario-tienda-group').style.display = 'block';
+        const tiendas = await db.getAll('tiendas');
+        const selectTienda = document.getElementById('modal-usuario-tienda');
+        selectTienda.innerHTML = '<option value="">Seleccione una tienda</option>';
+        tiendas.forEach(tienda => {
+            const option = document.createElement('option');
+            option.value = tienda.id;
+            option.textContent = tienda.nombre;
+            if (usuario.tiendaId === tienda.id) option.selected = true;
+            selectTienda.appendChild(option);
+        });
+    } else {
+        document.getElementById('modal-usuario-tienda-group').style.display = 'none';
+    }
+
+    document.getElementById('modal-usuario').classList.add('active');
+};
+
+window.eliminarUsuario = async function(usuarioId) {
+    if (!confirm('¿Está seguro de eliminar este usuario?')) return;
+    
+    try {
+        await db.eliminarUsuario(usuarioId);
+        const tipo = document.querySelector('#view-admin-usuarios .tab-btn.active').dataset.tab;
+        switchTabUsuarios(tipo);
+    } catch (error) {
+        alert('Error al eliminar usuario: ' + error.message);
+    }
+};
+
+function openModalUsuario() {
+    editingUsuarioId = null;
+    document.getElementById('modal-usuario-titulo').textContent = 'Nuevo Usuario';
+    document.getElementById('modal-usuario-nombre').value = '';
+    document.getElementById('modal-usuario-tipo').value = 'Técnico';
+    document.getElementById('modal-usuario-password').value = '';
+    document.getElementById('modal-usuario-tienda-group').style.display = 'none';
+
+    document.getElementById('modal-usuario').classList.add('active');
+}
+
+async function guardarUsuario() {
+    const nombre = document.getElementById('modal-usuario-nombre').value.trim();
+    const tipo = document.getElementById('modal-usuario-tipo').value;
+    const password = document.getElementById('modal-usuario-password').value;
+    const tiendaId = document.getElementById('modal-usuario-tienda').value;
+
+    if (!nombre) {
+        alert('Por favor, ingrese un nombre de usuario');
+        return;
+    }
+
+    if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+        alert('Por favor, ingrese una contraseña de 4 dígitos');
+        return;
+    }
+
+    if (tipo === 'Tienda' && !tiendaId) {
+        alert('Por favor, seleccione una tienda');
+        return;
+    }
+
+    try {
+        const usuarioData = {
+            username: nombre,
+            tipo: tipo,
+            password: password
+        };
+
+        if (tipo === 'Tienda') {
+            usuarioData.tiendaId = tiendaId;
+        }
+
+        if (editingUsuarioId) {
+            usuarioData.id = editingUsuarioId;
+            await db.actualizarUsuario(usuarioData);
+        } else {
+            await db.crearUsuario(usuarioData);
+        }
+
+        closeAllModals();
+        const tipoTab = document.querySelector('#view-admin-usuarios .tab-btn.active').dataset.tab;
+        switchTabUsuarios(tipoTab);
+    } catch (error) {
+        alert('Error al guardar usuario: ' + error.message);
+    }
+}
+
+// Gestión de Obras
+async function loadObras() {
+    const obras = await db.getAllObras();
+    const container = document.getElementById('obras-list');
+    const emptyState = document.getElementById('obras-empty');
+
+    if (obras.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+
+    obras.forEach(obra => {
+        const card = createObraCard(obra);
+        container.appendChild(card);
+    });
+}
+
+function createObraCard(obra) {
+    const card = document.createElement('div');
+    card.className = 'obra-card';
+    
+    const direccionLink = obra.direccionGoogleMaps 
+        ? `<a href="${obra.direccionGoogleMaps}" target="_blank">${obra.direccionGoogleMaps}</a>`
+        : 'No especificada';
+    
+    card.innerHTML = `
+        <div class="obra-header">
+            <div>
+                <h4>${obra.nombreComercial}</h4>
+                <div class="obra-info">Encargado: ${obra.encargado || 'No especificado'}</div>
+                <div class="obra-info">Teléfono: ${obra.telefonoEncargado || 'No especificado'}</div>
+                <div class="obra-direccion">Dirección: ${direccionLink}</div>
+            </div>
+        </div>
+        <div class="obra-actions">
+            <button class="btn-icon" onclick="editarObra('${obra.id}')" title="Editar">✏️</button>
+            <button class="btn-icon danger" onclick="eliminarObra('${obra.id}')" title="Eliminar">🗑️</button>
+        </div>
+    `;
+    return card;
+}
+
+window.editarObra = async function(obraId) {
+    const obra = await db.get('obras', obraId);
+    if (!obra) return;
+
+    editingObraId = obraId;
+    document.getElementById('modal-obra-titulo').textContent = 'Editar Obra';
+    document.getElementById('modal-obra-nombre').value = obra.nombreComercial || '';
+    document.getElementById('modal-obra-direccion').value = obra.direccionGoogleMaps || '';
+    document.getElementById('modal-obra-encargado').value = obra.encargado || '';
+    document.getElementById('modal-obra-telefono').value = obra.telefonoEncargado || '';
+
+    document.getElementById('modal-obra').classList.add('active');
+};
+
+window.eliminarObra = async function(obraId) {
+    if (!confirm('¿Está seguro de eliminar esta obra?')) return;
+    
+    try {
+        await db.eliminarObra(obraId);
+        loadObras();
+    } catch (error) {
+        alert('Error al eliminar obra: ' + error.message);
+    }
+};
+
+function openModalObra() {
+    editingObraId = null;
+    document.getElementById('modal-obra-titulo').textContent = 'Nueva Obra';
+    document.getElementById('modal-obra-nombre').value = '';
+    document.getElementById('modal-obra-direccion').value = '';
+    document.getElementById('modal-obra-encargado').value = '';
+    document.getElementById('modal-obra-telefono').value = '';
+
+    document.getElementById('modal-obra').classList.add('active');
+}
+
+async function guardarObra() {
+    const nombre = document.getElementById('modal-obra-nombre').value.trim();
+    const direccion = document.getElementById('modal-obra-direccion').value.trim();
+    const encargado = document.getElementById('modal-obra-encargado').value.trim();
+    const telefono = document.getElementById('modal-obra-telefono').value.trim();
+
+    if (!nombre) {
+        alert('Por favor, ingrese un nombre comercial');
+        return;
+    }
+
+    try {
+        const obraData = {
+            nombreComercial: nombre,
+            direccionGoogleMaps: direccion,
+            encargado: encargado,
+            telefonoEncargado: telefono
+        };
+
+        if (editingObraId) {
+            obraData.id = editingObraId;
+            await db.actualizarObra(obraData);
+        } else {
+            await db.crearObra(obraData);
+        }
+
+        closeAllModals();
+        loadObras();
+    } catch (error) {
+        alert('Error al guardar obra: ' + error.message);
+    }
+}
+
+function closeAllModals() {
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.classList.remove('active');
+    });
+    editingUsuarioId = null;
+    editingObraId = null;
+}
 

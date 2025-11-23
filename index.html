@@ -12,55 +12,49 @@
         <div class="login-container">
             <h1>Compras InvestHome</h1>
             <div class="form-group">
-                <label for="select-persona">¿Quién pide la mercancía?</label>
-                <select id="select-persona" class="form-select">
-                    <option value="">Seleccione una opción</option>
-                    <option value="Lucas | Técnico">Lucas | Técnico</option>
-                    <option value="Juanjo | Técnico">Juanjo | Técnico</option>
-                    <option value="Daniel | Técnico">Daniel | Técnico</option>
-                    <option value="Miguel | Técnico">Miguel | Técnico</option>
-                    <option value="Oleg | Técnico">Oleg | Técnico</option>
-                    <option value="Romer | Técnico">Romer | Técnico</option>
-                    <option value="Alejandro | Técnico">Alejandro | Técnico</option>
-                    <option value="Javier | Técnico">Javier | Técnico</option>
-                    <option value="Alexander | Encargado">Alexander | Encargado</option>
-                    <option value="Oleksandr Moroz | Encargado">Oleksandr Moroz | Encargado</option>
-                    <option value="Juan Pedro | Encargado">Juan Pedro | Encargado</option>
-                    <option value="Florin | Encargado">Florin | Encargado</option>
-                    <option value="Petru | Encargado">Petru | Encargado</option>
-                    <option value="Ruslan | Encargado">Ruslan | Encargado</option>
-                    <option value="Ionel | Encargado">Ionel | Encargado</option>
-                    <option value="Stefan | Encargado">Stefan | Encargado</option>
-                    <option value="Vladimir | Encargado">Vladimir | Encargado</option>
-                    <option value="Yurii Kharin | Fontanería">Yurii Kharin | Fontanería</option>
-                    <option value="Cristina | Project Manager">Cristina | Project Manager</option>
-                    <option value="Otro">Otro</option>
+                <label for="select-tipo-usuario">Tipo de Usuario</label>
+                <select id="select-tipo-usuario" class="form-select">
+                    <option value="">Seleccione tipo de usuario</option>
+                    <option value="Administrador">Administrador</option>
+                    <option value="Contabilidad">Contabilidad</option>
+                    <option value="Técnico">Técnico</option>
+                    <option value="Encargado">Encargado</option>
+                    <option value="Tienda">Tienda</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label for="select-obra">¿Para qué obra es?</label>
+            
+            <!-- Campo dinámico para usuario (Técnico/Encargado) -->
+            <div id="form-group-usuario" class="form-group" style="display: none;">
+                <label for="select-usuario">Usuario</label>
+                <select id="select-usuario" class="form-select">
+                    <option value="">Seleccione un usuario</option>
+                </select>
+            </div>
+
+            <!-- Campo dinámico para obra (Técnico/Encargado) -->
+            <div id="form-group-obra" class="form-group" style="display: none;">
+                <label for="select-obra">Obra</label>
                 <select id="select-obra" class="form-select">
-                    <option value="">Seleccione una opción</option>
-                    <option value="01.7 Villas | Urb. Peña Blanquilla [Mijas]">01.7 Villas | Urb. Peña Blanquilla [Mijas]</option>
-                    <option value="02. Caseta de Ventas El Higueron [Mijas]">02. Caseta de Ventas El Higueron [Mijas]</option>
-                    <option value="03. Quinta de Sierra Blanca [Marbella]">03. Quinta de Sierra Blanca [Marbella]</option>
-                    <option value="04. Gualdalmina 19 [Marbella]">04. Gualdalmina 19 [Marbella]</option>
-                    <option value="05. C2 13 Camojan [Marbella]">05. C2 13 Camojan [Marbella]</option>
-                    <option value="06. CC El Rodeo [Marbella]">06. CC El Rodeo [Marbella]</option>
-                    <option value="07. Los Flamingos 101 [Benahavís]">07. Los Flamingos 101 [Benahavís]</option>
-                    <option value="08. A2 19 La Zagaleta [Benahavís]">08. A2 19 La Zagaleta [Benahavís]</option>
-                    <option value="09. C1 12 La Zagaleta [Benahavís]">09. C1 12 La Zagaleta [Benahavís]</option>
-                    <option value="10. C1 14 La Zagaleta [Benahavís]">10. C1 14 La Zagaleta [Benahavís]</option>
-                    <option value="11. Caserias del Esperonal | Marbella Country Club [Benahavís]">11. Caserias del Esperonal | Marbella Country Club [Benahavís]</option>
-                    <option value="12. La Perla [Benahavís]">12. La Perla [Benahavís]</option>
-                    <option value="13. La Verde Island | Doña Julia [Estepona]">13. La Verde Island | Doña Julia [Estepona]</option>
-                    <option value="14. Arroyo Medio [Estepona]">14. Arroyo Medio [Estepona]</option>
-                    <option value="15. El Taraje Fase 1 [Estepona]">15. El Taraje Fase 1 [Estepona]</option>
-                    <option value="Oficina">Oficina</option>
-                    <option value="0. Otra">0. Otra</option>
+                    <option value="">Seleccione una obra</option>
                 </select>
             </div>
-            <button id="btn-login" class="btn btn-primary">Aceptar</button>
+
+            <!-- Campo dinámico para tienda (Tienda) -->
+            <div id="form-group-tienda" class="form-group" style="display: none;">
+                <label for="select-tienda">Tienda</label>
+                <select id="select-tienda" class="form-select">
+                    <option value="">Seleccione una tienda</option>
+                </select>
+            </div>
+
+            <!-- Campo de contraseña -->
+            <div id="form-group-password" class="form-group" style="display: none;">
+                <label for="input-password">Contraseña (4 dígitos)</label>
+                <input type="password" id="input-password" class="form-input" maxlength="4" pattern="[0-9]{4}" placeholder="0000">
+            </div>
+
+            <button id="btn-login" class="btn btn-primary btn-block">Iniciar Sesión</button>
+            <div id="login-error" class="error-message" style="display: none;"></div>
         </div>
     </div>
 
@@ -269,6 +263,167 @@
         </main>
     </div>
 
+    <!-- Vista 8: Administración - Gestión de Usuarios -->
+    <div id="view-admin-usuarios" class="view">
+        <header class="app-header">
+            <button class="icon-btn btn-back" aria-label="Volver">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2>Gestión de Usuarios</h2>
+            <button id="btn-nuevo-usuario" class="icon-btn" aria-label="Nuevo Usuario" title="Nuevo Usuario">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>
+        </header>
+
+        <main class="main-content">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="tecnicos">Técnicos</button>
+                <button class="tab-btn" data-tab="encargados">Encargados</button>
+                <button class="tab-btn" data-tab="tiendas">Tiendas</button>
+            </div>
+            <div id="usuarios-list" class="usuarios-list">
+                <!-- Los usuarios se cargarán dinámicamente -->
+            </div>
+            <div id="usuarios-empty" class="empty-state" style="display: none;">
+                <p>No hay usuarios registrados</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista 9: Administración - Gestión de Obras -->
+    <div id="view-admin-obras" class="view">
+        <header class="app-header">
+            <button class="icon-btn btn-back" aria-label="Volver">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2>Gestión de Obras</h2>
+            <button id="btn-nueva-obra" class="icon-btn" aria-label="Nueva Obra" title="Nueva Obra">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>
+        </header>
+
+        <main class="main-content">
+            <div id="obras-list" class="obras-list">
+                <!-- Las obras se cargarán dinámicamente -->
+            </div>
+            <div id="obras-empty" class="empty-state" style="display: none;">
+                <p>No hay obras registradas</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista 10: Panel de Administración -->
+    <div id="view-admin" class="view">
+        <header class="app-header">
+            <button id="btn-menu-admin" class="icon-btn" aria-label="Menú">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <h2>Administración</h2>
+            <div style="width: 24px;"></div>
+        </header>
+
+        <main class="main-content">
+            <div class="admin-menu-grid">
+                <div class="admin-menu-card" data-action="usuarios">
+                    <div class="admin-menu-icon">👥</div>
+                    <h3>Gestión de Usuarios</h3>
+                    <p>Crear y gestionar usuarios</p>
+                </div>
+                <div class="admin-menu-card" data-action="obras">
+                    <div class="admin-menu-icon">🏗️</div>
+                    <h3>Gestión de Obras</h3>
+                    <p>Crear y gestionar obras</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Crear/Editar Usuario -->
+    <div id="modal-usuario" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-usuario-titulo">Nuevo Usuario</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="modal-usuario-nombre">Nombre de Usuario</label>
+                    <input type="text" id="modal-usuario-nombre" class="form-input" placeholder="Nombre del usuario">
+                </div>
+                <div class="form-group">
+                    <label for="modal-usuario-tipo">Tipo</label>
+                    <select id="modal-usuario-tipo" class="form-select">
+                        <option value="Técnico">Técnico</option>
+                        <option value="Encargado">Encargado</option>
+                        <option value="Tienda">Tienda</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="modal-usuario-password">Contraseña (4 dígitos)</label>
+                    <input type="password" id="modal-usuario-password" class="form-input" maxlength="4" pattern="[0-9]{4}" placeholder="0000">
+                </div>
+                <div id="modal-usuario-tienda-group" class="form-group" style="display: none;">
+                    <label for="modal-usuario-tienda">Tienda Asociada</label>
+                    <select id="modal-usuario-tienda" class="form-select">
+                        <option value="">Seleccione una tienda</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-usuario" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-usuario" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear/Editar Obra -->
+    <div id="modal-obra" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-obra-titulo">Nueva Obra</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="modal-obra-nombre">Nombre Comercial</label>
+                    <input type="text" id="modal-obra-nombre" class="form-input" placeholder="Nombre de la obra">
+                </div>
+                <div class="form-group">
+                    <label for="modal-obra-direccion">Dirección (Google Maps)</label>
+                    <input type="text" id="modal-obra-direccion" class="form-input" placeholder="URL o dirección de Google Maps">
+                </div>
+                <div class="form-group">
+                    <label for="modal-obra-encargado">Encargado</label>
+                    <input type="text" id="modal-obra-encargado" class="form-input" placeholder="Nombre del encargado">
+                </div>
+                <div class="form-group">
+                    <label for="modal-obra-telefono">Teléfono del Encargado</label>
+                    <input type="tel" id="modal-obra-telefono" class="form-input" placeholder="Teléfono">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-obra" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-obra" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Menú lateral -->
     <div id="sidebar" class="sidebar">
         <div class="sidebar-overlay"></div>
@@ -280,9 +435,12 @@
             <div class="sidebar-body">
                 <div class="sidebar-user-info">
                     <p><strong>Usuario:</strong> <span id="sidebar-usuario"></span></p>
-                    <p><strong>Obra:</strong> <span id="sidebar-obra"></span></p>
+                    <p><strong>Tipo:</strong> <span id="sidebar-tipo"></span></p>
+                    <p id="sidebar-obra-info" style="display: none;"><strong>Obra:</strong> <span id="sidebar-obra"></span></p>
+                    <p id="sidebar-tienda-info" style="display: none;"><strong>Tienda:</strong> <span id="sidebar-tienda"></span></p>
                 </div>
-                <button id="btn-gestion-tienda" class="sidebar-btn">Gestión de Tienda</button>
+                <button id="btn-admin" class="sidebar-btn" style="display: none;">Administración</button>
+                <button id="btn-gestion-tienda" class="sidebar-btn" style="display: none;">Gestión de Tienda</button>
                 <button id="btn-logout" class="sidebar-btn btn-danger">Cerrar Sesión</button>
             </div>
         </div>

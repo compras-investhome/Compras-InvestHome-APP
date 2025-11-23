@@ -62,6 +62,24 @@ class Database {
             if (tiendasSnapshot.empty) {
                 await this.seedData();
             }
+            
+            // Verificar si existe usuario administrador
+            const usuariosSnapshot = await getDocs(collection(this.db, 'usuarios'));
+            const adminExists = usuariosSnapshot.docs.some(doc => doc.data().tipo === 'Administrador');
+            if (!adminExists) {
+                // Crear usuario administrador por defecto
+                await addDoc(collection(this.db, 'usuarios'), {
+                    username: 'admin',
+                    tipo: 'Administrador',
+                    password: '0000'
+                });
+            }
+            
+            // Verificar si existen obras
+            const obrasSnapshot = await getDocs(collection(this.db, 'obras'));
+            if (obrasSnapshot.empty) {
+                await this.seedObras();
+            }
         } catch (error) {
             console.error('Error al verificar datos iniciales:', error);
         }
@@ -170,6 +188,30 @@ class Database {
         }
     }
 
+    async seedObras() {
+        const obras = [
+            { nombreComercial: '01.7 Villas | Urb. Peña Blanquilla [Mijas]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '02. Caseta de Ventas El Higueron [Mijas]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '03. Quinta de Sierra Blanca [Marbella]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '04. Gualdalmina 19 [Marbella]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '05. C2 13 Camojan [Marbella]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '06. CC El Rodeo [Marbella]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '07. Los Flamingos 101 [Benahavís]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '08. A2 19 La Zagaleta [Benahavís]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '09. C1 12 La Zagaleta [Benahavís]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '10. C1 14 La Zagaleta [Benahavís]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '11. Caserias del Esperonal | Marbella Country Club [Benahavís]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '12. La Perla [Benahavís]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '13. La Verde Island | Doña Julia [Estepona]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '14. Arroyo Medio [Estepona]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' },
+            { nombreComercial: '15. El Taraje Fase 1 [Estepona]', direccionGoogleMaps: '', encargado: '', telefonoEncargado: '' }
+        ];
+
+        for (const obra of obras) {
+            await addDoc(collection(this.db, 'obras'), obra);
+        }
+    }
+
     // Operaciones CRUD genéricas
     async add(storeName, data) {
         const docRef = await addDoc(collection(this.db, storeName), {
@@ -245,12 +287,12 @@ class Database {
         );
     }
 
-    async getPedidosByUser(persona, obra) {
+    async getPedidosByUser(userId, obraId) {
         // Firestore requiere índice compuesto para múltiples where + orderBy
         // Por ahora, filtramos en memoria
         const q = query(
             collection(this.db, 'pedidos'),
-            where('persona', '==', persona)
+            where('userId', '==', userId)
         );
         const querySnapshot = await getDocs(q);
         const pedidos = querySnapshot.docs.map(doc => ({
@@ -259,7 +301,7 @@ class Database {
         }));
         // Filtrar por obra y ordenar
         return pedidos
-            .filter(p => p.obra === obra)
+            .filter(p => p.obraId === obraId)
             .sort((a, b) => {
                 const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
                 const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
@@ -308,6 +350,110 @@ class Database {
             await deleteDoc(sesionRef);
         } catch (error) {
             // Ignorar si no existe
+        }
+    }
+
+    // Métodos para Usuarios
+    async getUsuarioByUsername(username) {
+        const q = query(
+            collection(this.db, 'usuarios'),
+            where('username', '==', username)
+        );
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const doc = querySnapshot.docs[0];
+            return { id: doc.id, ...doc.data() };
+        }
+        return null;
+    }
+
+    async getUsuariosByTipo(tipo) {
+        const q = query(
+            collection(this.db, 'usuarios'),
+            where('tipo', '==', tipo)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    }
+
+    async getAllUsuarios() {
+        return await this.getAll('usuarios');
+    }
+
+    async crearUsuario(usuarioData) {
+        // Verificar que no exista otro administrador si es admin
+        if (usuarioData.tipo === 'Administrador') {
+            const admins = await this.getUsuariosByTipo('Administrador');
+            if (admins.length > 0) {
+                throw new Error('Ya existe un usuario administrador');
+            }
+        }
+        // Verificar que no exista otro usuario de contabilidad si es contabilidad
+        if (usuarioData.tipo === 'Contabilidad') {
+            const contabilidad = await this.getUsuariosByTipo('Contabilidad');
+            if (contabilidad.length > 0) {
+                throw new Error('Ya existe un usuario de contabilidad');
+            }
+        }
+        // Verificar que el username no esté en uso
+        const existing = await this.getUsuarioByUsername(usuarioData.username);
+        if (existing) {
+            throw new Error('El nombre de usuario ya está en uso');
+        }
+        return await this.add('usuarios', usuarioData);
+    }
+
+    async actualizarUsuario(usuarioData) {
+        return await this.update('usuarios', usuarioData);
+    }
+
+    async eliminarUsuario(usuarioId) {
+        await this.delete('usuarios', usuarioId);
+    }
+
+    // Métodos para Obras
+    async getAllObras() {
+        return await this.getAll('obras');
+    }
+
+    async getObra(obraId) {
+        return await this.get('obras', obraId);
+    }
+
+    async crearObra(obraData) {
+        return await this.add('obras', obraData);
+    }
+
+    async actualizarObra(obraData) {
+        return await this.update('obras', obraData);
+    }
+
+    async eliminarObra(obraId) {
+        await this.delete('obras', obraId);
+    }
+
+    // Métodos para Sesión mejorada
+    async saveSesionCompleta(sesionData) {
+        const sesionRef = doc(this.db, 'sesion', 'current');
+        await setDoc(sesionRef, {
+            ...sesionData,
+            fecha: serverTimestamp()
+        });
+    }
+
+    async getSesionCompleta() {
+        try {
+            const sesionRef = doc(this.db, 'sesion', 'current');
+            const docSnap = await getDoc(sesionRef);
+            if (docSnap.exists()) {
+                return { id: docSnap.id, ...docSnap.data() };
+            }
+            return null;
+        } catch (error) {
+            return null;
         }
     }
 }
