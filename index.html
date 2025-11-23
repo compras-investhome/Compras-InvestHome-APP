@@ -243,6 +243,7 @@
         <div class="tabs">
             <button class="tab-btn active" data-tab="en-curso">Pedidos en Curso</button>
             <button class="tab-btn" data-tab="cerrados">Pedidos Cerrados</button>
+            <button class="tab-btn" data-tab="solicitudes">Solicitudes de Anulación</button>
         </div>
 
         <main class="main-content">
@@ -260,6 +261,14 @@
                 </div>
                 <div id="pedidos-cerrados-empty" class="empty-state" style="display: none;">
                     <p>No hay pedidos cerrados</p>
+                </div>
+            </div>
+            <div id="solicitudes" class="tab-content">
+                <div id="solicitudes-list" class="pedidos-gestion-list">
+                    <!-- Las solicitudes se cargarán dinámicamente -->
+                </div>
+                <div id="solicitudes-empty" class="empty-state" style="display: none;">
+                    <p>No hay solicitudes de anulación pendientes</p>
                 </div>
             </div>
         </main>

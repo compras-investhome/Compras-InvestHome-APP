@@ -309,6 +309,32 @@ class Database {
             });
     }
 
+    async getAllPedidosByUser(userId) {
+        // Obtener todos los pedidos del usuario sin filtrar por obra
+        const q = query(
+            collection(this.db, 'pedidos'),
+            where('userId', '==', userId)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    }
+
+    async getSolicitudesAnulacionByTienda(tiendaId) {
+        const q = query(
+            collection(this.db, 'solicitudesAnulacion'),
+            where('tiendaId', '==', tiendaId),
+            where('estado', '==', 'Pendiente')
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    }
+
     async getPedidosByTienda(tiendaId) {
         try {
             // Intentar con orderBy primero

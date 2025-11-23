@@ -982,7 +982,7 @@ async function finalizarPedido() {
 
 // Mis Pedidos
 async function loadMisPedidos() {
-    if (!currentUser || !currentObra) {
+    if (!currentUser) {
         const container = document.getElementById('pedidos-list');
         const emptyState = document.getElementById('pedidos-empty');
         container.innerHTML = '';
@@ -990,11 +990,14 @@ async function loadMisPedidos() {
         return;
     }
     
-    const pedidos = await db.getPedidosByUser(currentUser.id, currentObra.id);
+    // Obtener todos los pedidos del usuario (no completados)
+    const todosPedidos = await db.getAllPedidosByUser(currentUser.id);
+    const pedidosNoCompletados = todosPedidos.filter(p => p.estado !== 'Completado');
+    
     const container = document.getElementById('pedidos-list');
     const emptyState = document.getElementById('pedidos-empty');
     
-    if (pedidos.length === 0) {
+    if (pedidosNoCompletados.length === 0) {
         container.innerHTML = '';
         emptyState.style.display = 'block';
         return;
@@ -1003,17 +1006,59 @@ async function loadMisPedidos() {
     emptyState.style.display = 'none';
     container.innerHTML = '';
     
-    // Ordenar por fecha (más recientes primero)
-    pedidos.sort((a, b) => {
-        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-        return fechaB - fechaA;
+    // Agrupar pedidos por obra
+    const pedidosPorObra = {};
+    for (const pedido of pedidosNoCompletados) {
+        const obraId = pedido.obraId;
+        if (!pedidosPorObra[obraId]) {
+            const obra = await db.get('obras', obraId);
+            pedidosPorObra[obraId] = {
+                obra: obra,
+                pedidos: []
+            };
+        }
+        pedidosPorObra[obraId].pedidos.push(pedido);
+    }
+    
+    // Ordenar obras por nombre
+    const obrasOrdenadas = Object.values(pedidosPorObra).sort((a, b) => {
+        const nombreA = a.obra?.nombreComercial || '';
+        const nombreB = b.obra?.nombreComercial || '';
+        return nombreA.localeCompare(nombreB);
     });
     
-    for (const pedido of pedidos) {
-        const tienda = await db.get('tiendas', pedido.tiendaId);
-        const card = createPedidoCard(pedido, tienda);
-        container.appendChild(card);
+    // Crear desplegables por obra
+    for (const grupo of obrasOrdenadas) {
+        const obra = grupo.obra;
+        const pedidos = grupo.pedidos;
+        
+        // Ordenar pedidos por fecha (más recientes primero)
+        pedidos.sort((a, b) => {
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+            return fechaB - fechaA;
+        });
+        
+        const obraSection = document.createElement('div');
+        obraSection.className = 'obra-pedidos-section';
+        obraSection.innerHTML = `
+            <div class="obra-pedidos-header" onclick="toggleObraPedidos('${obra.id}')">
+                <h3>${obra.nombreComercial || 'Obra sin nombre'}</h3>
+                <span class="obra-pedidos-count">${pedidos.length} pedido${pedidos.length !== 1 ? 's' : ''}</span>
+                <span class="obra-pedidos-toggle" id="toggle-${obra.id}">▼</span>
+            </div>
+            <div class="obra-pedidos-content" id="content-${obra.id}" style="display: none;">
+                <!-- Los pedidos se cargarán aquí -->
+            </div>
+        `;
+        container.appendChild(obraSection);
+        
+        const contentDiv = obraSection.querySelector(`#content-${obra.id}`);
+        for (const pedido of pedidos) {
+            const tienda = await db.get('tiendas', pedido.tiendaId);
+            const card = createPedidoCard(pedido, tienda);
+            contentDiv.appendChild(card);
+        }
     }
 }
 
@@ -1036,17 +1081,27 @@ function createPedidoCard(pedido, tienda) {
         <div class="pedido-header">
             <div>
                 <div class="pedido-id">Pedido #${pedido.id} - ${tienda.nombre}</div>
-                <div class="pedido-info">${pedido.persona} | ${pedido.obra}</div>
+                <div class="pedido-info">${pedido.persona} | ${pedido.obraNombreComercial || pedido.obra}</div>
             </div>
             <span class="pedido-estado ${estadoClass}">${pedido.estado}</span>
         </div>
         <div class="pedido-items">
-            ${pedido.items.map(item => `
-                <div class="pedido-item">
-                    <span class="pedido-item-nombre">${item.nombre} (${item.descripcion})</span>
-                    <span class="pedido-item-cantidad">x${item.cantidad}</span>
+            ${pedido.items.map((item, index) => `
+                <div class="pedido-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-color); border-radius: 6px; margin-bottom: 0.5rem;">
+                    <div style="flex: 1;">
+                        <span class="pedido-item-nombre">${item.nombre}${item.descripcion ? ` (${item.descripcion})` : ''}</span>
+                        <span class="pedido-item-cantidad">x${item.cantidad}</span>
+                    </div>
+                    <button class="btn-solicitar-anulacion-item" onclick="solicitarAnulacionItem('${pedido.id}', ${index})" title="Solicitar anulación de este artículo">
+                        🗑️
+                    </button>
                 </div>
             `).join('')}
+        </div>
+        <div class="pedido-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button class="btn btn-secondary" onclick="solicitarAnulacionPedido('${pedido.id}')" style="flex: 1;">
+                Solicitar Anulación del Pedido
+            </button>
         </div>
         ${pedido.albaran ? `
             <div class="pedido-albaran">
@@ -1060,6 +1115,79 @@ function createPedidoCard(pedido, tienda) {
     
     return card;
 }
+
+window.toggleObraPedidos = function(obraId) {
+    const content = document.getElementById(`content-${obraId}`);
+    const toggle = document.getElementById(`toggle-${obraId}`);
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▲';
+    } else {
+        content.style.display = 'none';
+        toggle.textContent = '▼';
+    }
+};
+
+// Solicitudes de Anulación
+window.solicitarAnulacionItem = async function(pedidoId, itemIndex) {
+    if (!confirm('¿Está seguro de solicitar la anulación de este artículo?')) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            alert('Error: No se pudo encontrar el artículo');
+            return;
+        }
+        
+        const item = pedido.items[itemIndex];
+        const solicitud = {
+            pedidoId: pedidoId,
+            tiendaId: pedido.tiendaId,
+            userId: pedido.userId,
+            tipo: 'item',
+            itemIndex: itemIndex,
+            item: item,
+            estado: 'Pendiente',
+            fecha: new Date()
+        };
+        
+        await db.add('solicitudesAnulacion', solicitud);
+        alert('Solicitud de anulación enviada a la tienda');
+        loadMisPedidos();
+    } catch (error) {
+        console.error('Error al solicitar anulación:', error);
+        alert('Error al solicitar anulación: ' + error.message);
+    }
+};
+
+window.solicitarAnulacionPedido = async function(pedidoId) {
+    if (!confirm('¿Está seguro de solicitar la anulación completa de este pedido?')) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            alert('Error: No se pudo encontrar el pedido');
+            return;
+        }
+        
+        const solicitud = {
+            pedidoId: pedidoId,
+            tiendaId: pedido.tiendaId,
+            userId: pedido.userId,
+            tipo: 'pedido',
+            estado: 'Pendiente',
+            fecha: new Date()
+        };
+        
+        await db.add('solicitudesAnulacion', solicitud);
+        alert('Solicitud de anulación del pedido enviada a la tienda');
+        loadMisPedidos();
+    } catch (error) {
+        console.error('Error al solicitar anulación:', error);
+        alert('Error al solicitar anulación: ' + error.message);
+    }
+};
 
 // Gestión de Tienda
 async function showGestionTienda() {
@@ -1097,9 +1225,12 @@ function switchTab(tab) {
     if (tab === 'en-curso') {
         document.getElementById('pedidos-en-curso').classList.add('active');
         loadPedidosEnCurso();
-    } else {
+    } else if (tab === 'cerrados') {
         document.getElementById('pedidos-cerrados').classList.add('active');
         loadPedidosCerrados();
+    } else if (tab === 'solicitudes') {
+        document.getElementById('solicitudes').classList.add('active');
+        loadSolicitudesAnulacion();
     }
 }
 
@@ -1252,6 +1383,161 @@ async function loadPedidosCerrados() {
         container.appendChild(card);
     }
 }
+
+async function loadSolicitudesAnulacion() {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const solicitudes = await db.getSolicitudesAnulacionByTienda(tiendaId);
+    const container = document.getElementById('solicitudes-list');
+    const emptyState = document.getElementById('solicitudes-empty');
+    
+    if (solicitudes.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    // Ordenar por fecha (más recientes primero)
+    solicitudes.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+    
+    for (const solicitud of solicitudes) {
+        const pedido = await db.get('pedidos', solicitud.pedidoId);
+        if (!pedido) continue;
+        
+        const usuario = await db.get('usuarios', solicitud.userId);
+        const card = createSolicitudCard(solicitud, pedido, usuario);
+        container.appendChild(card);
+    }
+}
+
+function createSolicitudCard(solicitud, pedido, usuario) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card';
+    
+    let fecha;
+    if (solicitud.fecha && solicitud.fecha.toDate) {
+        fecha = solicitud.fecha.toDate().toLocaleString('es-ES');
+    } else if (solicitud.fecha) {
+        fecha = new Date(solicitud.fecha).toLocaleString('es-ES');
+    } else {
+        fecha = 'Fecha no disponible';
+    }
+    
+    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    
+    card.innerHTML = `
+        <div class="pedido-gestion-header">
+            <div class="pedido-gestion-info">
+                <h4>Solicitud de Anulación</h4>
+                <p><strong>Usuario:</strong> ${usuario ? usuario.username : pedido.persona}</p>
+                <p><strong>Obra:</strong> ${obraNombre}</p>
+                <p><strong>Pedido:</strong> #${pedido.id}</p>
+                <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
+            </div>
+            <span class="pedido-estado estado-pendiente">Pendiente</span>
+        </div>
+        <div class="pedido-items">
+            ${solicitud.tipo === 'item' ? `
+                <div class="pedido-item" style="padding: 0.75rem; background: var(--bg-color); border-radius: 8px;">
+                    <p><strong>Solicitud:</strong> Anular artículo</p>
+                    <div style="margin-top: 0.5rem;">
+                        <strong>${solicitud.item.nombre}</strong>
+                        ${solicitud.item.descripcion ? `<p style="font-size: 0.875rem; color: var(--text-secondary);">${solicitud.item.descripcion}</p>` : ''}
+                        <p style="font-size: 0.875rem; color: var(--text-secondary);">Cantidad: x${solicitud.item.cantidad}</p>
+                    </div>
+                </div>
+            ` : `
+                <div class="pedido-item" style="padding: 0.75rem; background: var(--bg-color); border-radius: 8px;">
+                    <p><strong>Solicitud:</strong> Anular pedido completo</p>
+                </div>
+            `}
+        </div>
+        <div class="pedido-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button class="btn btn-danger" onclick="rechazarSolicitudAnulacion('${solicitud.id}')" style="flex: 1;">
+                Rechazar
+            </button>
+            <button class="btn btn-primary" onclick="aceptarSolicitudAnulacion('${solicitud.id}')" style="flex: 1;">
+                Aceptar
+            </button>
+        </div>
+    `;
+    
+    return card;
+}
+
+window.aceptarSolicitudAnulacion = async function(solicitudId) {
+    if (!confirm('¿Está seguro de aceptar esta solicitud de anulación?')) return;
+    
+    try {
+        const solicitud = await db.get('solicitudesAnulacion', solicitudId);
+        if (!solicitud) {
+            alert('Error: No se pudo encontrar la solicitud');
+            return;
+        }
+        
+        const pedido = await db.get('pedidos', solicitud.pedidoId);
+        if (!pedido) {
+            alert('Error: No se pudo encontrar el pedido');
+            return;
+        }
+        
+        if (solicitud.tipo === 'item') {
+            // Eliminar el artículo del pedido
+            pedido.items.splice(solicitud.itemIndex, 1);
+            
+            // Si el pedido queda sin items, eliminarlo
+            if (pedido.items.length === 0) {
+                await db.delete('pedidos', pedido.id);
+            } else {
+                await db.update('pedidos', pedido);
+            }
+        } else {
+            // Eliminar el pedido completo
+            await db.delete('pedidos', pedido.id);
+        }
+        
+        // Marcar solicitud como aceptada
+        solicitud.estado = 'Aceptada';
+        await db.update('solicitudesAnulacion', solicitud);
+        
+        alert('Solicitud aceptada');
+        loadSolicitudesAnulacion();
+        loadPedidosEnCurso();
+    } catch (error) {
+        console.error('Error al aceptar solicitud:', error);
+        alert('Error al aceptar solicitud: ' + error.message);
+    }
+};
+
+window.rechazarSolicitudAnulacion = async function(solicitudId) {
+    if (!confirm('¿Está seguro de rechazar esta solicitud de anulación?')) return;
+    
+    try {
+        const solicitud = await db.get('solicitudesAnulacion', solicitudId);
+        if (!solicitud) {
+            alert('Error: No se pudo encontrar la solicitud');
+            return;
+        }
+        
+        // Marcar solicitud como rechazada
+        solicitud.estado = 'Rechazada';
+        await db.update('solicitudesAnulacion', solicitud);
+        
+        alert('Solicitud rechazada');
+        loadSolicitudesAnulacion();
+    } catch (error) {
+        console.error('Error al rechazar solicitud:', error);
+        alert('Error al rechazar solicitud: ' + error.message);
+    }
+};
 
 function createPedidoGestionCard(pedido, isCerrado = false) {
     const card = document.createElement('div');
