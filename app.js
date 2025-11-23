@@ -2748,6 +2748,14 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                 </p>
             </div>
         </div>
+        ${pedido.pedidoSistemaPDF ? `
+            <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Documento del Pedido del Sistema (con el pago real):</p>
+                <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-block; padding: 0.5rem 1rem; background: var(--primary-color-light); border-radius: 6px;">
+                    📄 Ver/Descargar Documento del Sistema
+                </a>
+            </div>
+        ` : ''}
         ${!isPagado && estadoPago === 'Pendiente de pago' ? `
             <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
                 <label for="transferencia-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
