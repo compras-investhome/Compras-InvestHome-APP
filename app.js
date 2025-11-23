@@ -3495,10 +3495,16 @@ async function procesarExcel() {
         }
         
         let productosCreados = 0;
+        let productosActualizados = 0;
         let categoriasCreadas = 0;
         let productosConError = 0;
         const errores = [];
         const categoriasMap = {}; // Cache de categorías por nombre
+        
+        // Obtener todos los productos de la tienda para verificar duplicados
+        const tiendaId = excelImportMode === 'categorias' ? currentTiendaAdmin.id : currentCategoriaAdmin.tiendaId;
+        const todosProductos = await db.getAll('productos');
+        const productosTienda = todosProductos.filter(p => p.tiendaId === tiendaId);
         
         messageP.textContent = `Procesando ${jsonData.length - startRow} filas...`;
         
@@ -3611,8 +3617,38 @@ async function procesarExcel() {
                     foto: foto || null
                 };
                 
-                await db.add('productos', productoData);
-                productosCreados++;
+                // Buscar producto existente por EAN o referencia
+                let productoExistente = null;
+                if (ean && ean.trim() !== '') {
+                    productoExistente = productosTienda.find(p => 
+                        p.ean && p.ean.trim() !== '' && p.ean.trim() === ean.trim()
+                    );
+                }
+                
+                // Si no se encontró por EAN, buscar por referencia
+                if (!productoExistente && referencia && referencia.trim() !== '') {
+                    productoExistente = productosTienda.find(p => 
+                        p.referencia && p.referencia.trim() !== '' && p.referencia.trim() === referencia.trim()
+                    );
+                }
+                
+                if (productoExistente) {
+                    // Actualizar producto existente
+                    productoData.id = productoExistente.id;
+                    await db.update('productos', productoData);
+                    productosActualizados++;
+                    // Actualizar en la lista local para evitar duplicados en la misma importación
+                    const index = productosTienda.findIndex(p => p.id === productoExistente.id);
+                    if (index !== -1) {
+                        productosTienda[index] = { ...productoData, id: productoExistente.id };
+                    }
+                } else {
+                    // Crear nuevo producto
+                    const nuevoId = await db.add('productos', productoData);
+                    productosCreados++;
+                    // Agregar a la lista para evitar duplicados en la misma importación
+                    productosTienda.push({ ...productoData, id: nuevoId });
+                }
             } catch (error) {
                 productosConError++;
                 errores.push(`Fila ${i + 1}: ${error.message}`);
@@ -3625,6 +3661,7 @@ async function procesarExcel() {
             mensaje += `- Categorías creadas: ${categoriasCreadas}\n`;
         }
         mensaje += `- Productos creados: ${productosCreados}\n`;
+        mensaje += `- Productos actualizados: ${productosActualizados}\n`;
         if (productosConError > 0) {
             mensaje += `- Errores: ${productosConError}\n`;
             if (errores.length > 0) {
