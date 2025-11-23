@@ -2817,13 +2817,14 @@ async function createCuentaContabilidadCard(tienda, gastado) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
     
-    // Obtener pedidos "Pago A cuenta" con documento del sistema
+    // Obtener pedidos "Pago A cuenta" con documento del sistema que NO estén pagados
     const todosPedidos = await db.getAll('pedidos');
     const pedidosCuenta = todosPedidos.filter(p => 
         p.tiendaId === tienda.id && 
         p.estadoPago === 'Pago A cuenta' && 
         p.estado !== 'Completado' &&
-        p.pedidoSistemaPDF
+        p.pedidoSistemaPDF &&
+        !p.transferenciaPDF // No mostrar los que ya tienen PDF de pago (ya están pagados)
     );
     
     const porcentaje = (gastado / tienda.limiteCuenta) * 100;
@@ -3002,7 +3003,15 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         }
         
         await showAlert('PDF del pago adjuntado correctamente. El pedido se ha marcado como pagado y se ha descontado del gastado de la cuenta.', 'Éxito');
+        
+        // Recargar la vista de cuentas (el pedido desaparecerá del desplegable)
         loadCuentasContabilidad();
+        
+        // Si estamos en la pestaña de pedidos pagados, recargarla también (el pedido aparecerá ahí)
+        const tabActivo = document.querySelector('.tab-btn.active[data-tab]');
+        if (tabActivo && tabActivo.dataset.tab === 'pedidos-pagados-contabilidad') {
+            loadPedidosPagadosContabilidad();
+        }
     } catch (error) {
         console.error('Error al subir pago de cuenta:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
