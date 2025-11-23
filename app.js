@@ -586,6 +586,17 @@ async function loadTiendas() {
         for (const producto of searchResults) {
             const card = await createProductoCard(producto);
             container.appendChild(card);
+            
+            // Agregar event listener al botón "Añadir"
+            const btnAdd = card.querySelector('.btn-add-cart[data-producto-id]');
+            if (btnAdd) {
+                btnAdd.addEventListener('click', async () => {
+                    const productoId = btnAdd.getAttribute('data-producto-id');
+                    const cantidadInput = card.querySelector(`.cantidad-input[data-producto-id="${productoId}"]`);
+                    const cantidad = cantidadInput ? parseInt(cantidadInput.value) || 1 : 1;
+                    await addToCart(productoId, cantidad);
+                });
+            }
         }
     } else {
         container.innerHTML = '';
@@ -656,6 +667,17 @@ async function loadProductos(categoriaId) {
     for (const producto of productos) {
         const card = await createProductoCard(producto);
         container.appendChild(card);
+        
+        // Agregar event listener al botón "Añadir"
+        const btnAdd = card.querySelector('.btn-add-cart[data-producto-id]');
+        if (btnAdd) {
+            btnAdd.addEventListener('click', async () => {
+                const productoId = btnAdd.getAttribute('data-producto-id');
+                const cantidadInput = card.querySelector(`.cantidad-input[data-producto-id="${productoId}"]`);
+                const cantidad = cantidadInput ? parseInt(cantidadInput.value) || 1 : 1;
+                await addToCart(productoId, cantidad);
+            });
+        }
     }
 }
 
@@ -696,8 +718,8 @@ async function createProductoCard(producto) {
                 </div>
             ` : `
                 <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
-                    <input type="number" id="cantidad-${producto.id}" min="1" value="1" style="width: 60px; padding: 0.25rem; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
-                    <button class="btn-add-cart" onclick="addToCart(${producto.id}, document.getElementById('cantidad-${producto.id}').value)">Añadir</button>
+                    <input type="number" class="cantidad-input" data-producto-id="${producto.id}" min="1" value="1" style="width: 60px; padding: 0.25rem; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                    <button class="btn-add-cart" data-producto-id="${producto.id}">Añadir</button>
                 </div>
             `}
         </div>
@@ -877,7 +899,9 @@ async function finalizarPedido() {
     
     // Crear un pedido por cada tienda
     // La fecha se establecerá automáticamente con serverTimestamp() en Firestore
+    const pedidosCreados = [];
     for (const [tiendaId, items] of Object.entries(itemsPorTienda)) {
+        const tienda = await db.get('tiendas', tiendaId);
         const pedido = {
             tiendaId: tiendaId,
             userId: currentUser.id,
@@ -899,14 +923,22 @@ async function finalizarPedido() {
         };
         
         await db.add('pedidos', pedido);
+        pedidosCreados.push(tienda ? tienda.nombre : 'Tienda');
     }
     
     // Limpiar carrito
     carrito = [];
     updateCartCount();
     
-    alert('Pedido realizado con éxito');
+    // Mostrar mensaje de éxito
+    const mensaje = pedidosCreados.length === 1 
+        ? `Pedido realizado con éxito para ${pedidosCreados[0]}`
+        : `Se han creado ${pedidosCreados.length} pedidos:\n${pedidosCreados.join(', ')}`;
+    alert(mensaje);
+    
+    // Volver a la vista principal
     showView('main');
+    loadTiendas();
     loadTiendas();
 }
 
@@ -1193,7 +1225,14 @@ window.uploadAlbaran = async function(pedidoId, file) {
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => {
         const view = document.querySelector('.view.active');
-        if (view.id === 'view-admin-usuarios' || view.id === 'view-admin-obras' || view.id === 'view-admin-tiendas') {
+        if (view.id === 'view-carrito') {
+            // Volver a la vista anterior (main o productos)
+            if (currentCategoria) {
+                showView('productos');
+            } else {
+                showView('main');
+            }
+        } else if (view.id === 'view-admin-usuarios' || view.id === 'view-admin-obras' || view.id === 'view-admin-tiendas') {
             showView('admin');
         } else if (view.id === 'view-admin-categorias') {
             // Volver a tiendas admin
