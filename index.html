@@ -582,14 +582,21 @@
                     <input type="url" id="modal-tienda-web" class="form-input" placeholder="https://www.ejemplo.com">
                 </div>
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="modal-tienda-sin-cuenta"> Sin límite de cuenta
-                    </label>
-                </div>
-                <div id="modal-tienda-cuenta-group" class="form-group">
-                    <label>
-                        <input type="checkbox" id="modal-tienda-tiene-cuenta"> Tiene cuenta con límite
-                    </label>
+                    <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Cuenta:</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="radio" name="modal-tienda-cuenta-tipo" id="modal-tienda-no-cuenta" value="no-cuenta">
+                            <span>No tiene cuenta</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="radio" name="modal-tienda-cuenta-tipo" id="modal-tienda-sin-limite" value="sin-limite">
+                            <span>Sin límite de cuenta</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="radio" name="modal-tienda-cuenta-tipo" id="modal-tienda-tiene-cuenta" value="con-limite">
+                            <span>Tiene cuenta con límite</span>
+                        </label>
+                    </div>
                 </div>
                 <div id="modal-tienda-limite-group" class="form-group" style="display: none;">
                     <label for="modal-tienda-limite">Límite de Cuenta (€)</label>

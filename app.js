@@ -748,9 +748,20 @@ function createTiendaCard(tienda) {
         imagenHtml = `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
     }
     
+    // Obtener servicios
+    const servicios = [];
+    if (tienda.servicios?.cuenta) servicios.push('Cuenta');
+    if (tienda.servicios?.transporte) servicios.push('Transporte gratuito');
+    if (tienda.servicios?.preparacion) servicios.push('Preparación de pedidos');
+    if (tienda.servicios?.baseDatos) servicios.push('Base de datos');
+    
     card.innerHTML = `
         ${imagenHtml}
         <h3>${tienda.nombre}</h3>
+        ${tienda.sector ? `<div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">${tienda.sector}</div>` : ''}
+        ${servicios.length > 0 ? `<div style="font-size: 0.75rem; color: var(--primary-color); margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; justify-content: center;">
+            ${servicios.map(s => `<span style="background: var(--primary-color-light); padding: 0.25rem 0.5rem; border-radius: 12px;">${s}</span>`).join('')}
+        </div>` : ''}
     `;
     card.addEventListener('click', () => {
         currentTienda = tienda;
@@ -2740,6 +2751,7 @@ function createTiendaAdminCard(tienda) {
                 ${tienda.web ? `<div class="tienda-admin-info"><strong>Web:</strong> <a href="${tienda.web}" target="_blank">${tienda.web}</a></div>` : ''}
                 ${tienda.limiteCuenta ? `<div class="tienda-admin-info"><strong>Límite cuenta:</strong> ${tienda.limiteCuenta}€</div>` : ''}
                 ${servicios.length > 0 ? `<div class="tienda-admin-info"><strong>Servicios:</strong> ${servicios.join(', ')}</div>` : ''}
+                ${tienda.contactos ? `<div class="tienda-admin-info" style="margin-top: 0.5rem;"><strong>Personas de Contacto:</strong><br><span style="white-space: pre-line; font-size: 0.875rem;">${tienda.contactos}</span></div>` : ''}
             </div>
         </div>
         <div class="tienda-admin-actions">
@@ -2762,8 +2774,21 @@ window.editarTienda = async function(tiendaId) {
     document.getElementById('modal-tienda-ubicacion').value = tienda.ubicacion || '';
     document.getElementById('modal-tienda-sin-web').checked = !tienda.web;
     document.getElementById('modal-tienda-web').value = tienda.web || '';
-    document.getElementById('modal-tienda-sin-cuenta').checked = !tienda.tieneCuenta && !tienda.limiteCuenta;
-    document.getElementById('modal-tienda-tiene-cuenta').checked = tienda.tieneCuenta || false;
+    
+    // Configurar radio buttons de cuenta
+    if (!tienda.tieneCuenta && !tienda.limiteCuenta) {
+        // No tiene cuenta
+        document.getElementById('modal-tienda-no-cuenta').checked = true;
+    } else if (tienda.tieneCuenta && !tienda.limiteCuenta) {
+        // Sin límite de cuenta
+        document.getElementById('modal-tienda-sin-limite').checked = true;
+    } else if (tienda.tieneCuenta && tienda.limiteCuenta) {
+        // Tiene cuenta con límite
+        document.getElementById('modal-tienda-tiene-cuenta').checked = true;
+    } else {
+        // Por defecto: no tiene cuenta
+        document.getElementById('modal-tienda-no-cuenta').checked = true;
+    }
     document.getElementById('modal-tienda-limite').value = tienda.limiteCuenta || '';
     document.getElementById('modal-tienda-contactos').value = tienda.contactos || '';
     document.getElementById('modal-tienda-servicio-cuenta').checked = tienda.servicios?.cuenta || false;
@@ -2829,7 +2854,9 @@ function openModalTienda() {
     document.getElementById('modal-tienda-ubicacion').value = '';
     document.getElementById('modal-tienda-sin-web').checked = false;
     document.getElementById('modal-tienda-web').value = '';
-    document.getElementById('modal-tienda-sin-cuenta').checked = true;
+    // Configurar radio buttons de cuenta por defecto
+    document.getElementById('modal-tienda-no-cuenta').checked = true;
+    document.getElementById('modal-tienda-sin-limite').checked = false;
     document.getElementById('modal-tienda-tiene-cuenta').checked = false;
     document.getElementById('modal-tienda-limite').value = '';
     document.getElementById('modal-tienda-contactos').value = '';
@@ -2852,8 +2879,6 @@ function openModalTienda() {
 function setupTiendaModalListeners() {
     // Listeners para checkboxes de tienda
     const sinWeb = document.getElementById('modal-tienda-sin-web');
-    const sinCuenta = document.getElementById('modal-tienda-sin-cuenta');
-    const tieneCuenta = document.getElementById('modal-tienda-tiene-cuenta');
     
     if (sinWeb) {
         sinWeb.addEventListener('change', () => {
@@ -2861,14 +2886,25 @@ function setupTiendaModalListeners() {
         });
     }
     
-    if (sinCuenta) {
-        sinCuenta.addEventListener('change', () => {
+    // Listeners para radio buttons de cuenta
+    const noCuenta = document.getElementById('modal-tienda-no-cuenta');
+    const sinLimite = document.getElementById('modal-tienda-sin-limite');
+    const conLimite = document.getElementById('modal-tienda-tiene-cuenta');
+    
+    if (noCuenta) {
+        noCuenta.addEventListener('change', () => {
             updateTiendaModalVisibility();
         });
     }
     
-    if (tieneCuenta) {
-        tieneCuenta.addEventListener('change', () => {
+    if (sinLimite) {
+        sinLimite.addEventListener('change', () => {
+            updateTiendaModalVisibility();
+        });
+    }
+    
+    if (conLimite) {
+        conLimite.addEventListener('change', () => {
             updateTiendaModalVisibility();
         });
     }
@@ -2958,12 +2994,12 @@ function setupTiendaModalListeners() {
 
 function updateTiendaModalVisibility() {
     const sinWeb = document.getElementById('modal-tienda-sin-web').checked;
-    const sinCuenta = document.getElementById('modal-tienda-sin-cuenta').checked;
-    const tieneCuenta = document.getElementById('modal-tienda-tiene-cuenta').checked;
+    const noCuenta = document.getElementById('modal-tienda-no-cuenta').checked;
+    const sinLimite = document.getElementById('modal-tienda-sin-limite').checked;
+    const conLimite = document.getElementById('modal-tienda-tiene-cuenta').checked;
     
     document.getElementById('modal-tienda-web-group').style.display = sinWeb ? 'none' : 'block';
-    document.getElementById('modal-tienda-cuenta-group').style.display = sinCuenta ? 'none' : 'block';
-    document.getElementById('modal-tienda-limite-group').style.display = (sinCuenta || !tieneCuenta) ? 'none' : 'block';
+    document.getElementById('modal-tienda-limite-group').style.display = conLimite ? 'block' : 'none';
 }
 
 async function handleImageFile(file, preview, previewImg) {
@@ -2986,9 +3022,13 @@ async function guardarTienda() {
     const ubicacion = document.getElementById('modal-tienda-ubicacion').value.trim();
     const sinWeb = document.getElementById('modal-tienda-sin-web').checked;
     const web = sinWeb ? '' : document.getElementById('modal-tienda-web').value.trim();
-    const sinCuenta = document.getElementById('modal-tienda-sin-cuenta').checked;
-    const tieneCuenta = document.getElementById('modal-tienda-tiene-cuenta').checked;
-    const limite = sinCuenta || !tieneCuenta ? null : parseFloat(document.getElementById('modal-tienda-limite').value);
+    const noCuenta = document.getElementById('modal-tienda-no-cuenta').checked;
+    const sinLimite = document.getElementById('modal-tienda-sin-limite').checked;
+    const conLimite = document.getElementById('modal-tienda-tiene-cuenta').checked;
+    
+    // Determinar si tiene cuenta y el límite
+    const tieneCuenta = sinLimite || conLimite;
+    const limite = conLimite ? parseFloat(document.getElementById('modal-tienda-limite').value) : null;
     const contactos = document.getElementById('modal-tienda-contactos').value.trim();
     const servicios = {
         cuenta: document.getElementById('modal-tienda-servicio-cuenta').checked,
@@ -3031,7 +3071,7 @@ async function guardarTienda() {
             sector: sector || null,
             ubicacion: ubicacion || null,
             web: web || null,
-            tieneCuenta: tieneCuenta && !sinCuenta,
+            tieneCuenta: tieneCuenta,
             limiteCuenta: limite || null,
             contactos: contactos || null,
             servicios: servicios,
