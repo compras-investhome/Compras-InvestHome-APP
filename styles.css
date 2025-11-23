@@ -236,6 +236,17 @@ body {
     margin-bottom: 0.5rem;
 }
 
+.tienda-card-logo {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .tienda-card h3 {
     font-size: 1.1rem;
     font-weight: 600;

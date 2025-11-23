@@ -606,6 +606,11 @@
                     <textarea id="modal-tienda-notas" class="form-input" rows="3" placeholder="Notas adicionales sobre la tienda"></textarea>
                 </div>
                 <div class="form-group">
+                    <label for="modal-tienda-password">Contraseña de la Tienda (4 dígitos)</label>
+                    <input type="password" id="modal-tienda-password" class="form-input" maxlength="4" pattern="[0-9]{4}" placeholder="0000">
+                    <small style="color: var(--text-secondary); font-size: 0.875rem;">Contraseña para acceder como tienda (4 dígitos numéricos)</small>
+                </div>
+                <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 0.5rem;">
                         <input type="checkbox" id="modal-tienda-activa" checked>
                         <span>Tienda activa (visible para técnicos y encargados)</span>

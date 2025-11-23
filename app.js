@@ -14,6 +14,9 @@ let editingObraId = null;
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
+    // Mostrar login por defecto
+    showView('login');
+    
     try {
         await db.init();
         await db.initDefaultData();
@@ -21,19 +24,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Verificar si hay sesión activa
         const sesion = await db.getSesionCompleta();
         if (sesion && sesion.userId) {
-            const usuario = await db.get('usuarios', sesion.userId);
-            if (usuario) {
-                currentUser = usuario;
-                currentUserType = usuario.tipo;
-                currentObra = sesion.obraId ? await db.get('obras', sesion.obraId) : null;
-                currentTienda = sesion.tiendaId ? await db.get('tiendas', sesion.tiendaId) : null;
-                redirectByUserType();
-            } else {
-                showView('login');
+            try {
+                // Si el userId empieza con "tienda_", es una sesión de tienda
+                if (sesion.userId.startsWith('tienda_')) {
+                    const tiendaId = sesion.userId.replace('tienda_', '');
+                    const tienda = await db.get('tiendas', tiendaId);
+                    if (tienda) {
+                        currentUser = {
+                            id: sesion.userId,
+                            username: tienda.nombre,
+                            tipo: 'Tienda'
+                        };
+                        currentUserType = 'Tienda';
+                        currentTienda = tienda;
+                        redirectByUserType();
+                        return;
+                    }
+                } else {
+                    // Es un usuario normal
+                    const usuario = await db.get('usuarios', sesion.userId);
+                    if (usuario) {
+                        currentUser = usuario;
+                        currentUserType = usuario.tipo;
+                        currentObra = sesion.obraId ? await db.get('obras', sesion.obraId) : null;
+                        currentTienda = sesion.tiendaId ? await db.get('tiendas', sesion.tiendaId) : null;
+                        redirectByUserType();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('Error al cargar sesión:', error);
+                // Limpiar sesión inválida
+                await db.clearSesion();
             }
-        } else {
-            showView('login');
         }
+        
+        // Si llegamos aquí, no hay sesión válida, mostrar login
+        showView('login');
     } catch (error) {
         console.error('Error al inicializar Firebase:', error);
         showView('login');
@@ -349,27 +376,17 @@ async function updateLoginForm(tipoUsuario) {
             selectObra.appendChild(option);
         });
     } else if (tipoUsuario === 'Tienda') {
-        // Tienda + Contraseña
+        // Solo Tienda + Contraseña (sin usuarios)
         formGroupTienda.style.display = 'block';
         
-        // Cargar usuarios de tipo Tienda
-        const usuarios = await db.getUsuariosByTipo('Tienda');
-        selectUsuario.innerHTML = '<option value="">Seleccione un usuario</option>';
-        usuarios.forEach(usuario => {
+        // Cargar todas las tiendas
+        const tiendas = await db.getAll('tiendas');
+        selectTienda.innerHTML = '<option value="">Seleccione una tienda</option>';
+        tiendas.forEach(tienda => {
             const option = document.createElement('option');
-            option.value = usuario.id;
-            option.textContent = usuario.username;
-            option.dataset.tiendaId = usuario.tiendaId;
-            selectUsuario.appendChild(option);
-        });
-        formGroupUsuario.style.display = 'block';
-
-        // Actualizar select de tienda cuando se selecciona usuario
-        selectUsuario.addEventListener('change', (e) => {
-            const selectedOption = e.target.options[e.target.selectedIndex];
-            if (selectedOption.dataset.tiendaId) {
-                selectTienda.value = selectedOption.dataset.tiendaId;
-            }
+            option.value = tienda.id;
+            option.textContent = tienda.nombre;
+            selectTienda.appendChild(option);
         });
     }
 }
@@ -391,60 +408,81 @@ async function handleLogin() {
         return;
     }
 
-    if (!userId) {
-        showError('Por favor, seleccione un usuario');
-        return;
-    }
-
     if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
         showError('Por favor, ingrese una contraseña de 4 dígitos');
         return;
     }
 
-    if ((tipoUsuario === 'Técnico' || tipoUsuario === 'Encargado') && !obraId) {
-        showError('Por favor, seleccione una obra');
-        return;
-    }
-
-    if (tipoUsuario === 'Tienda' && !tiendaId) {
-        showError('Por favor, seleccione una tienda');
-        return;
+    // Validaciones específicas por tipo
+    if (tipoUsuario === 'Tienda') {
+        if (!tiendaId) {
+            showError('Por favor, seleccione una tienda');
+            return;
+        }
+    } else {
+        if (!userId) {
+            showError('Por favor, seleccione un usuario');
+            return;
+        }
+        
+        if ((tipoUsuario === 'Técnico' || tipoUsuario === 'Encargado') && !obraId) {
+            showError('Por favor, seleccione una obra');
+            return;
+        }
     }
 
     try {
-        // Verificar usuario y contraseña
-        const usuario = await db.get('usuarios', userId);
-        if (!usuario) {
-            showError('Usuario no encontrado');
-            return;
-        }
+        let usuario = null;
+        let tienda = null;
+        
+        if (tipoUsuario === 'Tienda') {
+            // Validar contraseña de la tienda directamente
+            tienda = await db.get('tiendas', tiendaId);
+            if (!tienda) {
+                showError('Tienda no encontrada');
+                return;
+            }
+            
+            if (!tienda.password || tienda.password !== password) {
+                showError('Contraseña incorrecta');
+                return;
+            }
+            
+            // Crear objeto de usuario temporal para compatibilidad
+            usuario = {
+                id: `tienda_${tiendaId}`,
+                username: tienda.nombre,
+                tipo: 'Tienda'
+            };
+        } else {
+            // Validar usuario y contraseña
+            usuario = await db.get('usuarios', userId);
+            if (!usuario) {
+                showError('Usuario no encontrado');
+                return;
+            }
 
-        if (usuario.password !== password) {
-            showError('Contraseña incorrecta');
-            return;
-        }
+            if (usuario.password !== password) {
+                showError('Contraseña incorrecta');
+                return;
+            }
 
-        if (usuario.tipo !== tipoUsuario) {
-            showError('Tipo de usuario no coincide');
-            return;
-        }
-
-        // Si es Tienda, verificar que la tienda coincida
-        if (tipoUsuario === 'Tienda' && usuario.tiendaId !== tiendaId) {
-            showError('La tienda no coincide con el usuario');
-            return;
+            if (usuario.tipo !== tipoUsuario) {
+                showError('Tipo de usuario no coincide');
+                return;
+            }
         }
 
         // Guardar sesión
         currentUser = usuario;
-        currentUserType = usuario.tipo;
+        currentUserType = tipoUsuario;
         
         if (obraId) {
             currentObra = await db.get('obras', obraId);
         }
         
         if (tiendaId) {
-            currentTienda = await db.get('tiendas', tiendaId);
+            currentTienda = tienda || await db.get('tiendas', tiendaId);
         }
 
         await db.saveSesionCompleta({
@@ -557,16 +595,17 @@ function createTiendaCard(tienda) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
     
-    const logoHtml = tienda.logo 
-        ? `<img src="${tienda.logo}" alt="${tienda.nombre}" style="width: 60px; height: 60px; object-fit: contain; border-radius: 8px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
-        : '';
-    const iconoHtml = tienda.logo 
-        ? `<div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>`
-        : `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
+    // Mostrar logo si existe, si no mostrar icono
+    let imagenHtml = '';
+    if (tienda.logo) {
+        imagenHtml = `<img src="${tienda.logo}" alt="${tienda.nombre}" class="tienda-card-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`;
+        imagenHtml += `<div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>`;
+    } else {
+        imagenHtml = `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
+    }
     
     card.innerHTML = `
-        ${logoHtml}
-        ${iconoHtml}
+        ${imagenHtml}
         <h3>${tienda.nombre}</h3>
     `;
     card.addEventListener('click', () => {
@@ -1527,6 +1566,7 @@ window.editarTienda = async function(tiendaId) {
     document.getElementById('modal-tienda-servicio-preparacion').checked = tienda.servicios?.preparacion || false;
     document.getElementById('modal-tienda-servicio-base-datos').checked = tienda.servicios?.baseDatos || false;
     document.getElementById('modal-tienda-notas').value = tienda.notas || '';
+    document.getElementById('modal-tienda-password').value = tienda.password || '';
     document.getElementById('modal-tienda-activa').checked = tienda.activa !== false;
     
     // Cargar logo si existe
@@ -1592,6 +1632,7 @@ function openModalTienda() {
     document.getElementById('modal-tienda-servicio-preparacion').checked = false;
     document.getElementById('modal-tienda-servicio-base-datos').checked = false;
     document.getElementById('modal-tienda-notas').value = '';
+    document.getElementById('modal-tienda-password').value = '';
     document.getElementById('modal-tienda-activa').checked = true;
     
     // Limpiar logo
@@ -1750,11 +1791,17 @@ async function guardarTienda() {
         baseDatos: document.getElementById('modal-tienda-servicio-base-datos').checked
     };
     const notas = document.getElementById('modal-tienda-notas').value.trim();
+    const password = document.getElementById('modal-tienda-password').value.trim();
     const activa = document.getElementById('modal-tienda-activa').checked;
     const logoFileInput = document.getElementById('modal-tienda-logo-file');
 
     if (!nombre) {
         alert('Por favor, ingrese un nombre para la tienda');
+        return;
+    }
+
+    if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+        alert('Por favor, ingrese una contraseña de 4 dígitos para la tienda');
         return;
     }
 
@@ -1781,7 +1828,8 @@ async function guardarTienda() {
             servicios: servicios,
             notas: notas || null,
             activa: activa,
-            logo: logo
+            logo: logo,
+            password: password
         };
 
         if (editingTiendaId) {
