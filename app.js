@@ -1444,8 +1444,9 @@ async function calcularGastadoCuenta(tiendaId) {
     let gastado = 0;
     
     for (const pedido of pedidos) {
-        // Solo contar pedidos con estadoPago = 'Pago A cuenta' que no estén completados
-        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado') {
+        // Solo contar pedidos con estadoPago = 'Pago A cuenta' que tengan PDF de pago adjuntado y no estén completados
+        // El PDF de pago se adjunta desde contabilidad, y eso es lo que "gasta" el límite de la cuenta
+        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.transferenciaPDF) {
             const totalPedido = pedido.items.reduce((total, item) => {
                 const precioItem = item.precio || 0;
                 const cantidad = item.cantidad || 0;
@@ -2188,6 +2189,40 @@ async function createPedidoGestionCard(pedido, isCerrado = false) {
                     </div>
                 ` : ''}
             ` : `
+                ${pedido.estadoPago === 'Pendiente de pago' ? `
+                    ${!pedido.pedidoSistemaPDF ? `
+                        <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                            <label for="pedido-sistema-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                                📎 Adjuntar Captura/PDF del Pedido del Sistema (con el pago real)
+                            </label>
+                            <input type="file" id="pedido-sistema-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoSistema('${pedido.id}', this.files[0])" style="width: 100%;">
+                        </div>
+                    ` : `
+                        <div style="margin-top: 1rem; padding: 1rem; background: var(--success-color-light); border-radius: 8px;">
+                            <p style="font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600;">Documento del pedido del sistema adjuntado:</p>
+                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                                📄 Ver/Descargar Documento
+                            </a>
+                        </div>
+                    `}
+                ` : ''}
+                ${pedido.estadoPago === 'Pago A cuenta' ? `
+                    ${!pedido.pedidoSistemaPDF ? `
+                        <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                            <label for="pedido-sistema-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                                📎 Adjuntar Captura/PDF del Pedido del Sistema (con la cantidad real a pagar)
+                            </label>
+                            <input type="file" id="pedido-sistema-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoSistema('${pedido.id}', this.files[0])" style="width: 100%;">
+                        </div>
+                    ` : `
+                        <div style="margin-top: 1rem; padding: 1rem; background: var(--success-color-light); border-radius: 8px;">
+                            <p style="font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600;">Documento del pedido del sistema adjuntado:</p>
+                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                                📄 Ver/Descargar Documento
+                            </a>
+                        </div>
+                    `}
+                ` : ''}
                 <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
                     <label for="albaran-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
                         📎 Adjuntar Albarán/Factura
@@ -2542,19 +2577,13 @@ function switchTabContabilidad(tab) {
 async function loadPedidosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
     
-    // Filtrar pedidos pendientes: si no tiene cuenta, debe tener pedidoSistemaPDF
+    // Filtrar pedidos pendientes de pago que tengan documento del sistema adjuntado
     const pedidosFiltrados = [];
     for (const pedido of todosPedidos) {
         if (pedido.estado === 'Completado' || pedido.estadoPago !== 'Pendiente de pago') continue;
         
-        const tienda = await db.get('tiendas', pedido.tiendaId);
-        if (!tienda || !tienda.tieneCuenta) {
-            // Sin cuenta: solo si tiene pedidoSistemaPDF
-            if (pedido.pedidoSistemaPDF) {
-                pedidosFiltrados.push(pedido);
-            }
-        } else {
-            // Con cuenta: siempre mostrar si está pendiente
+        // Solo mostrar pedidos que tengan el documento del sistema adjuntado (para todos los tipos de tienda)
+        if (pedido.pedidoSistemaPDF) {
             pedidosFiltrados.push(pedido);
         }
     }
@@ -2688,7 +2717,7 @@ async function loadCuentasContabilidad() {
     
     for (const tienda of tiendasConCuenta) {
         const gastado = await calcularGastadoCuenta(tienda.id);
-        const card = createCuentaContabilidadCard(tienda, gastado);
+        const card = await createCuentaContabilidadCard(tienda, gastado);
         container.appendChild(card);
     }
 }
@@ -2784,12 +2813,106 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     return card;
 }
 
-function createCuentaContabilidadCard(tienda, gastado) {
+async function createCuentaContabilidadCard(tienda, gastado) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
     
+    // Obtener pedidos "Pago A cuenta" con documento del sistema
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosCuenta = todosPedidos.filter(p => 
+        p.tiendaId === tienda.id && 
+        p.estadoPago === 'Pago A cuenta' && 
+        p.estado !== 'Completado' &&
+        p.pedidoSistemaPDF
+    );
+    
     const porcentaje = (gastado / tienda.limiteCuenta) * 100;
     const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
+    
+    // Ordenar pedidos por fecha
+    pedidosCuenta.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+    
+    let pedidosHtml = '';
+    if (pedidosCuenta.length > 0) {
+        pedidosHtml = `
+            <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div class="obra-header" style="padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleCuentaPedidos('${tienda.id}')">
+                    <h4 style="margin: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1rem;">
+                        <span>Pedidos Pendientes de Pago (${pedidosCuenta.length})</span>
+                        <span class="toggle-icon" id="toggle-cuenta-${tienda.id}">▼</span>
+                    </h4>
+                </div>
+                <div class="cuenta-pedidos-content" id="cuenta-pedidos-${tienda.id}" style="display: block;">
+        `;
+        
+        for (const pedido of pedidosCuenta) {
+            const precioTotalPedido = pedido.items.reduce((total, item) => {
+                const precioItem = item.precio || 0;
+                const cantidad = item.cantidad || 0;
+                return total + (precioItem * cantidad);
+            }, 0);
+            
+            let fecha;
+            let fechaObj;
+            if (pedido.fecha && pedido.fecha.toDate) {
+                fechaObj = pedido.fecha.toDate();
+            } else if (pedido.fecha) {
+                fechaObj = new Date(pedido.fecha);
+            } else {
+                fechaObj = new Date();
+            }
+            const dia = fechaObj.getDate().toString().padStart(2, '0');
+            const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+            const año = fechaObj.getFullYear();
+            fecha = `${dia}/${mes}/${año}`;
+            
+            pedidosHtml += `
+                <div style="padding: 1rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                        <div>
+                            <p style="font-weight: 600; margin-bottom: 0.25rem;">Pedido #${pedido.id}</p>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary);">${fecha}</p>
+                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p style="font-weight: 600; color: var(--primary-color);">${precioTotalPedido.toFixed(2)} €</p>
+                        </div>
+                    </div>
+                    ${pedido.pedidoSistemaPDF ? `
+                        <div style="margin-bottom: 0.5rem;">
+                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                                📄 Ver Documento del Sistema
+                            </a>
+                        </div>
+                    ` : ''}
+                    ${!pedido.transferenciaPDF ? `
+                        <div style="margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-color); border-radius: 6px;">
+                            <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                                📎 Adjuntar PDF del Pago
+                            </label>
+                            <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; font-size: 0.875rem;">
+                        </div>
+                    ` : `
+                        <div style="margin-top: 0.5rem;">
+                            <p style="font-size: 0.875rem; color: var(--success-color); font-weight: 600; margin-bottom: 0.25rem;">✓ Pago adjuntado</p>
+                            <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                                📄 Ver PDF del Pago
+                            </a>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+        
+        pedidosHtml += `
+                </div>
+            </div>
+        `;
+    }
     
     card.innerHTML = `
         <div style="padding: 1.5rem;">
@@ -2818,10 +2941,53 @@ function createCuentaContabilidadCard(tienda, gastado) {
             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;">
                 ${porcentaje.toFixed(1)}% utilizado
             </p>
+            ${pedidosHtml}
         </div>
     `;
     
     return card;
+}
+
+window.toggleCuentaPedidos = function(tiendaId) {
+    const content = document.getElementById(`cuenta-pedidos-${tiendaId}`);
+    const toggle = document.getElementById(`toggle-cuenta-${tiendaId}`);
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▼';
+    } else {
+        content.style.display = 'none';
+        toggle.textContent = '▶';
+    }
+}
+
+window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
+    if (!file) return;
+    
+    if (file.type !== 'application/pdf') {
+        await showAlert('Por favor, seleccione un archivo PDF', 'Error');
+        return;
+    }
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        // Convertir archivo a base64
+        const transferenciaPDF = await fileToBase64(file);
+        
+        pedido.transferenciaPDF = transferenciaPDF;
+        await db.update('pedidos', pedido);
+        
+        await showAlert('PDF del pago adjuntado correctamente. El límite de la cuenta se ha actualizado.', 'Éxito');
+        loadCuentasContabilidad();
+    } catch (error) {
+        console.error('Error al subir pago de cuenta:', error);
+        await showAlert('Error al subir el PDF: ' + error.message, 'Error');
+    }
 }
 
 window.uploadTransferencia = async function(pedidoId, file) {
