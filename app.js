@@ -1214,13 +1214,13 @@ async function loadMisPedidos() {
         const contentDiv = obraSection.querySelector(`#content-${obra.id}`);
         for (const pedido of pedidos) {
             const tienda = await db.get('tiendas', pedido.tiendaId);
-            const card = createPedidoCard(pedido, tienda);
+            const card = await createPedidoCard(pedido, tienda);
             contentDiv.appendChild(card);
         }
     }
 }
 
-function createPedidoCard(pedido, tienda) {
+async function createPedidoCard(pedido, tienda) {
     const card = document.createElement('div');
     card.className = 'pedido-card';
     
@@ -1253,6 +1253,90 @@ function createPedidoCard(pedido, tienda) {
         return total + (precioItem * cantidad);
     }, 0);
     
+    // Obtener estado de pago
+    const estadoPago = pedido.estadoPago || 'Sin Asignar';
+    
+    // Generar HTML para estado de pago
+    let estadoPagoHtml = '';
+    if (estadoPago === 'Pagado' || pedido.transferenciaPDF) {
+        estadoPagoHtml = `
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: #d1fae5; border-radius: 8px; border: 2px solid #10b981;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">✓ Pagado</span>
+                </div>
+                ${pedido.transferenciaPDF ? `
+                    <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
+                        📄 Ver PDF de Transferencia
+                    </a>
+                ` : ''}
+            </div>
+        `;
+    } else if (estadoPago === 'Pago A cuenta') {
+        estadoPagoHtml = `
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: #dbeafe; border-radius: 8px; border: 2px solid #3b82f6;">
+                <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Pago A cuenta</span>
+            </div>
+        `;
+    } else if (estadoPago === 'Pendiente de pago') {
+        estadoPagoHtml = `
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: #fee2e2; border-radius: 8px; border: 2px solid #ef4444;">
+                <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #ef4444; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Pendiente de pago</span>
+            </div>
+        `;
+    }
+    
+    // Obtener información de la cuenta de la tienda
+    let cuentaInfoHtml = '';
+    if (tienda && tienda.tieneCuenta) {
+        const gastado = await calcularGastadoCuenta(tienda.id);
+        if (tienda.limiteCuenta) {
+            const disponible = Math.max(0, tienda.limiteCuenta - gastado);
+            const porcentaje = (gastado / tienda.limiteCuenta) * 100;
+            cuentaInfoHtml = `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">💳 Información de la Cuenta:</p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.875rem;">Límite:</span>
+                        <strong style="font-size: 0.875rem;">${tienda.limiteCuenta}€</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                        <span style="font-size: 0.875rem;">Gastado:</span>
+                        <strong style="font-size: 0.875rem; color: ${porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : 'var(--text-primary)'};">
+                            ${gastado.toFixed(2)}€
+                        </strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 0.875rem;">Disponible:</span>
+                        <strong style="font-size: 0.875rem; color: ${disponible < 0 ? '#ef4444' : 'var(--text-primary)'};">
+                            ${disponible.toFixed(2)}€
+                        </strong>
+                    </div>
+                    <div style="margin-top: 0.5rem; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden;">
+                        <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981'}; transition: width 0.3s;"></div>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; text-align: center;">
+                        ${porcentaje.toFixed(1)}% utilizado
+                    </p>
+                </div>
+            `;
+        } else {
+            cuentaInfoHtml = `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">💳 Información de la Cuenta:</p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.875rem;">Gastado:</span>
+                        <strong style="font-size: 0.875rem;">${gastado.toFixed(2)}€</strong>
+                    </div>
+                    <div style="padding: 0.5rem; background: #d1fae5; border-radius: 6px; text-align: center;">
+                        <p style="font-size: 0.75rem; color: #065f46; font-weight: 600; margin: 0;">
+                            ✓ Cuenta sin límite de gasto
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
     card.innerHTML = `
         <div class="pedido-header">
             <div>
@@ -1261,6 +1345,8 @@ function createPedidoCard(pedido, tienda) {
             </div>
             <span class="pedido-estado ${estadoClass}">${pedido.estado}</span>
         </div>
+        ${estadoPagoHtml}
+        ${cuentaInfoHtml}
         <div class="pedido-items">
             ${pedido.items.map((item, index) => {
                 const foto = item.foto ? `<img src="${item.foto}" alt="${item.nombre}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; margin-right: 0.75rem;" onerror="this.style.display='none'">` : '';
