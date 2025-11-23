@@ -1444,9 +1444,9 @@ async function calcularGastadoCuenta(tiendaId) {
     let gastado = 0;
     
     for (const pedido of pedidos) {
-        // Solo contar pedidos con estadoPago = 'Pago A cuenta' que tengan PDF de pago adjuntado y no estén completados
-        // El PDF de pago se adjunta desde contabilidad, y eso es lo que "gasta" el límite de la cuenta
-        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.transferenciaPDF) {
+        // Contar pedidos con estadoPago = 'Pago A cuenta' que tengan documento del sistema y no estén completados
+        // El gastado se suma cuando la tienda marca como "Pago A cuenta" y adjunta el documento del sistema
+        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.pedidoSistemaPDF) {
             const totalPedido = pedido.items.reduce((total, item) => {
                 const precioItem = item.precio || 0;
                 const cantidad = item.cantidad || 0;
@@ -2532,7 +2532,7 @@ window.updateEstadoPago = async function(pedidoId, nuevoEstadoPago) {
         pedido.estadoPago = nuevoEstadoPago;
         await db.update('pedidos', pedido);
         
-        // Si la tienda tiene límite y se cambió a "Pago A cuenta", actualizar badge
+        // Si la tienda tiene límite, actualizar badge siempre (tanto si cambia a "Pago A cuenta" como si cambia a otro estado)
         if (currentTienda && currentTienda.limiteCuenta) {
             const gastado = await calcularGastadoCuenta(currentTienda.id);
             const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
@@ -2839,11 +2839,11 @@ async function createCuentaContabilidadCard(tienda, gastado) {
     let pedidosHtml = '';
     if (pedidosCuenta.length > 0) {
         pedidosHtml = `
-            <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                <div class="obra-header" style="padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleCuentaPedidos('${tienda.id}')">
-                    <h4 style="margin: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1rem;">
-                        <span>Pedidos Pendientes de Pago (${pedidosCuenta.length})</span>
-                        <span class="toggle-icon" id="toggle-cuenta-${tienda.id}">▼</span>
+            <div style="margin-top: 1.5rem; border-top: 2px solid var(--border-color); padding-top: 1.5rem;">
+                <div class="obra-header" style="padding: 1rem; background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color-dark) 100%); border-radius: 12px; margin-bottom: 1rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: all 0.3s;" onclick="toggleCuentaPedidos('${tienda.id}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
+                    <h4 style="margin: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1.1rem; color: white; font-weight: 600;">
+                        <span>📋 Pedidos Pendientes de Pago (${pedidosCuenta.length})</span>
+                        <span class="toggle-icon" id="toggle-cuenta-${tienda.id}" style="color: white; font-size: 1.2rem; transition: transform 0.3s;">▼</span>
                     </h4>
                 </div>
                 <div class="cuenta-pedidos-content" id="cuenta-pedidos-${tienda.id}" style="display: block;">
@@ -2871,36 +2871,41 @@ async function createCuentaContabilidadCard(tienda, gastado) {
             fecha = `${dia}/${mes}/${año}`;
             
             pedidosHtml += `
-                <div style="padding: 1rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem; border: 1px solid var(--border-color);">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
-                        <div>
-                            <p style="font-weight: 600; margin-bottom: 0.25rem;">Pedido #${pedido.id}</p>
-                            <p style="font-size: 0.875rem; color: var(--text-secondary);">${fecha}</p>
-                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
+                <div style="padding: 1.25rem; background: white; border-radius: 12px; margin-bottom: 1rem; border: 2px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)'">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                        <div style="flex: 1;">
+                            <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Pedido #${pedido.id}</p>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">📅 ${fecha}</p>
+                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>🏗️ Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
+                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>👤 Usuario:</strong> ${pedido.persona || 'Desconocido'}</p>
                         </div>
-                        <div style="text-align: right;">
-                            <p style="font-weight: 600; color: var(--primary-color);">${precioTotalPedido.toFixed(2)} €</p>
+                        <div style="text-align: right; margin-left: 1rem;">
+                            <p style="font-weight: 700; font-size: 1.25rem; color: var(--primary-color); margin-bottom: 0.25rem;">${precioTotalPedido.toFixed(2)} €</p>
+                            <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">Pago A cuenta</span>
                         </div>
                     </div>
                     ${pedido.pedidoSistemaPDF ? `
-                        <div style="margin-bottom: 0.5rem;">
-                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                                📄 Ver Documento del Sistema
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px;">
+                            <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">📄 Documento del Sistema:</p>
+                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
+                                📥 Ver/Descargar Documento
                             </a>
                         </div>
                     ` : ''}
                     ${!pedido.transferenciaPDF ? `
-                        <div style="margin-top: 0.5rem; padding: 0.75rem; background: var(--bg-color); border-radius: 6px;">
-                            <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem;">
-                                📎 Adjuntar PDF del Pago
+                        <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 8px;">
+                            <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
+                                💳 Adjuntar PDF del Pago
                             </label>
-                            <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; font-size: 0.875rem;">
+                            <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; cursor: pointer;">
                         </div>
                     ` : `
-                        <div style="margin-top: 0.5rem;">
-                            <p style="font-size: 0.875rem; color: var(--success-color); font-weight: 600; margin-bottom: 0.25rem;">✓ Pago adjuntado</p>
-                            <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                                📄 Ver PDF del Pago
+                        <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border: 2px solid #10b981; border-radius: 8px;">
+                            <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                                ✓ Pago adjuntado y confirmado
+                            </p>
+                            <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
+                                📥 Ver PDF del Pago
                             </a>
                         </div>
                     `}
@@ -3040,6 +3045,15 @@ window.uploadPedidoSistema = async function(pedidoId, file) {
         
         pedido.pedidoSistemaPDF = pedidoSistemaPDF;
         await db.update('pedidos', pedido);
+        
+        // Si la tienda tiene límite y el pedido está marcado como "Pago A cuenta", actualizar badge
+        if (currentTienda && currentTienda.limiteCuenta && pedido.estadoPago === 'Pago A cuenta') {
+            const gastado = await calcularGastadoCuenta(currentTienda.id);
+            const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
+            if (cuentaBadge) {
+                cuentaBadge.textContent = `Cuenta ${currentTienda.limiteCuenta}€ / Gastado ${gastado.toFixed(2)}€`;
+            }
+        }
         
         await showAlert('Documento del pedido del sistema adjuntado correctamente', 'Éxito');
         loadPedidosEnCurso();
