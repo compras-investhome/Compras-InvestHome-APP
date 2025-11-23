@@ -234,6 +234,9 @@ body {
 .tienda-card-icon {
     font-size: 3rem;
     margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .tienda-card-logo {

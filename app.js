@@ -723,8 +723,10 @@ function createTiendaCard(tienda) {
     // Mostrar logo si existe, si no mostrar icono
     let imagenHtml = '';
     if (tienda.logo) {
-        imagenHtml = `<img src="${tienda.logo}" alt="${tienda.nombre}" class="tienda-card-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`;
-        imagenHtml += `<div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>`;
+        imagenHtml = `
+            <img src="${tienda.logo}" alt="${tienda.nombre}" class="tienda-card-logo" onerror="this.style.display='none'; this.parentElement.querySelector('.tienda-card-icon').style.display='flex';">
+            <div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>
+        `;
     } else {
         imagenHtml = `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
     }
