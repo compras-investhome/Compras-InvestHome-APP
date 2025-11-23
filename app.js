@@ -948,6 +948,10 @@ async function finalizarPedido() {
             items: items.map(item => ({
                 productoId: item.productoId,
                 nombre: item.producto.nombre,
+                designacion: item.producto.designacion || null,
+                referencia: item.producto.referencia || null,
+                ean: item.producto.ean || null,
+                foto: item.producto.foto || null,
                 descripcion: item.producto.descripcion,
                 cantidad: item.cantidad,
                 precio: item.producto.precio || 0
@@ -1122,6 +1126,88 @@ async function loadPedidosEnCurso() {
     emptyState.style.display = 'none';
     container.innerHTML = '';
     
+    // Agregar zona de drop para crear nuevo pedido
+    const dropZone = document.createElement('div');
+    dropZone.className = 'new-pedido-dropzone';
+    dropZone.id = 'new-pedido-dropzone';
+    dropZone.innerHTML = `
+        <div style="text-align: center; padding: 2rem; border: 2px dashed var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-secondary);">
+            <p style="font-size: 1.25rem; margin-bottom: 0.5rem;">➕ Crear Nuevo Pedido</p>
+            <p style="font-size: 0.875rem;">Arrastra un artículo aquí para crear un nuevo pedido</p>
+        </div>
+    `;
+    dropZone.ondrop = async function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        if (!draggedItem || !draggedPedidoId || draggedItemIndex === null) {
+            return;
+        }
+        
+        try {
+            // Obtener el pedido origen
+            const pedidoOrigen = await db.get('pedidos', draggedPedidoId);
+            if (!pedidoOrigen || !pedidoOrigen.items || draggedItemIndex >= pedidoOrigen.items.length) {
+                alert('Error: No se pudo encontrar el artículo a mover');
+                return;
+            }
+            
+            const itemAMover = pedidoOrigen.items[draggedItemIndex];
+            
+            // Crear nuevo pedido
+            const nuevoPedido = {
+                tiendaId: pedidoOrigen.tiendaId,
+                userId: pedidoOrigen.userId,
+                persona: pedidoOrigen.persona,
+                obraId: pedidoOrigen.obraId,
+                obraNombreComercial: pedidoOrigen.obraNombreComercial,
+                obraDireccionGoogleMaps: pedidoOrigen.obraDireccionGoogleMaps || '',
+                obraEncargado: pedidoOrigen.obraEncargado || '',
+                obraTelefono: pedidoOrigen.obraTelefono || '',
+                items: [itemAMover],
+                estado: 'Nuevo',
+                albaran: null
+            };
+            
+            await db.add('pedidos', nuevoPedido);
+            
+            // Remover item del pedido origen
+            pedidoOrigen.items.splice(draggedItemIndex, 1);
+            
+            // Si el pedido origen queda sin items, eliminarlo
+            if (pedidoOrigen.items.length === 0) {
+                await db.delete('pedidos', draggedPedidoId);
+            } else {
+                await db.update('pedidos', pedidoOrigen);
+            }
+            
+            // Recargar pedidos
+            loadPedidosEnCurso();
+            
+        } catch (error) {
+            console.error('Error al crear nuevo pedido:', error);
+            alert('Error al crear nuevo pedido: ' + error.message);
+        } finally {
+            draggedItem.style.opacity = '1';
+            dropZone.style.backgroundColor = '';
+            draggedItem = null;
+            draggedPedidoId = null;
+            draggedItemIndex = null;
+        }
+        
+        return false;
+    };
+    dropZone.ondragover = function(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        dropZone.style.backgroundColor = 'var(--primary-color-light)';
+        return false;
+    };
+    dropZone.ondragleave = function(event) {
+        dropZone.style.backgroundColor = '';
+    };
+    container.appendChild(dropZone);
+    
     pedidosEnCurso.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
@@ -1213,13 +1299,34 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
                 <span class="pedido-estado estado-completado">Completado</span>
             `}
         </div>
-        <div class="pedido-items">
-            ${pedido.items.map(item => `
-                <div class="pedido-item">
-                    <span class="pedido-item-nombre">${item.nombre} (${item.descripcion})</span>
-                    <span class="pedido-item-cantidad">x${item.cantidad}</span>
+        <div class="pedido-items" data-pedido-id="${pedido.id}" ${!isCerrado ? 'ondrop="handleDrop(event, \'' + pedido.id + '\')" ondragover="handleDragOver(event)"' : ''}>
+            ${pedido.items.map((item, index) => {
+                const foto = item.foto ? `<img src="${item.foto}" alt="${item.nombre}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; margin-right: 0.75rem;" onerror="this.style.display='none'">` : '';
+                const designacion = item.designacion ? `<strong>${item.designacion}</strong>` : '';
+                const referencia = item.referencia ? `<span style="color: var(--text-secondary); font-size: 0.875rem;">Ref: ${item.referencia}</span>` : '';
+                const ean = item.ean ? `<span style="color: var(--text-secondary); font-size: 0.875rem;">EAN: ${item.ean}</span>` : '';
+                
+                return `
+                <div class="pedido-item ${!isCerrado ? 'draggable-item' : ''}" 
+                     draggable="${!isCerrado ? 'true' : 'false'}" 
+                     data-pedido-id="${pedido.id}" 
+                     data-item-index="${index}"
+                     ondragstart="handleDragStart(event, '${pedido.id}', ${index})"
+                     style="${!isCerrado ? 'cursor: move;' : ''} display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem;">
+                    ${foto}
+                    <div style="flex: 1;">
+                        ${designacion ? `<div>${designacion}</div>` : ''}
+                        <div style="font-size: 0.875rem; color: var(--text-primary);">${item.nombre}</div>
+                        ${item.descripcion ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${item.descripcion}</div>` : ''}
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap;">
+                            ${referencia}
+                            ${ean}
+                        </div>
+                    </div>
+                    <span class="pedido-item-cantidad" style="font-weight: 600; color: var(--primary-color);">x${item.cantidad}</span>
                 </div>
-            `).join('')}
+            `;
+            }).join('')}
         </div>
         ${pedido.estado === 'Entregado' && !pedido.albaran && !isCerrado ? `
             <div class="file-upload">
@@ -1240,6 +1347,115 @@ function createPedidoGestionCard(pedido, isCerrado = false) {
     
     return card;
 }
+
+// Variables globales para drag and drop
+let draggedItem = null;
+let draggedPedidoId = null;
+let draggedItemIndex = null;
+
+// Funciones de drag and drop
+window.handleDragStart = function(event, pedidoId, itemIndex) {
+    draggedItem = event.target;
+    draggedPedidoId = pedidoId;
+    draggedItemIndex = itemIndex;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/html', event.target.outerHTML);
+    event.target.style.opacity = '0.5';
+};
+
+window.handleDragOver = function(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    event.currentTarget.style.backgroundColor = 'var(--primary-color-light)';
+    return false;
+};
+
+window.handleDragLeave = function(event) {
+    event.currentTarget.style.backgroundColor = '';
+};
+
+window.handleDrop = async function(event, targetPedidoId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (!draggedItem || !draggedPedidoId || draggedItemIndex === null) {
+        return;
+    }
+    
+    // Si se arrastra al mismo pedido, no hacer nada
+    if (draggedPedidoId === targetPedidoId) {
+        draggedItem.style.opacity = '1';
+        event.currentTarget.style.backgroundColor = '';
+        draggedItem = null;
+        draggedPedidoId = null;
+        draggedItemIndex = null;
+        return;
+    }
+    
+    try {
+        // Obtener el pedido origen
+        const pedidoOrigen = await db.get('pedidos', draggedPedidoId);
+        if (!pedidoOrigen || !pedidoOrigen.items || draggedItemIndex >= pedidoOrigen.items.length) {
+            alert('Error: No se pudo encontrar el artículo a mover');
+            return;
+        }
+        
+        const itemAMover = pedidoOrigen.items[draggedItemIndex];
+        
+        // Obtener el pedido destino
+        const pedidoDestino = await db.get('pedidos', targetPedidoId);
+        if (!pedidoDestino) {
+            // Crear nuevo pedido
+            const nuevoPedido = {
+                tiendaId: pedidoOrigen.tiendaId,
+                userId: pedidoOrigen.userId,
+                persona: pedidoOrigen.persona,
+                obraId: pedidoOrigen.obraId,
+                obraNombreComercial: pedidoOrigen.obraNombreComercial,
+                obraDireccionGoogleMaps: pedidoOrigen.obraDireccionGoogleMaps || '',
+                obraEncargado: pedidoOrigen.obraEncargado || '',
+                obraTelefono: pedidoOrigen.obraTelefono || '',
+                items: [itemAMover],
+                estado: 'Nuevo',
+                albaran: null
+            };
+            
+            await db.add('pedidos', nuevoPedido);
+        } else {
+            // Agregar item al pedido destino
+            if (!pedidoDestino.items) {
+                pedidoDestino.items = [];
+            }
+            pedidoDestino.items.push(itemAMover);
+            await db.update('pedidos', pedidoDestino);
+        }
+        
+        // Remover item del pedido origen
+        pedidoOrigen.items.splice(draggedItemIndex, 1);
+        
+        // Si el pedido origen queda sin items, eliminarlo
+        if (pedidoOrigen.items.length === 0) {
+            await db.delete('pedidos', draggedPedidoId);
+        } else {
+            await db.update('pedidos', pedidoOrigen);
+        }
+        
+        // Recargar pedidos
+        loadPedidosEnCurso();
+        
+    } catch (error) {
+        console.error('Error al mover artículo:', error);
+        alert('Error al mover el artículo: ' + error.message);
+    } finally {
+        draggedItem.style.opacity = '1';
+        event.currentTarget.style.backgroundColor = '';
+        draggedItem = null;
+        draggedPedidoId = null;
+        draggedItemIndex = null;
+    }
+    
+    return false;
+};
 
 window.updateEstadoPedido = async function(pedidoId, nuevoEstado) {
     const pedido = await db.get('pedidos', pedidoId);

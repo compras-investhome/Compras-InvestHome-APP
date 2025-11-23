@@ -1344,3 +1344,33 @@ input[type="checkbox"] {
     border-top: 1px solid var(--border-color);
 }
 
+/* Drag and Drop Styles */
+.draggable-item {
+    cursor: move;
+    transition: all 0.2s;
+}
+
+.draggable-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.draggable-item:active {
+    opacity: 0.5;
+}
+
+.pedido-items {
+    min-height: 50px;
+    transition: background-color 0.2s;
+}
+
+.new-pedido-dropzone {
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+}
+
+.new-pedido-dropzone:hover {
+    border-color: var(--primary-color);
+    background-color: var(--primary-color-light);
+}
+
