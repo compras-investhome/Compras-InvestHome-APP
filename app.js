@@ -584,7 +584,7 @@ async function loadTiendas() {
         container.className = 'productos-list';
         
         for (const producto of searchResults) {
-            const card = createProductoCard(producto);
+            const card = await createProductoCard(producto);
             container.appendChild(card);
         }
     } else {
@@ -653,23 +653,37 @@ async function loadProductos(categoriaId) {
     document.getElementById('productos-categoria-nombre').textContent = categoria.nombre;
     container.innerHTML = '';
     
-    productos.forEach(producto => {
-        const card = createProductoCard(producto);
+    for (const producto of productos) {
+        const card = await createProductoCard(producto);
         container.appendChild(card);
-    });
+    }
 }
 
-function createProductoCard(producto) {
+async function createProductoCard(producto) {
     const card = document.createElement('div');
     card.className = 'producto-card';
     
     const cantidadEnCarrito = getCantidadEnCarrito(producto.id);
     const foto = producto.foto ? `<img src="${producto.foto}" alt="${producto.nombre}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-right: 1rem;" onerror="this.style.display='none'">` : '';
     
+    // Obtener nombre de la tienda si es resultado de búsqueda
+    let vendidoPor = '';
+    if (searchResults.length > 0 && producto.tiendaId) {
+        try {
+            const tienda = await db.get('tiendas', producto.tiendaId);
+            if (tienda) {
+                vendidoPor = `<p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">Vendido por: <strong>${tienda.nombre}</strong></p>`;
+            }
+        } catch (error) {
+            console.error('Error al obtener tienda:', error);
+        }
+    }
+    
     card.innerHTML = `
         ${foto}
         <div class="producto-info" style="flex: 1;">
             <h3>${producto.nombre}</h3>
+            ${vendidoPor}
             ${producto.descripcion ? `<p>${producto.descripcion}</p>` : ''}
             ${producto.precio ? `<p style="color: var(--primary-color); font-weight: 600;">${producto.precio.toFixed(2)} €</p>` : ''}
         </div>
@@ -681,7 +695,10 @@ function createProductoCard(producto) {
                     <button class="quantity-btn" onclick="incrementProducto(${producto.id})">+</button>
                 </div>
             ` : `
-                <button class="btn-add-cart" onclick="addToCart(${producto.id})">Añadir</button>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+                    <input type="number" id="cantidad-${producto.id}" min="1" value="1" style="width: 60px; padding: 0.25rem; border: 1px solid var(--border-color); border-radius: 4px; text-align: center;">
+                    <button class="btn-add-cart" onclick="addToCart(${producto.id}, document.getElementById('cantidad-${producto.id}').value)">Añadir</button>
+                </div>
             `}
         </div>
     `;
@@ -701,17 +718,28 @@ function getCantidadEnCarrito(productoId) {
 }
 
 // Funciones globales para uso en HTML onclick
-window.addToCart = async function(productoId) {
+window.addToCart = async function(productoId, cantidad = 1) {
     const producto = await db.get('productos', productoId);
+    if (!producto) {
+        alert('Error: Producto no encontrado');
+        return;
+    }
+    
+    const cantidadNum = parseInt(cantidad) || 1;
+    if (cantidadNum < 1) {
+        alert('La cantidad debe ser al menos 1');
+        return;
+    }
+    
     const existingItem = carrito.find(item => item.productoId === productoId);
     
     if (existingItem) {
-        existingItem.cantidad++;
+        existingItem.cantidad += cantidadNum;
     } else {
         carrito.push({
             productoId: productoId,
             producto: producto,
-            cantidad: 1
+            cantidad: cantidadNum
         });
     }
     
@@ -2018,6 +2046,8 @@ window.editarProducto = async function(productoId) {
     editingProductoId = productoId;
     document.getElementById('modal-producto-titulo').textContent = 'Editar Producto';
     document.getElementById('modal-producto-foto-url').value = producto.foto || '';
+    document.getElementById('modal-producto-designacion').value = producto.designacion || '';
+    document.getElementById('modal-producto-ean').value = producto.ean || '';
     document.getElementById('modal-producto-nombre').value = producto.nombre || '';
     document.getElementById('modal-producto-precio').value = producto.precio || '';
     document.getElementById('modal-producto-descripcion').value = producto.descripcion || '';
@@ -2051,6 +2081,8 @@ function openModalProducto() {
     editingProductoId = null;
     document.getElementById('modal-producto-titulo').textContent = 'Nuevo Producto';
     document.getElementById('modal-producto-foto-url').value = '';
+    document.getElementById('modal-producto-designacion').value = '';
+    document.getElementById('modal-producto-ean').value = '';
     document.getElementById('modal-producto-nombre').value = '';
     document.getElementById('modal-producto-precio').value = '';
     document.getElementById('modal-producto-descripcion').value = '';
@@ -2062,13 +2094,20 @@ function openModalProducto() {
 
 async function guardarProducto() {
     const fotoUrl = document.getElementById('modal-producto-foto-url').value.trim();
+    const designacion = document.getElementById('modal-producto-designacion').value.trim();
+    const ean = document.getElementById('modal-producto-ean').value.trim();
     const nombre = document.getElementById('modal-producto-nombre').value.trim();
     const precio = parseFloat(document.getElementById('modal-producto-precio').value) || null;
     const descripcion = document.getElementById('modal-producto-descripcion').value.trim();
     const fileInput = document.getElementById('modal-producto-foto-file');
     
-    if (!nombre) {
+    if (!designacion) {
         alert('Por favor, ingrese una designación para el artículo');
+        return;
+    }
+    
+    if (!nombre) {
+        alert('Por favor, ingrese un nombre para el artículo');
         return;
     }
 
@@ -2089,6 +2128,8 @@ async function guardarProducto() {
         const productoData = {
             categoriaId: currentCategoriaAdmin.id,
             tiendaId: currentCategoriaAdmin.tiendaId,
+            designacion: designacion,
+            ean: ean || null,
             nombre: nombre,
             precio: precio,
             descripcion: descripcion || null,
@@ -2138,15 +2179,15 @@ function openModalExcel() {
             <strong>Formato del Excel:</strong><br>
             <strong>Columna A:</strong> Categoría (obligatorio) - Se repetirá para cada producto de esa categoría<br>
             <strong>Columna B:</strong> Designación del artículo (obligatorio)<br>
-            <strong>Columna C:</strong> Descripción (opcional)<br>
-            <strong>Columna D:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
-            <strong>Columna E:</strong> URL de la foto (opcional)<br>
+            <strong>Columna C:</strong> EAN (opcional)<br>
+            <strong>Columna D:</strong> Nombre del artículo (obligatorio)<br>
+            <strong>Columna E:</strong> Descripción (opcional)<br>
+            <strong>Columna F:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
+            <strong>Columna G:</strong> URL de la foto (opcional)<br>
             <br>
             <strong>Ejemplo:</strong><br>
-            | Categoría | Designación | Descripción | Precio | Foto |<br>
-            | Ferretería | Tornillo M6x20 | Tornillo acero | 0.15 | https://... |<br>
-            | Ferretería | Tuerca M6 | Tuerca hexagonal | 0.10 | https://... |<br>
-            | Pinturas | Pintura Blanca | Pintura 5L | 25.99 | https://... |<br>
+            | Categoría | Designación | EAN | Nombre | Descripción | Precio | Foto |<br>
+            | Ferretería | TORN-M6-20 | 1234567890123 | Tornillo M6x20 | Tornillo acero | 0.15 | https://... |<br>
             <br>
             <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada. Las categorías se crearán automáticamente si no existen.
         `;
@@ -2155,9 +2196,11 @@ function openModalExcel() {
         instructions.innerHTML = `
             <strong>Formato del Excel:</strong><br>
             <strong>Columna A:</strong> Designación del artículo (obligatorio)<br>
-            <strong>Columna B:</strong> Descripción (opcional)<br>
-            <strong>Columna C:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
-            <strong>Columna D:</strong> URL de la foto (opcional)<br>
+            <strong>Columna B:</strong> EAN (opcional)<br>
+            <strong>Columna C:</strong> Nombre del artículo (obligatorio)<br>
+            <strong>Columna D:</strong> Descripción (opcional)<br>
+            <strong>Columna E:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
+            <strong>Columna F:</strong> URL de la foto (opcional)<br>
             <br>
             <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada. Los productos se crearán en la categoría actualmente seleccionada.
         `;
@@ -2248,14 +2291,19 @@ async function procesarExcel() {
             let precio = null;
             let foto = null;
             
+            let designacion = null;
+            let ean = null;
+            
             if (excelImportMode === 'categorias') {
-                // Modo categorías: Columna A = Categoría, B = Nombre, C = Descripción, D = Precio, E = Foto
+                // Modo categorías: A = Categoría, B = Designación, C = EAN, D = Nombre, E = Descripción, F = Precio, G = Foto
                 const categoriaNombre = row[0] ? String(row[0]).trim() : null;
-                nombre = row[1] ? String(row[1]).trim() : null;
+                designacion = row[1] ? String(row[1]).trim() : null;
+                ean = row[2] ? String(row[2]).trim() : null;
+                nombre = row[3] ? String(row[3]).trim() : null;
                 
-                if (!categoriaNombre || !nombre) {
+                if (!categoriaNombre || !designacion || !nombre) {
                     productosConError++;
-                    errores.push(`Fila ${i + 1}: Falta la categoría o el nombre del artículo`);
+                    errores.push(`Fila ${i + 1}: Falta la categoría, designación o nombre del artículo`);
                     continue;
                 }
                 
@@ -2280,52 +2328,57 @@ async function procesarExcel() {
                 }
                 categoriaId = categoriasMap[categoriaNombre];
                 
-                // Columna C: Descripción (opcional)
-                descripcion = row[2] ? String(row[2]).trim() : null;
+                // Columna E: Descripción (opcional)
+                descripcion = row[4] ? String(row[4]).trim() : null;
                 
-                // Columna D: Precio (opcional)
-                if (row[3] !== null && row[3] !== undefined && row[3] !== '') {
-                    const precioStr = String(row[3]).replace(',', '.');
+                // Columna F: Precio (opcional)
+                if (row[5] !== null && row[5] !== undefined && row[5] !== '') {
+                    const precioStr = String(row[5]).replace(',', '.');
                     precio = parseFloat(precioStr);
                     if (isNaN(precio)) {
                         precio = null;
                     }
                 }
                 
-                // Columna E: URL de la foto (opcional)
-                foto = row[4] ? String(row[4]).trim() : null;
+                // Columna G: URL de la foto (opcional)
+                foto = row[6] ? String(row[6]).trim() : null;
                 
             } else {
-                // Modo productos: Columna A = Nombre, B = Descripción, C = Precio, D = Foto
-                nombre = row[0] ? String(row[0]).trim() : null;
-                if (!nombre) {
+                // Modo productos: A = Designación, B = EAN, C = Nombre, D = Descripción, E = Precio, F = Foto
+                designacion = row[0] ? String(row[0]).trim() : null;
+                ean = row[1] ? String(row[1]).trim() : null;
+                nombre = row[2] ? String(row[2]).trim() : null;
+                
+                if (!designacion || !nombre) {
                     productosConError++;
-                    errores.push(`Fila ${i + 1}: Falta la designación del artículo`);
+                    errores.push(`Fila ${i + 1}: Falta la designación o nombre del artículo`);
                     continue;
                 }
                 
                 categoriaId = currentCategoriaAdmin.id;
                 
-                // Columna B: Descripción (opcional)
-                descripcion = row[1] ? String(row[1]).trim() : null;
+                // Columna D: Descripción (opcional)
+                descripcion = row[3] ? String(row[3]).trim() : null;
                 
-                // Columna C: Precio (opcional)
-                if (row[2] !== null && row[2] !== undefined && row[2] !== '') {
-                    const precioStr = String(row[2]).replace(',', '.');
+                // Columna E: Precio (opcional)
+                if (row[4] !== null && row[4] !== undefined && row[4] !== '') {
+                    const precioStr = String(row[4]).replace(',', '.');
                     precio = parseFloat(precioStr);
                     if (isNaN(precio)) {
                         precio = null;
                     }
                 }
                 
-                // Columna D: URL de la foto (opcional)
-                foto = row[3] ? String(row[3]).trim() : null;
+                // Columna F: URL de la foto (opcional)
+                foto = row[5] ? String(row[5]).trim() : null;
             }
             
             try {
                 const productoData = {
                     categoriaId: categoriaId,
                     tiendaId: excelImportMode === 'categorias' ? currentTiendaAdmin.id : currentCategoriaAdmin.tiendaId,
+                    designacion: designacion || null,
+                    ean: ean || null,
                     nombre: nombre,
                     descripcion: descripcion || null,
                     precio: precio,
