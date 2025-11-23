@@ -63,6 +63,9 @@ function setupEventListeners() {
             } else if (action === 'obras') {
                 showView('admin-obras');
                 loadObras();
+            } else if (action === 'tiendas') {
+                showView('admin-tiendas');
+                loadTiendasAdmin();
             }
         });
     });
@@ -84,6 +87,19 @@ function setupEventListeners() {
         openModalObra();
     });
 
+    // Botones de tiendas
+    document.getElementById('btn-nueva-tienda')?.addEventListener('click', () => {
+        openModalTienda();
+    });
+
+    document.getElementById('btn-nueva-categoria')?.addEventListener('click', () => {
+        openModalCategoria();
+    });
+
+    document.getElementById('btn-nuevo-producto')?.addEventListener('click', () => {
+        openModalProducto();
+    });
+
     // Modales
     document.querySelectorAll('.btn-close-modal').forEach(btn => {
         btn.addEventListener('click', closeAllModals);
@@ -97,6 +113,35 @@ function setupEventListeners() {
     document.getElementById('btn-cancelar-obra')?.addEventListener('click', closeAllModals);
     document.getElementById('btn-guardar-usuario')?.addEventListener('click', guardarUsuario);
     document.getElementById('btn-guardar-obra')?.addEventListener('click', guardarObra);
+    
+    // Listeners para modales de tiendas
+    document.getElementById('btn-cancelar-tienda')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-guardar-tienda')?.addEventListener('click', guardarTienda);
+    document.getElementById('btn-cancelar-categoria')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-guardar-categoria')?.addEventListener('click', guardarCategoria);
+    document.getElementById('btn-cancelar-producto')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-guardar-producto')?.addEventListener('click', guardarProducto);
+    
+    // Listeners para importación Excel
+    document.getElementById('btn-importar-excel')?.addEventListener('click', () => {
+        document.getElementById('modal-importar-excel').classList.add('active');
+        document.getElementById('excel-file-input').value = '';
+        document.getElementById('excel-import-status').style.display = 'none';
+        document.getElementById('btn-procesar-excel').disabled = true;
+    });
+    
+    document.getElementById('btn-cancelar-excel')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-procesar-excel')?.addEventListener('click', procesarExcel);
+    
+    const excelFileInput = document.getElementById('excel-file-input');
+    if (excelFileInput) {
+        excelFileInput.addEventListener('change', (e) => {
+            document.getElementById('btn-procesar-excel').disabled = !e.target.files.length;
+        });
+    }
+    
+    // Setup dropzone y listeners de tienda
+    setupTiendaModalListeners();
 
     // Listener para tipo de usuario en modal
     const modalTipoUsuario = document.getElementById('modal-usuario-tipo');
@@ -480,7 +525,13 @@ function showView(viewName) {
 
 // Cargar Tiendas
 async function loadTiendas() {
-    const tiendas = await db.getAll('tiendas');
+    let tiendas = await db.getAll('tiendas');
+    
+    // Si no es administrador, filtrar solo tiendas activas
+    if (currentUserType !== 'Administrador' && currentUserType !== 'Contabilidad') {
+        tiendas = tiendas.filter(t => t.activa !== false);
+    }
+    
     const container = document.getElementById('tiendas-list');
     
     if (searchResults.length > 0) {
@@ -505,8 +556,17 @@ async function loadTiendas() {
 function createTiendaCard(tienda) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
+    
+    const logoHtml = tienda.logo 
+        ? `<img src="${tienda.logo}" alt="${tienda.nombre}" style="width: 60px; height: 60px; object-fit: contain; border-radius: 8px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+        : '';
+    const iconoHtml = tienda.logo 
+        ? `<div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>`
+        : `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
+    
     card.innerHTML = `
-        <div class="tienda-card-icon">${tienda.icono || '🏪'}</div>
+        ${logoHtml}
+        ${iconoHtml}
         <h3>${tienda.nombre}</h3>
     `;
     card.addEventListener('click', () => {
@@ -559,11 +619,13 @@ function createProductoCard(producto) {
     card.className = 'producto-card';
     
     const cantidadEnCarrito = getCantidadEnCarrito(producto.id);
+    const foto = producto.foto ? `<img src="${producto.foto}" alt="${producto.nombre}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-right: 1rem;" onerror="this.style.display='none'">` : '';
     
     card.innerHTML = `
-        <div class="producto-info">
+        ${foto}
+        <div class="producto-info" style="flex: 1;">
             <h3>${producto.nombre}</h3>
-            <p>${producto.descripcion}</p>
+            ${producto.descripcion ? `<p>${producto.descripcion}</p>` : ''}
             ${producto.precio ? `<p style="color: var(--primary-color); font-weight: 600;">${producto.precio.toFixed(2)} €</p>` : ''}
         </div>
         <div class="producto-actions">
@@ -1058,8 +1120,23 @@ window.uploadAlbaran = async function(pedidoId, file) {
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => {
         const view = document.querySelector('.view.active');
-        if (view.id === 'view-admin-usuarios' || view.id === 'view-admin-obras') {
+        if (view.id === 'view-admin-usuarios' || view.id === 'view-admin-obras' || view.id === 'view-admin-tiendas') {
             showView('admin');
+        } else if (view.id === 'view-admin-categorias') {
+            // Volver a tiendas admin
+            currentTiendaAdmin = null;
+            showView('admin-tiendas');
+            loadTiendasAdmin();
+        } else if (view.id === 'view-admin-productos') {
+            // Volver a categorías admin
+            currentCategoriaAdmin = null;
+            if (currentTiendaAdmin) {
+                showView('admin-categorias');
+                loadCategoriasAdmin(currentTiendaAdmin.id);
+            } else {
+                showView('admin-tiendas');
+                loadTiendasAdmin();
+            }
         } else if (currentCategoria) {
             // Volver a categorías
             currentCategoria = null;
@@ -1354,5 +1431,780 @@ function closeAllModals() {
     });
     editingUsuarioId = null;
     editingObraId = null;
+    editingTiendaId = null;
+    editingCategoriaId = null;
+    editingProductoId = null;
+    currentTiendaAdmin = null;
+    currentCategoriaAdmin = null;
 }
+
+// ========== GESTIÓN DE TIENDAS ==========
+
+let editingTiendaId = null;
+let editingCategoriaId = null;
+let editingProductoId = null;
+let currentTiendaAdmin = null;
+let currentCategoriaAdmin = null;
+
+// Cargar tiendas para administración
+async function loadTiendasAdmin() {
+    const tiendas = await db.getAll('tiendas');
+    const container = document.getElementById('tiendas-admin-list');
+    const emptyState = document.getElementById('tiendas-admin-empty');
+
+    if (tiendas.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+
+    tiendas.forEach(tienda => {
+        const card = createTiendaAdminCard(tienda);
+        container.appendChild(card);
+    });
+}
+
+function createTiendaAdminCard(tienda) {
+    const card = document.createElement('div');
+    card.className = `tienda-admin-card ${tienda.activa !== false ? 'activa' : 'inactiva'}`;
+    
+    const servicios = [];
+    if (tienda.servicios?.cuenta) servicios.push('Cuenta');
+    if (tienda.servicios?.transporte) servicios.push('Transporte gratuito');
+    if (tienda.servicios?.preparacion) servicios.push('Preparación de pedidos');
+    if (tienda.servicios?.baseDatos) servicios.push('Base de datos');
+    
+    const logoHtml = tienda.logo 
+        ? `<img src="${tienda.logo}" alt="${tienda.nombre}" style="width: 50px; height: 50px; object-fit: contain; border-radius: 8px; margin-bottom: 0.5rem;" onerror="this.style.display='none';">`
+        : '';
+    
+    card.innerHTML = `
+        <div class="tienda-admin-header">
+            <div>
+                ${logoHtml}
+                <h4>
+                    ${tienda.nombre || 'Sin nombre'}
+                    <span class="tienda-admin-badge ${tienda.activa !== false ? 'activa' : 'inactiva'}">
+                        ${tienda.activa !== false ? 'Activa' : 'Inactiva'}
+                    </span>
+                </h4>
+                ${tienda.sector ? `<div class="tienda-admin-info"><strong>Sector:</strong> ${tienda.sector}</div>` : ''}
+                ${tienda.ubicacion ? `<div class="tienda-admin-info"><strong>Ubicación:</strong> ${tienda.ubicacion}</div>` : ''}
+                ${tienda.web ? `<div class="tienda-admin-info"><strong>Web:</strong> <a href="${tienda.web}" target="_blank">${tienda.web}</a></div>` : ''}
+                ${tienda.limiteCuenta ? `<div class="tienda-admin-info"><strong>Límite cuenta:</strong> ${tienda.limiteCuenta}€</div>` : ''}
+                ${servicios.length > 0 ? `<div class="tienda-admin-info"><strong>Servicios:</strong> ${servicios.join(', ')}</div>` : ''}
+            </div>
+        </div>
+        <div class="tienda-admin-actions">
+            <button class="btn-icon" onclick="editarTienda('${tienda.id}')" title="Editar">✏️</button>
+            <button class="btn-icon" onclick="gestionarCategoriasTienda('${tienda.id}')" title="Gestionar Categorías">📁</button>
+            <button class="btn-icon danger" onclick="eliminarTienda('${tienda.id}')" title="Eliminar">🗑️</button>
+        </div>
+    `;
+    return card;
+}
+
+window.editarTienda = async function(tiendaId) {
+    const tienda = await db.get('tiendas', tiendaId);
+    if (!tienda) return;
+
+    editingTiendaId = tiendaId;
+    document.getElementById('modal-tienda-titulo').textContent = 'Editar Tienda';
+    document.getElementById('modal-tienda-nombre').value = tienda.nombre || '';
+    document.getElementById('modal-tienda-sector').value = tienda.sector || '';
+    document.getElementById('modal-tienda-ubicacion').value = tienda.ubicacion || '';
+    document.getElementById('modal-tienda-sin-web').checked = !tienda.web;
+    document.getElementById('modal-tienda-web').value = tienda.web || '';
+    document.getElementById('modal-tienda-sin-cuenta').checked = !tienda.tieneCuenta && !tienda.limiteCuenta;
+    document.getElementById('modal-tienda-tiene-cuenta').checked = tienda.tieneCuenta || false;
+    document.getElementById('modal-tienda-limite').value = tienda.limiteCuenta || '';
+    document.getElementById('modal-tienda-contactos').value = tienda.contactos || '';
+    document.getElementById('modal-tienda-servicio-cuenta').checked = tienda.servicios?.cuenta || false;
+    document.getElementById('modal-tienda-servicio-transporte').checked = tienda.servicios?.transporte || false;
+    document.getElementById('modal-tienda-servicio-preparacion').checked = tienda.servicios?.preparacion || false;
+    document.getElementById('modal-tienda-servicio-base-datos').checked = tienda.servicios?.baseDatos || false;
+    document.getElementById('modal-tienda-notas').value = tienda.notas || '';
+    document.getElementById('modal-tienda-activa').checked = tienda.activa !== false;
+    
+    // Cargar logo si existe
+    const logoPreview = document.getElementById('modal-tienda-logo-preview');
+    const logoPreviewImg = document.getElementById('modal-tienda-logo-preview-img');
+    if (tienda.logo) {
+        logoPreviewImg.src = tienda.logo;
+        logoPreview.style.display = 'block';
+    } else {
+        logoPreview.style.display = 'none';
+    }
+    document.getElementById('modal-tienda-logo-file').value = '';
+
+    updateTiendaModalVisibility();
+    document.getElementById('modal-tienda').classList.add('active');
+};
+
+window.eliminarTienda = async function(tiendaId) {
+    if (!confirm('¿Está seguro de eliminar esta tienda? Esto también eliminará todas sus categorías y productos.')) return;
+    
+    try {
+        // Eliminar categorías y productos relacionados
+        const categorias = await db.getCategoriasByTienda(tiendaId);
+        for (const categoria of categorias) {
+            const productos = await db.getProductosByCategoria(categoria.id);
+            for (const producto of productos) {
+                await db.delete('productos', producto.id);
+            }
+            await db.delete('categorias', categoria.id);
+        }
+        
+        await db.delete('tiendas', tiendaId);
+        loadTiendasAdmin();
+    } catch (error) {
+        alert('Error al eliminar tienda: ' + error.message);
+    }
+};
+
+window.gestionarCategoriasTienda = async function(tiendaId) {
+    const tienda = await db.get('tiendas', tiendaId);
+    if (!tienda) return;
+    
+    currentTiendaAdmin = tienda;
+    document.getElementById('categorias-tienda-header').textContent = `Categorías - ${tienda.nombre}`;
+    showView('admin-categorias');
+    loadCategoriasAdmin(tiendaId);
+};
+
+function openModalTienda() {
+    editingTiendaId = null;
+    document.getElementById('modal-tienda-titulo').textContent = 'Nueva Tienda';
+    document.getElementById('modal-tienda-nombre').value = '';
+    document.getElementById('modal-tienda-sector').value = '';
+    document.getElementById('modal-tienda-ubicacion').value = '';
+    document.getElementById('modal-tienda-sin-web').checked = false;
+    document.getElementById('modal-tienda-web').value = '';
+    document.getElementById('modal-tienda-sin-cuenta').checked = true;
+    document.getElementById('modal-tienda-tiene-cuenta').checked = false;
+    document.getElementById('modal-tienda-limite').value = '';
+    document.getElementById('modal-tienda-contactos').value = '';
+    document.getElementById('modal-tienda-servicio-cuenta').checked = false;
+    document.getElementById('modal-tienda-servicio-transporte').checked = false;
+    document.getElementById('modal-tienda-servicio-preparacion').checked = false;
+    document.getElementById('modal-tienda-servicio-base-datos').checked = false;
+    document.getElementById('modal-tienda-notas').value = '';
+    document.getElementById('modal-tienda-activa').checked = true;
+    
+    // Limpiar logo
+    document.getElementById('modal-tienda-logo-preview').style.display = 'none';
+    document.getElementById('modal-tienda-logo-file').value = '';
+
+    updateTiendaModalVisibility();
+    document.getElementById('modal-tienda').classList.add('active');
+}
+
+function setupTiendaModalListeners() {
+    // Listeners para checkboxes de tienda
+    const sinWeb = document.getElementById('modal-tienda-sin-web');
+    const sinCuenta = document.getElementById('modal-tienda-sin-cuenta');
+    const tieneCuenta = document.getElementById('modal-tienda-tiene-cuenta');
+    
+    if (sinWeb) {
+        sinWeb.addEventListener('change', () => {
+            updateTiendaModalVisibility();
+        });
+    }
+    
+    if (sinCuenta) {
+        sinCuenta.addEventListener('change', () => {
+            updateTiendaModalVisibility();
+        });
+    }
+    
+    if (tieneCuenta) {
+        tieneCuenta.addEventListener('change', () => {
+            updateTiendaModalVisibility();
+        });
+    }
+    
+    // Setup dropzone de logo de tienda
+    const logoDropzone = document.getElementById('modal-tienda-logo-dropzone');
+    const logoFileInput = document.getElementById('modal-tienda-logo-file');
+    const logoPreview = document.getElementById('modal-tienda-logo-preview');
+    const logoPreviewImg = document.getElementById('modal-tienda-logo-preview-img');
+    
+    if (logoDropzone && logoFileInput) {
+        logoDropzone.addEventListener('click', () => logoFileInput.click());
+        
+        logoDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            logoDropzone.classList.add('dragover');
+        });
+        
+        logoDropzone.addEventListener('dragleave', () => {
+            logoDropzone.classList.remove('dragover');
+        });
+        
+        logoDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            logoDropzone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleImageFile(files[0], logoPreview, logoPreviewImg);
+            }
+        });
+        
+        logoFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleImageFile(e.target.files[0], logoPreview, logoPreviewImg);
+            }
+        });
+    }
+    
+    // Setup dropzone de foto de producto
+    const dropzone = document.getElementById('modal-producto-dropzone');
+    const fileInput = document.getElementById('modal-producto-foto-file');
+    const preview = document.getElementById('modal-producto-preview');
+    const previewImg = document.getElementById('modal-producto-preview-img');
+    
+    if (dropzone && fileInput) {
+        dropzone.addEventListener('click', () => fileInput.click());
+        
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('dragover');
+        });
+        
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleImageFile(files[0], preview, previewImg);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleImageFile(e.target.files[0], preview, previewImg);
+            }
+        });
+    }
+    
+    // Listener para URL de foto
+    const fotoUrlInput = document.getElementById('modal-producto-foto-url');
+    if (fotoUrlInput) {
+        fotoUrlInput.addEventListener('input', (e) => {
+            const url = e.target.value.trim();
+            if (url) {
+                previewImg.src = url;
+                preview.style.display = 'block';
+            } else if (!fileInput.files.length) {
+                preview.style.display = 'none';
+            }
+        });
+    }
+}
+
+function updateTiendaModalVisibility() {
+    const sinWeb = document.getElementById('modal-tienda-sin-web').checked;
+    const sinCuenta = document.getElementById('modal-tienda-sin-cuenta').checked;
+    const tieneCuenta = document.getElementById('modal-tienda-tiene-cuenta').checked;
+    
+    document.getElementById('modal-tienda-web-group').style.display = sinWeb ? 'none' : 'block';
+    document.getElementById('modal-tienda-cuenta-group').style.display = sinCuenta ? 'none' : 'block';
+    document.getElementById('modal-tienda-limite-group').style.display = (sinCuenta || !tieneCuenta) ? 'none' : 'block';
+}
+
+function handleImageFile(file, preview, previewImg) {
+    if (!file.type.startsWith('image/')) {
+        alert('Por favor, selecciona un archivo de imagen');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function guardarTienda() {
+    const nombre = document.getElementById('modal-tienda-nombre').value.trim();
+    const sector = document.getElementById('modal-tienda-sector').value.trim();
+    const ubicacion = document.getElementById('modal-tienda-ubicacion').value.trim();
+    const sinWeb = document.getElementById('modal-tienda-sin-web').checked;
+    const web = sinWeb ? '' : document.getElementById('modal-tienda-web').value.trim();
+    const sinCuenta = document.getElementById('modal-tienda-sin-cuenta').checked;
+    const tieneCuenta = document.getElementById('modal-tienda-tiene-cuenta').checked;
+    const limite = sinCuenta || !tieneCuenta ? null : parseFloat(document.getElementById('modal-tienda-limite').value);
+    const contactos = document.getElementById('modal-tienda-contactos').value.trim();
+    const servicios = {
+        cuenta: document.getElementById('modal-tienda-servicio-cuenta').checked,
+        transporte: document.getElementById('modal-tienda-servicio-transporte').checked,
+        preparacion: document.getElementById('modal-tienda-servicio-preparacion').checked,
+        baseDatos: document.getElementById('modal-tienda-servicio-base-datos').checked
+    };
+    const notas = document.getElementById('modal-tienda-notas').value.trim();
+    const activa = document.getElementById('modal-tienda-activa').checked;
+    const logoFileInput = document.getElementById('modal-tienda-logo-file');
+
+    if (!nombre) {
+        alert('Por favor, ingrese un nombre para la tienda');
+        return;
+    }
+
+    try {
+        let logo = null;
+        
+        // Si hay un archivo nuevo, convertirlo a base64
+        if (logoFileInput.files.length > 0) {
+            logo = await fileToBase64(logoFileInput.files[0]);
+        } else if (editingTiendaId) {
+            // Si estamos editando y no hay archivo nuevo, mantener el logo existente
+            const tiendaExistente = await db.get('tiendas', editingTiendaId);
+            logo = tiendaExistente?.logo || null;
+        }
+
+        const tiendaData = {
+            nombre: nombre,
+            sector: sector || null,
+            ubicacion: ubicacion || null,
+            web: web || null,
+            tieneCuenta: tieneCuenta && !sinCuenta,
+            limiteCuenta: limite || null,
+            contactos: contactos || null,
+            servicios: servicios,
+            notas: notas || null,
+            activa: activa,
+            logo: logo
+        };
+
+        if (editingTiendaId) {
+            tiendaData.id = editingTiendaId;
+            await db.update('tiendas', tiendaData);
+        } else {
+            await db.add('tiendas', tiendaData);
+        }
+
+        closeAllModals();
+        loadTiendasAdmin();
+    } catch (error) {
+        alert('Error al guardar tienda: ' + error.message);
+    }
+}
+
+// ========== GESTIÓN DE CATEGORÍAS ==========
+
+async function loadCategoriasAdmin(tiendaId) {
+    const categorias = await db.getCategoriasByTienda(tiendaId);
+    const container = document.getElementById('categorias-admin-list');
+    const emptyState = document.getElementById('categorias-admin-empty');
+
+    if (categorias.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+
+    categorias.forEach(categoria => {
+        const card = createCategoriaAdminCard(categoria);
+        container.appendChild(card);
+    });
+}
+
+function createCategoriaAdminCard(categoria) {
+    const card = document.createElement('div');
+    card.className = 'categoria-admin-card';
+    card.innerHTML = `
+        <div>
+            <h4>${categoria.nombre}</h4>
+        </div>
+        <div class="usuario-actions">
+            <button class="btn-icon" onclick="editarCategoria('${categoria.id}')" title="Editar">✏️</button>
+            <button class="btn-icon" onclick="gestionarProductosCategoria('${categoria.id}')" title="Gestionar Productos">📦</button>
+            <button class="btn-icon danger" onclick="eliminarCategoria('${categoria.id}')" title="Eliminar">🗑️</button>
+        </div>
+    `;
+    return card;
+}
+
+window.editarCategoria = async function(categoriaId) {
+    const categoria = await db.get('categorias', categoriaId);
+    if (!categoria) return;
+
+    editingCategoriaId = categoriaId;
+    document.getElementById('modal-categoria-titulo').textContent = 'Editar Categoría';
+    document.getElementById('modal-categoria-nombre').value = categoria.nombre || '';
+
+    document.getElementById('modal-categoria').classList.add('active');
+};
+
+window.eliminarCategoria = async function(categoriaId) {
+    if (!confirm('¿Está seguro de eliminar esta categoría? Esto también eliminará todos sus productos.')) return;
+    
+    try {
+        const productos = await db.getProductosByCategoria(categoriaId);
+        for (const producto of productos) {
+            await db.delete('productos', producto.id);
+        }
+        await db.delete('categorias', categoriaId);
+        if (currentTiendaAdmin) {
+            loadCategoriasAdmin(currentTiendaAdmin.id);
+        }
+    } catch (error) {
+        alert('Error al eliminar categoría: ' + error.message);
+    }
+};
+
+window.gestionarProductosCategoria = async function(categoriaId) {
+    const categoria = await db.get('categorias', categoriaId);
+    if (!categoria) return;
+    
+    currentCategoriaAdmin = categoria;
+    document.getElementById('productos-categoria-header').textContent = `Productos - ${categoria.nombre}`;
+    showView('admin-productos');
+    loadProductosAdmin(categoriaId);
+};
+
+function openModalCategoria() {
+    editingCategoriaId = null;
+    document.getElementById('modal-categoria-titulo').textContent = 'Nueva Categoría';
+    document.getElementById('modal-categoria-nombre').value = '';
+
+    document.getElementById('modal-categoria').classList.add('active');
+}
+
+async function guardarCategoria() {
+    const nombre = document.getElementById('modal-categoria-nombre').value.trim();
+
+    if (!nombre) {
+        alert('Por favor, ingrese un nombre para la categoría');
+        return;
+    }
+
+    if (!currentTiendaAdmin) {
+        alert('Error: No hay tienda seleccionada');
+        return;
+    }
+
+    try {
+        const categoriaData = {
+            tiendaId: currentTiendaAdmin.id,
+            nombre: nombre
+        };
+
+        if (editingCategoriaId) {
+            categoriaData.id = editingCategoriaId;
+            await db.update('categorias', categoriaData);
+        } else {
+            await db.add('categorias', categoriaData);
+        }
+
+        closeAllModals();
+        loadCategoriasAdmin(currentTiendaAdmin.id);
+    } catch (error) {
+        alert('Error al guardar categoría: ' + error.message);
+    }
+}
+
+// ========== GESTIÓN DE PRODUCTOS ==========
+
+async function loadProductosAdmin(categoriaId) {
+    const productos = await db.getProductosByCategoria(categoriaId);
+    const container = document.getElementById('productos-admin-list');
+    const emptyState = document.getElementById('productos-admin-empty');
+
+    if (productos.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+
+    productos.forEach(producto => {
+        const card = createProductoAdminCard(producto);
+        container.appendChild(card);
+    });
+}
+
+function createProductoAdminCard(producto) {
+    const card = document.createElement('div');
+    card.className = 'producto-admin-card';
+    
+    const foto = producto.foto || '';
+    
+    card.innerHTML = `
+        ${foto ? `<img src="${foto}" alt="${producto.nombre}" class="producto-admin-image" onerror="this.style.display='none'">` : '<div class="producto-admin-image" style="background-color: var(--bg-color); display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">Sin imagen</div>'}
+        <h4>${producto.nombre}</h4>
+        ${producto.precio ? `<div class="producto-admin-precio">${producto.precio.toFixed(2)}€</div>` : ''}
+        ${producto.descripcion ? `<p style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">${producto.descripcion}</p>` : ''}
+        <div class="producto-admin-actions">
+            <button class="btn-icon" onclick="editarProducto('${producto.id}')" title="Editar">✏️</button>
+            <button class="btn-icon danger" onclick="eliminarProducto('${producto.id}')" title="Eliminar">🗑️</button>
+        </div>
+    `;
+    return card;
+}
+
+window.editarProducto = async function(productoId) {
+    const producto = await db.get('productos', productoId);
+    if (!producto) return;
+
+    editingProductoId = productoId;
+    document.getElementById('modal-producto-titulo').textContent = 'Editar Producto';
+    document.getElementById('modal-producto-foto-url').value = producto.foto || '';
+    document.getElementById('modal-producto-nombre').value = producto.nombre || '';
+    document.getElementById('modal-producto-precio').value = producto.precio || '';
+    document.getElementById('modal-producto-descripcion').value = producto.descripcion || '';
+    
+    const preview = document.getElementById('modal-producto-preview');
+    const previewImg = document.getElementById('modal-producto-preview-img');
+    if (producto.foto) {
+        previewImg.src = producto.foto;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+
+    document.getElementById('modal-producto').classList.add('active');
+};
+
+window.eliminarProducto = async function(productoId) {
+    if (!confirm('¿Está seguro de eliminar este producto?')) return;
+    
+    try {
+        await db.delete('productos', productoId);
+        if (currentCategoriaAdmin) {
+            loadProductosAdmin(currentCategoriaAdmin.id);
+        }
+    } catch (error) {
+        alert('Error al eliminar producto: ' + error.message);
+    }
+};
+
+function openModalProducto() {
+    editingProductoId = null;
+    document.getElementById('modal-producto-titulo').textContent = 'Nuevo Producto';
+    document.getElementById('modal-producto-foto-url').value = '';
+    document.getElementById('modal-producto-nombre').value = '';
+    document.getElementById('modal-producto-precio').value = '';
+    document.getElementById('modal-producto-descripcion').value = '';
+    document.getElementById('modal-producto-preview').style.display = 'none';
+    document.getElementById('modal-producto-foto-file').value = '';
+
+    document.getElementById('modal-producto').classList.add('active');
+}
+
+async function guardarProducto() {
+    const fotoUrl = document.getElementById('modal-producto-foto-url').value.trim();
+    const nombre = document.getElementById('modal-producto-nombre').value.trim();
+    const precio = parseFloat(document.getElementById('modal-producto-precio').value) || null;
+    const descripcion = document.getElementById('modal-producto-descripcion').value.trim();
+    const fileInput = document.getElementById('modal-producto-foto-file');
+    
+    if (!nombre) {
+        alert('Por favor, ingrese una designación para el artículo');
+        return;
+    }
+
+    if (!currentCategoriaAdmin) {
+        alert('Error: No hay categoría seleccionada');
+        return;
+    }
+
+    try {
+        let foto = fotoUrl;
+        
+        // Si hay archivo seleccionado, convertirlo a base64
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            foto = await fileToBase64(file);
+        }
+
+        const productoData = {
+            categoriaId: currentCategoriaAdmin.id,
+            tiendaId: currentCategoriaAdmin.tiendaId,
+            nombre: nombre,
+            precio: precio,
+            descripcion: descripcion || null,
+            foto: foto || null
+        };
+
+        if (editingProductoId) {
+            productoData.id = editingProductoId;
+            await db.update('productos', productoData);
+        } else {
+            await db.add('productos', productoData);
+        }
+
+        closeAllModals();
+        loadProductosAdmin(currentCategoriaAdmin.id);
+    } catch (error) {
+        alert('Error al guardar producto: ' + error.message);
+    }
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// ========== IMPORTACIÓN DE EXCEL ==========
+
+async function procesarExcel() {
+    const fileInput = document.getElementById('excel-file-input');
+    const statusDiv = document.getElementById('excel-import-status');
+    const messageP = document.getElementById('excel-import-message');
+    const btnProcesar = document.getElementById('btn-procesar-excel');
+    
+    if (!fileInput.files.length) {
+        alert('Por favor, selecciona un archivo Excel');
+        return;
+    }
+    
+    if (!currentCategoriaAdmin) {
+        alert('Error: No hay categoría seleccionada');
+        return;
+    }
+    
+    if (!window.XLSX) {
+        alert('Error: La librería de Excel no está cargada. Por favor, recarga la página.');
+        return;
+    }
+    
+    btnProcesar.disabled = true;
+    btnProcesar.textContent = 'Procesando...';
+    statusDiv.style.display = 'block';
+    messageP.textContent = 'Leyendo archivo Excel...';
+    messageP.style.color = 'var(--text-secondary)';
+    
+    try {
+        const file = fileInput.files[0];
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // Obtener la primera hoja
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // Convertir a JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+            header: 1,
+            defval: null
+        });
+        
+        if (jsonData.length === 0) {
+            throw new Error('El archivo Excel está vacío');
+        }
+        
+        // Procesar filas (ignorar la primera si parece ser encabezados)
+        let startRow = 0;
+        if (jsonData.length > 0) {
+            const firstRow = jsonData[0];
+            // Si la primera fila parece ser encabezados (texto en todas las columnas), empezar desde la segunda
+            if (firstRow[0] && typeof firstRow[0] === 'string' && 
+                (firstRow[0].toLowerCase().includes('designación') || 
+                 firstRow[0].toLowerCase().includes('nombre') ||
+                 firstRow[0].toLowerCase().includes('artículo'))) {
+                startRow = 1;
+            }
+        }
+        
+        let productosCreados = 0;
+        let productosConError = 0;
+        const errores = [];
+        
+        messageP.textContent = `Procesando ${jsonData.length - startRow} productos...`;
+        
+        for (let i = startRow; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            
+            // Columna A: Designación del artículo (obligatorio)
+            const nombre = row[0] ? String(row[0]).trim() : null;
+            if (!nombre) {
+                productosConError++;
+                errores.push(`Fila ${i + 1}: Falta la designación del artículo`);
+                continue;
+            }
+            
+            // Columna B: Descripción (opcional)
+            const descripcion = row[1] ? String(row[1]).trim() : null;
+            
+            // Columna C: Precio (opcional)
+            let precio = null;
+            if (row[2] !== null && row[2] !== undefined && row[2] !== '') {
+                const precioStr = String(row[2]).replace(',', '.');
+                precio = parseFloat(precioStr);
+                if (isNaN(precio)) {
+                    precio = null;
+                }
+            }
+            
+            // Columna D: URL de la foto (opcional)
+            const foto = row[3] ? String(row[3]).trim() : null;
+            
+            try {
+                const productoData = {
+                    categoriaId: currentCategoriaAdmin.id,
+                    tiendaId: currentCategoriaAdmin.tiendaId,
+                    nombre: nombre,
+                    descripcion: descripcion || null,
+                    precio: precio,
+                    foto: foto || null
+                };
+                
+                await db.add('productos', productoData);
+                productosCreados++;
+            } catch (error) {
+                productosConError++;
+                errores.push(`Fila ${i + 1}: ${error.message}`);
+            }
+        }
+        
+        // Mostrar resultado
+        let mensaje = `✅ Importación completada:\n`;
+        mensaje += `- Productos creados: ${productosCreados}\n`;
+        if (productosConError > 0) {
+            mensaje += `- Errores: ${productosConError}\n`;
+            if (errores.length > 0) {
+                mensaje += `\nErrores:\n${errores.slice(0, 5).join('\n')}`;
+                if (errores.length > 5) {
+                    mensaje += `\n... y ${errores.length - 5} más`;
+                }
+            }
+            messageP.style.color = 'var(--warning-color)';
+        } else {
+            messageP.style.color = 'var(--success-color)';
+        }
+        
+        messageP.textContent = mensaje;
+        
+        // Recargar productos
+        setTimeout(() => {
+            loadProductosAdmin(currentCategoriaAdmin.id);
+            closeAllModals();
+        }, 2000);
+        
+    } catch (error) {
+        messageP.style.color = 'var(--danger-color)';
+        messageP.textContent = `❌ Error al procesar el archivo: ${error.message}`;
+        btnProcesar.disabled = false;
+        btnProcesar.textContent = 'Importar';
+    }
+}
+
 

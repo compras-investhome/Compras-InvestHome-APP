@@ -323,7 +323,97 @@
         </main>
     </div>
 
-    <!-- Vista 10: Panel de Administración -->
+    <!-- Vista 10: Administración - Gestión de Tiendas -->
+    <div id="view-admin-tiendas" class="view">
+        <header class="app-header">
+            <button class="icon-btn btn-back" aria-label="Volver">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2>Gestión de Tiendas</h2>
+            <button id="btn-nueva-tienda" class="icon-btn" aria-label="Nueva Tienda" title="Nueva Tienda">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>
+        </header>
+
+        <main class="main-content">
+            <div id="tiendas-admin-list" class="tiendas-admin-list">
+                <!-- Las tiendas se cargarán dinámicamente -->
+            </div>
+            <div id="tiendas-admin-empty" class="empty-state" style="display: none;">
+                <p>No hay tiendas registradas</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista 11: Administración - Categorías de Tienda -->
+    <div id="view-admin-categorias" class="view">
+        <header class="app-header">
+            <button class="icon-btn btn-back" aria-label="Volver">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2 id="categorias-tienda-header">Categorías</h2>
+            <button id="btn-nueva-categoria" class="icon-btn" aria-label="Nueva Categoría" title="Nueva Categoría">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>
+        </header>
+
+        <main class="main-content">
+            <div id="categorias-admin-list" class="categorias-admin-list">
+                <!-- Las categorías se cargarán dinámicamente -->
+            </div>
+            <div id="categorias-admin-empty" class="empty-state" style="display: none;">
+                <p>No hay categorías registradas</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista 12: Administración - Productos de Categoría -->
+    <div id="view-admin-productos" class="view">
+        <header class="app-header">
+            <button class="icon-btn btn-back" aria-label="Volver">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2 id="productos-categoria-header">Productos</h2>
+            <div style="display: flex; gap: 0.5rem;">
+                <button id="btn-importar-excel" class="icon-btn" aria-label="Importar Excel" title="Importar desde Excel">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+                <button id="btn-nuevo-producto" class="icon-btn" aria-label="Nuevo Producto" title="Nuevo Producto">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div id="productos-admin-list" class="productos-admin-list">
+                <!-- Los productos se cargarán dinámicamente -->
+            </div>
+            <div id="productos-admin-empty" class="empty-state" style="display: none;">
+                <p>No hay productos registrados</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista 13: Panel de Administración -->
     <div id="view-admin" class="view">
         <header class="app-header">
             <button id="btn-menu-admin" class="icon-btn" aria-label="Menú">
@@ -348,6 +438,11 @@
                     <div class="admin-menu-icon">🏗️</div>
                     <h3>Gestión de Obras</h3>
                     <p>Crear y gestionar obras</p>
+                </div>
+                <div class="admin-menu-card" data-action="tiendas">
+                    <div class="admin-menu-icon">🏪</div>
+                    <h3>Gestión de Tiendas</h3>
+                    <p>Crear y gestionar tiendas</p>
                 </div>
             </div>
         </main>
@@ -426,6 +521,169 @@
         </div>
     </div>
 
+    <!-- Modal: Crear/Editar Tienda -->
+    <div id="modal-tienda" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="modal-tienda-titulo">Nueva Tienda</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="modal-tienda-nombre">Nombre <span style="color: red;">*</span></label>
+                    <input type="text" id="modal-tienda-nombre" class="form-input" placeholder="Nombre de la tienda" required>
+                </div>
+                <div class="form-group">
+                    <label>Logo de la Tienda</label>
+                    <div id="modal-tienda-logo-dropzone" class="dropzone" style="border: 2px dashed var(--border-color); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Arrastra el logo aquí o haz clic para seleccionar</p>
+                        <input type="file" id="modal-tienda-logo-file" accept="image/*" style="display: none;">
+                        <div id="modal-tienda-logo-preview" style="margin-top: 1rem; display: none;">
+                            <img id="modal-tienda-logo-preview-img" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="modal-tienda-sector">Sector</label>
+                    <input type="text" id="modal-tienda-sector" class="form-input" placeholder="Ej: Ferretería, Fontanería, Pinturas...">
+                </div>
+                <div class="form-group">
+                    <label for="modal-tienda-ubicacion">Ubicación</label>
+                    <input type="text" id="modal-tienda-ubicacion" class="form-input" placeholder="Ciudad de la tienda">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="modal-tienda-sin-web"> No tiene web
+                    </label>
+                </div>
+                <div id="modal-tienda-web-group" class="form-group">
+                    <label for="modal-tienda-web">Web</label>
+                    <input type="url" id="modal-tienda-web" class="form-input" placeholder="https://www.ejemplo.com">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="modal-tienda-sin-cuenta"> Sin límite de cuenta
+                    </label>
+                </div>
+                <div id="modal-tienda-cuenta-group" class="form-group">
+                    <label>
+                        <input type="checkbox" id="modal-tienda-tiene-cuenta"> Tiene cuenta con límite
+                    </label>
+                </div>
+                <div id="modal-tienda-limite-group" class="form-group" style="display: none;">
+                    <label for="modal-tienda-limite">Límite de Cuenta (€)</label>
+                    <input type="number" id="modal-tienda-limite" class="form-input" placeholder="4000" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="modal-tienda-contactos">Personas de Contacto</label>
+                    <textarea id="modal-tienda-contactos" class="form-input" rows="3" placeholder="Manuel | Compras Leroy Merlin | 651228353&#10;María | Ventas | 612345678"></textarea>
+                    <small style="color: var(--text-secondary); font-size: 0.875rem;">Una por línea. Formato: Nombre | Cargo | Teléfono</small>
+                </div>
+                <div class="form-group">
+                    <label>Servicios:</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="modal-tienda-servicio-cuenta">
+                            <span>Cuenta</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="modal-tienda-servicio-transporte">
+                            <span>Transporte gratuito</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="modal-tienda-servicio-preparacion">
+                            <span>Preparación de pedidos</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="modal-tienda-servicio-base-datos">
+                            <span>Base de datos</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="modal-tienda-notas">Notas</label>
+                    <textarea id="modal-tienda-notas" class="form-input" rows="3" placeholder="Notas adicionales sobre la tienda"></textarea>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="modal-tienda-activa" checked>
+                        <span>Tienda activa (visible para técnicos y encargados)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-tienda" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-tienda" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear/Editar Categoría -->
+    <div id="modal-categoria" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-categoria-titulo">Nueva Categoría</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="modal-categoria-nombre">Nombre de la Categoría</label>
+                    <input type="text" id="modal-categoria-nombre" class="form-input" placeholder="Nombre de la categoría" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-categoria" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-categoria" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear/Editar Producto -->
+    <div id="modal-producto" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="modal-producto-titulo">Nuevo Producto</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="modal-producto-foto-url">URL de la Foto</label>
+                    <input type="url" id="modal-producto-foto-url" class="form-input" placeholder="https://www.ejemplo.com/imagen.jpg">
+                    <small style="color: var(--text-secondary); font-size: 0.875rem;">O arrastra y suelta una imagen abajo</small>
+                </div>
+                <div class="form-group">
+                    <label>O arrastra y suelta una imagen aquí</label>
+                    <div id="modal-producto-dropzone" class="dropzone" style="border: 2px dashed var(--border-color); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Arrastra una imagen aquí o haz clic para seleccionar</p>
+                        <input type="file" id="modal-producto-foto-file" accept="image/*" style="display: none;">
+                        <div id="modal-producto-preview" style="margin-top: 1rem; display: none;">
+                            <img id="modal-producto-preview-img" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="modal-producto-nombre">Designación del Artículo <span style="color: red;">*</span></label>
+                    <input type="text" id="modal-producto-nombre" class="form-input" placeholder="Nombre del producto" required>
+                </div>
+                <div class="form-group">
+                    <label for="modal-producto-precio">Precio (€)</label>
+                    <input type="number" id="modal-producto-precio" class="form-input" placeholder="0.00" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="modal-producto-descripcion">Descripción</label>
+                    <textarea id="modal-producto-descripcion" class="form-input" rows="3" placeholder="Descripción del producto (opcional)"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-producto" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-producto" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Menú lateral -->
     <div id="sidebar" class="sidebar">
         <div class="sidebar-overlay"></div>
@@ -448,6 +706,39 @@
         </div>
     </div>
 
+    <!-- Modal: Importar Excel -->
+    <div id="modal-importar-excel" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Importar Productos desde Excel</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Selecciona el archivo Excel (.xlsx)</label>
+                    <input type="file" id="excel-file-input" accept=".xlsx,.xls" class="form-input">
+                    <small style="color: var(--text-secondary); font-size: 0.875rem; display: block; margin-top: 0.5rem;">
+                        <strong>Formato del Excel:</strong><br>
+                        <strong>Columna A:</strong> Designación del artículo (obligatorio)<br>
+                        <strong>Columna B:</strong> Descripción (opcional)<br>
+                        <strong>Columna C:</strong> Precio en euros (opcional, usar punto o coma como decimal)<br>
+                        <strong>Columna D:</strong> URL de la foto (opcional)<br>
+                        <br>
+                        <strong>Nota:</strong> La primera fila puede ser encabezados y será ignorada.
+                    </small>
+                </div>
+                <div id="excel-import-status" style="display: none; margin-top: 1rem; padding: 1rem; background-color: var(--bg-color); border-radius: 8px;">
+                    <p id="excel-import-message"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-excel" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-procesar-excel" class="btn btn-primary" disabled>Importar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase Config debe cargarse primero -->
     <script>
         // Configuración de Firebase
@@ -460,6 +751,8 @@
             appId: "1:904947165686:web:aa503961c7768e05227fd7"
         };
     </script>
+    <!-- SheetJS para leer archivos Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <!-- Database y App como módulos ES6 -->
     <script type="module" src="database.js"></script>
     <script type="module" src="app.js"></script>
