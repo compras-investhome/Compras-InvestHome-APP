@@ -14,6 +14,10 @@ let editingObraId = null;
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
+    // Configurar event listeners PRIMERO (siempre deben estar activos)
+    setupEventListeners();
+    setupLoginListeners();
+    
     // Mostrar login por defecto
     showView('login');
     
@@ -37,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         };
                         currentUserType = 'Tienda';
                         currentTienda = tienda;
+                        updateSidebar();
                         redirectByUserType();
                         return;
                     }
@@ -48,6 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         currentUserType = usuario.tipo;
                         currentObra = sesion.obraId ? await db.get('obras', sesion.obraId) : null;
                         currentTienda = sesion.tiendaId ? await db.get('tiendas', sesion.tiendaId) : null;
+                        updateSidebar();
                         redirectByUserType();
                         return;
                     }
@@ -65,9 +71,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Error al inicializar Firebase:', error);
         showView('login');
     }
-
-    setupEventListeners();
-    setupLoginListeners();
 });
 
 // Event Listeners
