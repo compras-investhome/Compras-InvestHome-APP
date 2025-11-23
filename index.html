@@ -782,6 +782,57 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <!-- Database y App como módulos ES6 -->
     <script type="module" src="database.js"></script>
+    <!-- Popup personalizado para alertas -->
+    <div id="custom-alert" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-alert-title">Información</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-alert-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-alert-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup personalizado para confirmaciones -->
+    <div id="custom-confirm" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-confirm-title">Confirmar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-confirm-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-confirm-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-confirm-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup personalizado para prompts -->
+    <div id="custom-prompt" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-prompt-title">Ingresar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-prompt-message"></p>
+                <input type="text" id="custom-prompt-input" class="form-input" style="margin-top: 1rem;">
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-prompt-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-prompt-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="app.js"></script>
 </body>
 </html>

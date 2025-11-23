@@ -12,6 +12,100 @@ let searchResults = [];
 let editingUsuarioId = null;
 let editingObraId = null;
 
+// Funciones personalizadas para popups
+function showAlert(message, title = 'Información') {
+    return new Promise((resolve) => {
+        const alertPopup = document.getElementById('custom-alert');
+        const alertTitle = document.getElementById('custom-alert-title');
+        const alertMessage = document.getElementById('custom-alert-message');
+        const alertOk = document.getElementById('custom-alert-ok');
+        
+        alertTitle.textContent = title;
+        alertMessage.textContent = message;
+        alertPopup.classList.add('active');
+        
+        const closeAlert = () => {
+            alertPopup.classList.remove('active');
+            alertOk.removeEventListener('click', closeAlert);
+            alertPopup.querySelector('.custom-popup-overlay').removeEventListener('click', closeAlert);
+            resolve();
+        };
+        
+        alertOk.addEventListener('click', closeAlert);
+        alertPopup.querySelector('.custom-popup-overlay').addEventListener('click', closeAlert);
+    });
+}
+
+function showConfirm(message, title = 'Confirmar') {
+    return new Promise((resolve) => {
+        const confirmPopup = document.getElementById('custom-confirm');
+        const confirmTitle = document.getElementById('custom-confirm-title');
+        const confirmMessage = document.getElementById('custom-confirm-message');
+        const confirmOk = document.getElementById('custom-confirm-ok');
+        const confirmCancel = document.getElementById('custom-confirm-cancel');
+        
+        confirmTitle.textContent = title;
+        confirmMessage.textContent = message;
+        confirmPopup.classList.add('active');
+        
+        const closeConfirm = (result) => {
+            confirmPopup.classList.remove('active');
+            confirmOk.removeEventListener('click', () => closeConfirm(true));
+            confirmCancel.removeEventListener('click', () => closeConfirm(false));
+            confirmPopup.querySelector('.custom-popup-overlay').removeEventListener('click', () => closeConfirm(false));
+            resolve(result);
+        };
+        
+        confirmOk.addEventListener('click', () => closeConfirm(true));
+        confirmCancel.addEventListener('click', () => closeConfirm(false));
+        confirmPopup.querySelector('.custom-popup-overlay').addEventListener('click', () => closeConfirm(false));
+    });
+}
+
+function showPrompt(message, defaultValue = '', title = 'Ingresar') {
+    return new Promise((resolve) => {
+        const promptPopup = document.getElementById('custom-prompt');
+        const promptTitle = document.getElementById('custom-prompt-title');
+        const promptMessage = document.getElementById('custom-prompt-message');
+        const promptInput = document.getElementById('custom-prompt-input');
+        const promptOk = document.getElementById('custom-prompt-ok');
+        const promptCancel = document.getElementById('custom-prompt-cancel');
+        
+        promptTitle.textContent = title;
+        promptMessage.textContent = message;
+        promptInput.value = defaultValue;
+        promptPopup.classList.add('active');
+        
+        // Focus en el input
+        setTimeout(() => promptInput.focus(), 100);
+        
+        const closePrompt = (result) => {
+            promptPopup.classList.remove('active');
+            promptOk.removeEventListener('click', () => closePrompt(true));
+            promptCancel.removeEventListener('click', () => closePrompt(false));
+            promptInput.removeEventListener('keypress', handleKeyPress);
+            promptPopup.querySelector('.custom-popup-overlay').removeEventListener('click', () => closePrompt(false));
+            resolve(result);
+        };
+        
+        const handleKeyPress = (e) => {
+            if (e.key === 'Enter') {
+                closePrompt(true);
+            }
+        };
+        
+        promptOk.addEventListener('click', () => closePrompt(true));
+        promptCancel.addEventListener('click', () => closePrompt(false));
+        promptInput.addEventListener('keypress', handleKeyPress);
+        promptPopup.querySelector('.custom-popup-overlay').addEventListener('click', () => closePrompt(false));
+    }).then((confirmed) => {
+        if (confirmed) {
+            return document.getElementById('custom-prompt-input').value;
+        }
+        return null;
+    });
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     // Configurar event listeners PRIMERO (siempre deben estar activos)
@@ -757,13 +851,13 @@ function getCantidadEnCarrito(productoId) {
 window.addToCart = async function(productoId, cantidad = 1) {
     const producto = await db.get('productos', productoId);
     if (!producto) {
-        alert('Error: Producto no encontrado');
+        await showAlert('Error: Producto no encontrado', 'Error');
         return;
     }
     
     const cantidadNum = parseInt(cantidad) || 1;
     if (cantidadNum < 1) {
-        alert('La cantidad debe ser al menos 1');
+        await showAlert('La cantidad debe ser al menos 1', 'Error');
         return;
     }
     
@@ -926,7 +1020,7 @@ async function finalizarPedido() {
     if (carrito.length === 0) return;
     
     if (!currentObra) {
-        alert('No se ha seleccionado una obra');
+        await showAlert('No se ha seleccionado una obra', 'Error');
         return;
     }
     
@@ -982,7 +1076,7 @@ async function finalizarPedido() {
     const mensaje = pedidosCreados.length === 1 
         ? `Pedido realizado con éxito para ${pedidosCreados[0]}`
         : `Se han creado ${pedidosCreados.length} pedidos:\n${pedidosCreados.join(', ')}`;
-    alert(mensaje);
+    await showAlert(mensaje, 'Éxito');
     
     // Volver a la vista principal
     showView('main');
@@ -1183,26 +1277,26 @@ window.toggleObraPedidos = function(obraId) {
 
 // Solicitudes de Modificación de Cantidad
 window.solicitarModificacionCantidad = async function(pedidoId, itemIndex, cantidadActual) {
-    const nuevaCantidadStr = prompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad que desea solicitar:`, cantidadActual);
+    const nuevaCantidadStr = await showPrompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad que desea solicitar:`, cantidadActual.toString(), 'Modificar Cantidad');
     
     if (nuevaCantidadStr === null) return; // Usuario canceló
     
     const nuevaCantidad = parseInt(nuevaCantidadStr);
     
     if (isNaN(nuevaCantidad) || nuevaCantidad < 0) {
-        alert('Por favor, ingrese una cantidad válida');
+        await showAlert('Por favor, ingrese una cantidad válida', 'Error');
         return;
     }
     
     if (nuevaCantidad === cantidadActual) {
-        alert('La cantidad solicitada es igual a la actual');
+        await showAlert('La cantidad solicitada es igual a la actual', 'Información');
         return;
     }
     
     try {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
-            alert('Error: No se pudo encontrar el artículo');
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
             return;
         }
         
@@ -1221,22 +1315,23 @@ window.solicitarModificacionCantidad = async function(pedidoId, itemIndex, canti
         };
         
         await db.add('solicitudesModificacion', solicitud);
-        alert('Solicitud de modificación de cantidad enviada a la tienda');
+        await showAlert('Solicitud de modificación de cantidad enviada a la tienda', 'Éxito');
         loadMisPedidos();
     } catch (error) {
         console.error('Error al solicitar modificación:', error);
-        alert('Error al solicitar modificación: ' + error.message);
+        await showAlert('Error al solicitar modificación: ' + error.message, 'Error');
     }
 };
 
 // Solicitudes de Anulación
 window.solicitarAnulacionItem = async function(pedidoId, itemIndex) {
-    if (!confirm('¿Está seguro de solicitar la anulación de este artículo?')) return;
+    const confirmar = await showConfirm('¿Está seguro de solicitar la anulación de este artículo?', 'Confirmar Anulación');
+    if (!confirmar) return;
     
     try {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
-            alert('Error: No se pudo encontrar el artículo');
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
             return;
         }
         
@@ -1253,21 +1348,22 @@ window.solicitarAnulacionItem = async function(pedidoId, itemIndex) {
         };
         
         await db.add('solicitudesAnulacion', solicitud);
-        alert('Solicitud de anulación enviada a la tienda');
+        await showAlert('Solicitud de anulación enviada a la tienda', 'Éxito');
         loadMisPedidos();
     } catch (error) {
         console.error('Error al solicitar anulación:', error);
-        alert('Error al solicitar anulación: ' + error.message);
+        await showAlert('Error al solicitar anulación: ' + error.message, 'Error');
     }
 };
 
 window.solicitarAnulacionPedido = async function(pedidoId) {
-    if (!confirm('¿Está seguro de solicitar la anulación completa de este pedido?')) return;
+    const confirmar = await showConfirm('¿Está seguro de solicitar la anulación completa de este pedido?', 'Confirmar Anulación');
+    if (!confirmar) return;
     
     try {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido) {
-            alert('Error: No se pudo encontrar el pedido');
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
             return;
         }
         
@@ -1281,18 +1377,18 @@ window.solicitarAnulacionPedido = async function(pedidoId) {
         };
         
         await db.add('solicitudesAnulacion', solicitud);
-        alert('Solicitud de anulación del pedido enviada a la tienda');
+        await showAlert('Solicitud de anulación del pedido enviada a la tienda', 'Éxito');
         loadMisPedidos();
     } catch (error) {
         console.error('Error al solicitar anulación:', error);
-        alert('Error al solicitar anulación: ' + error.message);
+        await showAlert('Error al solicitar anulación: ' + error.message, 'Error');
     }
 };
 
 // Gestión de Tienda
 async function showGestionTienda() {
     if (!currentTienda) {
-        alert('No hay tienda asociada');
+        await showAlert('No hay tienda asociada', 'Error');
         return;
     }
     
@@ -1379,7 +1475,7 @@ async function loadPedidosEnCurso() {
             // Obtener el pedido origen
             const pedidoOrigen = await db.get('pedidos', draggedPedidoId);
             if (!pedidoOrigen || !pedidoOrigen.items || draggedItemIndex >= pedidoOrigen.items.length) {
-                alert('Error: No se pudo encontrar el artículo a mover');
+                await showAlert('Error: No se pudo encontrar el artículo a mover', 'Error');
                 return;
             }
             
@@ -1417,7 +1513,7 @@ async function loadPedidosEnCurso() {
             
         } catch (error) {
             console.error('Error al crear nuevo pedido:', error);
-            alert('Error al crear nuevo pedido: ' + error.message);
+            await showAlert('Error al crear nuevo pedido: ' + error.message, 'Error');
         } finally {
             draggedItem.style.opacity = '1';
             dropZone.style.backgroundColor = '';
@@ -1662,18 +1758,19 @@ function createSolicitudCard(solicitud, pedido, usuario) {
 }
 
 window.aceptarSolicitudAnulacion = async function(solicitudId) {
-    if (!confirm('¿Está seguro de aceptar esta solicitud de anulación?')) return;
+    const confirmar = await showConfirm('¿Está seguro de aceptar esta solicitud de anulación?', 'Confirmar');
+    if (!confirmar) return;
     
     try {
         const solicitud = await db.get('solicitudesAnulacion', solicitudId);
         if (!solicitud) {
-            alert('Error: No se pudo encontrar la solicitud');
+            await showAlert('Error: No se pudo encontrar la solicitud', 'Error');
             return;
         }
         
         const pedido = await db.get('pedidos', solicitud.pedidoId);
         if (!pedido) {
-            alert('Error: No se pudo encontrar el pedido');
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
             return;
         }
         
@@ -1696,22 +1793,23 @@ window.aceptarSolicitudAnulacion = async function(solicitudId) {
         solicitud.estado = 'Aceptada';
         await db.update('solicitudesAnulacion', solicitud);
         
-        alert('Solicitud aceptada');
+        await showAlert('Solicitud aceptada', 'Éxito');
         loadSolicitudesAnulacion();
         loadPedidosEnCurso();
     } catch (error) {
         console.error('Error al aceptar solicitud:', error);
-        alert('Error al aceptar solicitud: ' + error.message);
+        await showAlert('Error al aceptar solicitud: ' + error.message, 'Error');
     }
 };
 
 window.rechazarSolicitudAnulacion = async function(solicitudId) {
-    if (!confirm('¿Está seguro de rechazar esta solicitud de anulación?')) return;
+    const confirmar = await showConfirm('¿Está seguro de rechazar esta solicitud de anulación?', 'Confirmar');
+    if (!confirmar) return;
     
     try {
         const solicitud = await db.get('solicitudesAnulacion', solicitudId);
         if (!solicitud) {
-            alert('Error: No se pudo encontrar la solicitud');
+            await showAlert('Error: No se pudo encontrar la solicitud', 'Error');
             return;
         }
         
@@ -1719,27 +1817,28 @@ window.rechazarSolicitudAnulacion = async function(solicitudId) {
         solicitud.estado = 'Rechazada';
         await db.update('solicitudesAnulacion', solicitud);
         
-        alert('Solicitud rechazada');
+        await showAlert('Solicitud rechazada', 'Éxito');
         loadSolicitudesAnulacion();
     } catch (error) {
         console.error('Error al rechazar solicitud:', error);
-        alert('Error al rechazar solicitud: ' + error.message);
+        await showAlert('Error al rechazar solicitud: ' + error.message, 'Error');
     }
 };
 
 window.aceptarSolicitudModificacion = async function(solicitudId) {
-    if (!confirm('¿Está seguro de aceptar esta solicitud de modificación de cantidad?')) return;
+    const confirmar = await showConfirm('¿Está seguro de aceptar esta solicitud de modificación de cantidad?', 'Confirmar');
+    if (!confirmar) return;
     
     try {
         const solicitud = await db.get('solicitudesModificacion', solicitudId);
         if (!solicitud) {
-            alert('Error: No se pudo encontrar la solicitud');
+            await showAlert('Error: No se pudo encontrar la solicitud', 'Error');
             return;
         }
         
         const pedido = await db.get('pedidos', solicitud.pedidoId);
         if (!pedido || !pedido.items || solicitud.itemIndex >= pedido.items.length) {
-            alert('Error: No se pudo encontrar el pedido o el artículo');
+            await showAlert('Error: No se pudo encontrar el pedido o el artículo', 'Error');
             return;
         }
         
@@ -1762,22 +1861,23 @@ window.aceptarSolicitudModificacion = async function(solicitudId) {
         solicitud.estado = 'Aceptada';
         await db.update('solicitudesModificacion', solicitud);
         
-        alert('Solicitud aceptada. Cantidad actualizada.');
+        await showAlert('Solicitud aceptada. Cantidad actualizada.', 'Éxito');
         loadSolicitudesAnulacion();
         loadPedidosEnCurso();
     } catch (error) {
         console.error('Error al aceptar solicitud:', error);
-        alert('Error al aceptar solicitud: ' + error.message);
+        await showAlert('Error al aceptar solicitud: ' + error.message, 'Error');
     }
 };
 
 window.rechazarSolicitudModificacion = async function(solicitudId) {
-    if (!confirm('¿Está seguro de rechazar esta solicitud de modificación?')) return;
+    const confirmar = await showConfirm('¿Está seguro de rechazar esta solicitud de modificación?', 'Confirmar');
+    if (!confirmar) return;
     
     try {
         const solicitud = await db.get('solicitudesModificacion', solicitudId);
         if (!solicitud) {
-            alert('Error: No se pudo encontrar la solicitud');
+            await showAlert('Error: No se pudo encontrar la solicitud', 'Error');
             return;
         }
         
@@ -1785,11 +1885,11 @@ window.rechazarSolicitudModificacion = async function(solicitudId) {
         solicitud.estado = 'Rechazada';
         await db.update('solicitudesModificacion', solicitud);
         
-        alert('Solicitud rechazada');
+        await showAlert('Solicitud rechazada', 'Éxito');
         loadSolicitudesAnulacion();
     } catch (error) {
         console.error('Error al rechazar solicitud:', error);
-        alert('Error al rechazar solicitud: ' + error.message);
+        await showAlert('Error al rechazar solicitud: ' + error.message, 'Error');
     }
 };
 
@@ -1979,7 +2079,7 @@ window.handleDrop = async function(event, targetPedidoId) {
         // Obtener el pedido origen
         const pedidoOrigen = await db.get('pedidos', draggedPedidoId);
         if (!pedidoOrigen || !pedidoOrigen.items || draggedItemIndex >= pedidoOrigen.items.length) {
-            alert('Error: No se pudo encontrar el artículo a mover');
+            await showAlert('Error: No se pudo encontrar el artículo a mover', 'Error');
             return;
         }
         
@@ -2028,7 +2128,7 @@ window.handleDrop = async function(event, targetPedidoId) {
         
     } catch (error) {
         console.error('Error al mover artículo:', error);
-        alert('Error al mover el artículo: ' + error.message);
+        await showAlert('Error al mover el artículo: ' + error.message, 'Error');
     } finally {
         draggedItem.style.opacity = '1';
         event.currentTarget.style.backgroundColor = '';
@@ -2044,7 +2144,7 @@ window.duplicarLineaPedido = async function(pedidoId, itemIndex) {
     try {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
-            alert('Error: No se pudo encontrar el artículo');
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
             return;
         }
         
@@ -2062,20 +2162,21 @@ window.duplicarLineaPedido = async function(pedidoId, itemIndex) {
         
         // Recargar pedidos
         loadPedidosEnCurso();
-        alert('Línea duplicada. Puede ajustar la cantidad y arrastrarla a otro pedido si es necesario.');
+        await showAlert('Línea duplicada. Puede ajustar la cantidad y arrastrarla a otro pedido si es necesario.', 'Éxito');
     } catch (error) {
         console.error('Error al duplicar línea:', error);
-        alert('Error al duplicar la línea: ' + error.message);
+        await showAlert('Error al duplicar la línea: ' + error.message, 'Error');
     }
 };
 
 window.eliminarItemPedido = async function(pedidoId, itemIndex) {
-    if (!confirm('¿Está seguro de eliminar este artículo del pedido?')) return;
+    const confirmar = await showConfirm('¿Está seguro de eliminar este artículo del pedido?', 'Confirmar Eliminación');
+    if (!confirmar) return;
     
     try {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
-            alert('Error: No se pudo encontrar el artículo');
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
             return;
         }
         
@@ -2091,22 +2192,22 @@ window.eliminarItemPedido = async function(pedidoId, itemIndex) {
         
         // Recargar pedidos
         loadPedidosEnCurso();
-        alert('Artículo eliminado del pedido');
+        await showAlert('Artículo eliminado del pedido', 'Éxito');
     } catch (error) {
         console.error('Error al eliminar artículo:', error);
-        alert('Error al eliminar el artículo: ' + error.message);
+        await showAlert('Error al eliminar el artículo: ' + error.message, 'Error');
     }
 };
 
 window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) {
-    const nuevaCantidadStr = prompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad:`, cantidadActual);
+    const nuevaCantidadStr = await showPrompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad:`, cantidadActual.toString(), 'Editar Cantidad');
     
     if (nuevaCantidadStr === null) return; // Usuario canceló
     
     const nuevaCantidad = parseInt(nuevaCantidadStr);
     
     if (isNaN(nuevaCantidad) || nuevaCantidad < 0) {
-        alert('Por favor, ingrese una cantidad válida');
+        await showAlert('Por favor, ingrese una cantidad válida', 'Error');
         return;
     }
     
@@ -2117,7 +2218,7 @@ window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) 
     try {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
-            alert('Error: No se pudo encontrar el artículo');
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
             return;
         }
         
@@ -2126,7 +2227,8 @@ window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) 
         
         if (nuevaCantidad === 0) {
             // Si la cantidad es 0, eliminar el artículo
-            if (confirm('¿Eliminar este artículo del pedido?')) {
+            const confirmar = await showConfirm('¿Eliminar este artículo del pedido?', 'Confirmar Eliminación');
+            if (confirmar) {
                 pedido.items.splice(itemIndex, 1);
                 
                 if (pedido.items.length === 0) {
@@ -2136,7 +2238,7 @@ window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) 
                 }
                 
                 loadPedidosEnCurso();
-                alert('Artículo eliminado del pedido');
+                await showAlert('Artículo eliminado del pedido', 'Éxito');
             }
             return;
         }
@@ -2146,9 +2248,10 @@ window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) 
         
         // Si se redujo la cantidad, preguntar si crear nuevo pedido con la cantidad faltante
         if (cantidadFaltante > 0) {
-            const crearNuevoPedido = confirm(
+            const crearNuevoPedido = await showConfirm(
                 `Se reducirá la cantidad de ${cantidadActual} a ${nuevaCantidad}.\n\n` +
-                `¿Desea crear un nuevo pedido con la cantidad faltante (${cantidadFaltante} unidades) que llegará más tarde?`
+                `¿Desea crear un nuevo pedido con la cantidad faltante (${cantidadFaltante} unidades) que llegará más tarde?`,
+                'Crear Nuevo Pedido'
             );
             
             if (crearNuevoPedido) {
@@ -2185,10 +2288,10 @@ window.editarCantidadItem = async function(pedidoId, itemIndex, cantidadActual) 
         
         // Recargar pedidos
         loadPedidosEnCurso();
-        alert('Cantidad actualizada correctamente');
+        await showAlert('Cantidad actualizada correctamente', 'Éxito');
     } catch (error) {
         console.error('Error al editar cantidad:', error);
-        alert('Error al editar la cantidad: ' + error.message);
+        await showAlert('Error al editar la cantidad: ' + error.message, 'Error');
     }
 };
 
@@ -2360,14 +2463,15 @@ window.editarUsuario = async function(usuarioId) {
 };
 
 window.eliminarUsuario = async function(usuarioId) {
-    if (!confirm('¿Está seguro de eliminar este usuario?')) return;
+    const confirmar = await showConfirm('¿Está seguro de eliminar este usuario?', 'Confirmar Eliminación');
+    if (!confirmar) return;
     
     try {
         await db.eliminarUsuario(usuarioId);
         const tipo = document.querySelector('#view-admin-usuarios .tab-btn.active').dataset.tab;
         switchTabUsuarios(tipo);
     } catch (error) {
-        alert('Error al eliminar usuario: ' + error.message);
+        await showAlert('Error al eliminar usuario: ' + error.message, 'Error');
     }
 };
 
@@ -2389,17 +2493,17 @@ async function guardarUsuario() {
     const tiendaId = document.getElementById('modal-usuario-tienda').value;
 
     if (!nombre) {
-        alert('Por favor, ingrese un nombre de usuario');
+        await showAlert('Por favor, ingrese un nombre de usuario', 'Error');
         return;
     }
 
     if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
-        alert('Por favor, ingrese una contraseña de 4 dígitos');
+        await showAlert('Por favor, ingrese una contraseña de 4 dígitos', 'Error');
         return;
     }
 
     if (tipo === 'Tienda' && !tiendaId) {
-        alert('Por favor, seleccione una tienda');
+        await showAlert('Por favor, seleccione una tienda', 'Error');
         return;
     }
 
@@ -2425,7 +2529,7 @@ async function guardarUsuario() {
         const tipoTab = document.querySelector('#view-admin-usuarios .tab-btn.active').dataset.tab;
         switchTabUsuarios(tipoTab);
     } catch (error) {
-        alert('Error al guardar usuario: ' + error.message);
+        await showAlert('Error al guardar usuario: ' + error.message, 'Error');
     }
 }
 
@@ -2490,13 +2594,14 @@ window.editarObra = async function(obraId) {
 };
 
 window.eliminarObra = async function(obraId) {
-    if (!confirm('¿Está seguro de eliminar esta obra?')) return;
+    const confirmar = await showConfirm('¿Está seguro de eliminar esta obra?', 'Confirmar Eliminación');
+    if (!confirmar) return;
     
     try {
         await db.eliminarObra(obraId);
         loadObras();
     } catch (error) {
-        alert('Error al eliminar obra: ' + error.message);
+        await showAlert('Error al eliminar obra: ' + error.message, 'Error');
     }
 };
 
@@ -2518,7 +2623,7 @@ async function guardarObra() {
     const telefono = document.getElementById('modal-obra-telefono').value.trim();
 
     if (!nombre) {
-        alert('Por favor, ingrese un nombre comercial');
+        await showAlert('Por favor, ingrese un nombre comercial', 'Error');
         return;
     }
 
@@ -2540,7 +2645,7 @@ async function guardarObra() {
         closeAllModals();
         loadObras();
     } catch (error) {
-        alert('Error al guardar obra: ' + error.message);
+        await showAlert('Error al guardar obra: ' + error.message, 'Error');
     }
 }
 
@@ -2666,7 +2771,8 @@ window.editarTienda = async function(tiendaId) {
 };
 
 window.eliminarTienda = async function(tiendaId) {
-    if (!confirm('¿Está seguro de eliminar esta tienda? Esto también eliminará todas sus categorías y productos.')) return;
+    const confirmar = await showConfirm('¿Está seguro de eliminar esta tienda? Esto también eliminará todas sus categorías y productos.', 'Confirmar Eliminación');
+    if (!confirmar) return;
     
     try {
         // Eliminar categorías y productos relacionados
@@ -2682,7 +2788,7 @@ window.eliminarTienda = async function(tiendaId) {
         await db.delete('tiendas', tiendaId);
         loadTiendasAdmin();
     } catch (error) {
-        alert('Error al eliminar tienda: ' + error.message);
+        await showAlert('Error al eliminar tienda: ' + error.message, 'Error');
     }
 };
 
@@ -2841,9 +2947,9 @@ function updateTiendaModalVisibility() {
     document.getElementById('modal-tienda-limite-group').style.display = (sinCuenta || !tieneCuenta) ? 'none' : 'block';
 }
 
-function handleImageFile(file, preview, previewImg) {
+async function handleImageFile(file, preview, previewImg) {
     if (!file.type.startsWith('image/')) {
-        alert('Por favor, selecciona un archivo de imagen');
+        await showAlert('Por favor, selecciona un archivo de imagen', 'Error');
         return;
     }
     
@@ -2877,12 +2983,12 @@ async function guardarTienda() {
     const logoFileInput = document.getElementById('modal-tienda-logo-file');
 
     if (!nombre) {
-        alert('Por favor, ingrese un nombre para la tienda');
+        await showAlert('Por favor, ingrese un nombre para la tienda', 'Error');
         return;
     }
 
     if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
-        alert('Por favor, ingrese una contraseña de 4 dígitos para la tienda');
+        await showAlert('Por favor, ingrese una contraseña de 4 dígitos para la tienda', 'Error');
         return;
     }
 
@@ -2923,7 +3029,7 @@ async function guardarTienda() {
         closeAllModals();
         loadTiendasAdmin();
     } catch (error) {
-        alert('Error al guardar tienda: ' + error.message);
+        await showAlert('Error al guardar tienda: ' + error.message, 'Error');
     }
 }
 
@@ -2977,7 +3083,8 @@ window.editarCategoria = async function(categoriaId) {
 };
 
 window.eliminarCategoria = async function(categoriaId) {
-    if (!confirm('¿Está seguro de eliminar esta categoría? Esto también eliminará todos sus productos.')) return;
+    const confirmar = await showConfirm('¿Está seguro de eliminar esta categoría? Esto también eliminará todos sus productos.', 'Confirmar Eliminación');
+    if (!confirmar) return;
     
     try {
         const productos = await db.getProductosByCategoria(categoriaId);
@@ -2989,7 +3096,7 @@ window.eliminarCategoria = async function(categoriaId) {
             loadCategoriasAdmin(currentTiendaAdmin.id);
         }
     } catch (error) {
-        alert('Error al eliminar categoría: ' + error.message);
+        await showAlert('Error al eliminar categoría: ' + error.message, 'Error');
     }
 };
 
@@ -3015,12 +3122,12 @@ async function guardarCategoria() {
     const nombre = document.getElementById('modal-categoria-nombre').value.trim();
 
     if (!nombre) {
-        alert('Por favor, ingrese un nombre para la categoría');
+        await showAlert('Por favor, ingrese un nombre para la categoría', 'Error');
         return;
     }
 
     if (!currentTiendaAdmin) {
-        alert('Error: No hay tienda seleccionada');
+        await showAlert('Error: No hay tienda seleccionada', 'Error');
         return;
     }
 
@@ -3040,7 +3147,7 @@ async function guardarCategoria() {
         closeAllModals();
         loadCategoriasAdmin(currentTiendaAdmin.id);
     } catch (error) {
-        alert('Error al guardar categoría: ' + error.message);
+        await showAlert('Error al guardar categoría: ' + error.message, 'Error');
     }
 }
 
@@ -3111,7 +3218,8 @@ window.editarProducto = async function(productoId) {
 };
 
 window.eliminarProducto = async function(productoId) {
-    if (!confirm('¿Está seguro de eliminar este producto?')) return;
+    const confirmar = await showConfirm('¿Está seguro de eliminar este producto?', 'Confirmar Eliminación');
+    if (!confirmar) return;
     
     try {
         await db.delete('productos', productoId);
@@ -3119,7 +3227,7 @@ window.eliminarProducto = async function(productoId) {
             loadProductosAdmin(currentCategoriaAdmin.id);
         }
     } catch (error) {
-        alert('Error al eliminar producto: ' + error.message);
+        await showAlert('Error al eliminar producto: ' + error.message, 'Error');
     }
 };
 
@@ -3148,17 +3256,17 @@ async function guardarProducto() {
     const fileInput = document.getElementById('modal-producto-foto-file');
     
     if (!designacion) {
-        alert('Por favor, ingrese una designación para el artículo');
+        await showAlert('Por favor, ingrese una designación para el artículo', 'Error');
         return;
     }
     
     if (!nombre) {
-        alert('Por favor, ingrese un nombre para el artículo');
+        await showAlert('Por favor, ingrese un nombre para el artículo', 'Error');
         return;
     }
 
     if (!currentCategoriaAdmin) {
-        alert('Error: No hay categoría seleccionada');
+        await showAlert('Error: No hay categoría seleccionada', 'Error');
         return;
     }
 
@@ -3192,7 +3300,7 @@ async function guardarProducto() {
         closeAllModals();
         loadProductosAdmin(currentCategoriaAdmin.id);
     } catch (error) {
-        alert('Error al guardar producto: ' + error.message);
+        await showAlert('Error al guardar producto: ' + error.message, 'Error');
     }
 }
 
@@ -3262,22 +3370,22 @@ async function procesarExcel() {
     const btnProcesar = document.getElementById('btn-procesar-excel');
     
     if (!fileInput.files.length) {
-        alert('Por favor, selecciona un archivo Excel');
+        await showAlert('Por favor, selecciona un archivo Excel', 'Error');
         return;
     }
     
     if (excelImportMode === 'productos' && !currentCategoriaAdmin) {
-        alert('Error: No hay categoría seleccionada');
+        await showAlert('Error: No hay categoría seleccionada', 'Error');
         return;
     }
     
     if (excelImportMode === 'categorias' && !currentTiendaAdmin) {
-        alert('Error: No hay tienda seleccionada');
+        await showAlert('Error: No hay tienda seleccionada', 'Error');
         return;
     }
     
     if (!window.XLSX) {
-        alert('Error: La librería de Excel no está cargada. Por favor, recarga la página.');
+        await showAlert('Error: La librería de Excel no está cargada. Por favor, recarga la página.', 'Error');
         return;
     }
     
