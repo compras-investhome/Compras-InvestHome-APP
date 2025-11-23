@@ -1009,7 +1009,7 @@ body {
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
-    padding-top: 2rem;
+    padding-top: 3.5rem;
     scroll-margin-top: 60px;
 }
 
@@ -1020,7 +1020,7 @@ body {
 
 /* Espacio adicional para el primer elemento de usuarios */
 #view-admin-usuarios .usuarios-list > .usuario-card:first-child {
-    margin-top: 0.5rem;
+    margin-top: 1rem;
 }
 
 .usuario-card {
