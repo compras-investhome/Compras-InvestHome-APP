@@ -209,6 +209,10 @@ function setupEventListeners() {
     document.getElementById('btn-menu-admin')?.addEventListener('click', () => {
         document.getElementById('sidebar').classList.add('active');
     });
+    
+    document.getElementById('btn-menu-tienda')?.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.add('active');
+    });
 
     document.getElementById('btn-close-sidebar').addEventListener('click', () => {
         document.getElementById('sidebar').classList.remove('active');
@@ -839,40 +843,69 @@ async function loadCarrito() {
         grupo.className = 'carrito-item';
         grupo.innerHTML = `
             <div class="carrito-item-header">
-                <span class="carrito-item-tienda">${data.tienda.nombre}</span>
+                <span class="carrito-item-tienda">Vendido por: ${data.tienda.nombre}</span>
             </div>
-            ${data.items.map(item => `
-                <div class="carrito-item-producto">
-                    <h4>${item.producto.nombre}</h4>
-                    <p>${item.producto.descripcion}</p>
+            ${data.items.map(item => {
+                const foto = item.producto.foto ? `<img src="${item.producto.foto}" alt="${item.producto.nombre}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; margin-right: 1rem;" onerror="this.style.display='none'">` : '';
+                return `
+                <div class="carrito-item-producto" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                    ${foto}
+                    <div style="flex: 1;">
+                        <h4>${item.producto.nombre}</h4>
+                        ${item.producto.descripcion ? `<p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">${item.producto.descripcion}</p>` : ''}
+                        ${item.producto.precio ? `<p style="color: var(--primary-color); font-weight: 600; margin-top: 0.25rem;">${item.producto.precio.toFixed(2)} €</p>` : ''}
+                    </div>
                     <div class="carrito-item-controls">
                         <div class="quantity-control">
-                            <button class="quantity-btn" onclick="decrementCarritoItem(${item.productoId})">-</button>
+                            <button class="quantity-btn decrement-carrito" data-producto-id="${item.productoId}">-</button>
                             <span class="quantity-value">${item.cantidad}</span>
-                            <button class="quantity-btn" onclick="incrementCarritoItem(${item.productoId})">+</button>
+                            <button class="quantity-btn increment-carrito" data-producto-id="${item.productoId}">+</button>
                         </div>
-                        <button class="btn-remove-item" onclick="removeCarritoItem(${item.productoId})" title="Eliminar">✕</button>
+                        <button class="btn-remove-item remove-carrito" data-producto-id="${item.productoId}" title="Eliminar">✕</button>
                     </div>
                 </div>
-            `).join('')}
+            `;
+            }).join('')}
         `;
         container.appendChild(grupo);
+        
+        // Agregar event listeners a los botones
+        grupo.querySelectorAll('.increment-carrito').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const productoId = btn.getAttribute('data-producto-id');
+                incrementCarritoItem(productoId);
+            });
+        });
+        
+        grupo.querySelectorAll('.decrement-carrito').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const productoId = btn.getAttribute('data-producto-id');
+                decrementCarritoItem(productoId);
+            });
+        });
+        
+        grupo.querySelectorAll('.remove-carrito').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const productoId = btn.getAttribute('data-producto-id');
+                removeCarritoItem(productoId);
+            });
+        });
     }
     
     btnFinalizar.addEventListener('click', finalizarPedido);
 }
 
-window.incrementCarritoItem = function(productoId) {
+function incrementCarritoItem(productoId) {
     incrementProducto(productoId);
     loadCarrito();
 }
 
-window.decrementCarritoItem = function(productoId) {
+function decrementCarritoItem(productoId) {
     decrementProducto(productoId);
     loadCarrito();
 }
 
-window.removeCarritoItem = function(productoId) {
+function removeCarritoItem(productoId) {
     carrito = carrito.filter(item => item.productoId !== productoId);
     updateCartCount();
     loadCarrito();
@@ -1029,6 +1062,12 @@ async function showGestionTienda() {
         alert('No hay tienda asociada');
         return;
     }
+    
+    // Ocultar buscador si existe en la vista de tienda
+    const searchBtn = document.getElementById('btn-search');
+    const searchContainer = document.getElementById('search-container');
+    if (searchBtn) searchBtn.style.display = 'none';
+    if (searchContainer) searchContainer.style.display = 'none';
     
     document.getElementById('gestion-tienda-nombre').textContent = `Gestión - ${currentTienda.nombre}`;
     showView('gestion-tienda');
@@ -1225,7 +1264,10 @@ window.uploadAlbaran = async function(pedidoId, file) {
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => {
         const view = document.querySelector('.view.active');
-        if (view.id === 'view-carrito') {
+        if (view.id === 'view-gestion-tienda') {
+            // Las tiendas no pueden volver atrás, solo cerrar sesión
+            return;
+        } else if (view.id === 'view-carrito') {
             // Volver a la vista anterior (main o productos)
             if (currentCategoria) {
                 showView('productos');
