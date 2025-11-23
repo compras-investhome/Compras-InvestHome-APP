@@ -310,16 +310,37 @@ class Database {
     }
 
     async getPedidosByTienda(tiendaId) {
-        const q = query(
-            collection(this.db, 'pedidos'),
-            where('tiendaId', '==', tiendaId),
-            orderBy('fecha', 'desc')
-        );
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        try {
+            // Intentar con orderBy primero
+            const q = query(
+                collection(this.db, 'pedidos'),
+                where('tiendaId', '==', tiendaId),
+                orderBy('fecha', 'desc')
+            );
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+        } catch (error) {
+            // Si falla (por ejemplo, si no hay índice para fecha), intentar sin orderBy
+            console.warn('Error al obtener pedidos con orderBy, intentando sin orderBy:', error);
+            const q = query(
+                collection(this.db, 'pedidos'),
+                where('tiendaId', '==', tiendaId)
+            );
+            const querySnapshot = await getDocs(q);
+            const pedidos = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            // Ordenar manualmente por fecha
+            return pedidos.sort((a, b) => {
+                const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+                const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+                return fechaB - fechaA;
+            });
+        }
     }
 
     async saveSesion(persona, obra) {

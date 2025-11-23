@@ -935,6 +935,7 @@ async function finalizarPedido() {
     const pedidosCreados = [];
     for (const [tiendaId, items] of Object.entries(itemsPorTienda)) {
         const tienda = await db.get('tiendas', tiendaId);
+        console.log('Creando pedido para tienda ID:', tiendaId, 'Tienda:', tienda);
         const pedido = {
             tiendaId: tiendaId,
             userId: currentUser.id,
@@ -1069,6 +1070,9 @@ async function showGestionTienda() {
     if (searchBtn) searchBtn.style.display = 'none';
     if (searchContainer) searchContainer.style.display = 'none';
     
+    console.log('Mostrando gestión de tienda. currentTienda:', currentTienda);
+    console.log('ID de la tienda:', currentTienda.id);
+    
     document.getElementById('gestion-tienda-nombre').textContent = `Gestión - ${currentTienda.nombre}`;
     showView('gestion-tienda');
     switchTab('en-curso');
@@ -1098,7 +1102,13 @@ function switchTab(tab) {
 async function loadPedidosEnCurso() {
     if (!currentTienda) return;
     
-    const pedidos = await db.getPedidosByTienda(currentTienda.id);
+    // Usar el ID correcto de la tienda
+    const tiendaId = currentTienda.id;
+    console.log('Buscando pedidos para tienda ID:', tiendaId);
+    
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    console.log('Pedidos encontrados:', pedidos.length, pedidos);
+    
     const pedidosEnCurso = pedidos.filter(p => p.estado !== 'Completado');
     const container = document.getElementById('pedidos-en-curso-list');
     const emptyState = document.getElementById('pedidos-en-curso-empty');
@@ -1127,7 +1137,11 @@ async function loadPedidosEnCurso() {
 async function loadPedidosCerrados() {
     if (!currentTienda) return;
     
-    const pedidos = await db.getPedidosByTienda(currentTienda.id);
+    // Usar el ID correcto de la tienda
+    const tiendaId = currentTienda.id;
+    console.log('Buscando pedidos cerrados para tienda ID:', tiendaId);
+    
+    const pedidos = await db.getPedidosByTienda(tiendaId);
     const pedidosCerrados = pedidos.filter(p => p.estado === 'Completado');
     const container = document.getElementById('pedidos-cerrados-list');
     const emptyState = document.getElementById('pedidos-cerrados-empty');
