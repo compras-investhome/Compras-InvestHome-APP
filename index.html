@@ -69,12 +69,20 @@
                 </svg>
             </button>
             <h2>Tiendas</h2>
-            <button id="btn-search" class="icon-btn" aria-label="Buscar">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
-            </button>
+            <div class="header-actions">
+                <button id="btn-nuevo-pedido-especial" class="icon-btn btn-add-special-pedido" aria-label="Nuevo Pedido Especial" style="display: none;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+                <button id="btn-search" class="icon-btn" aria-label="Buscar">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <div class="search-container" id="search-container" style="display: none;">
@@ -196,6 +204,17 @@
             <div style="width: 24px;"></div>
         </header>
 
+        <div id="pedidos-tabs" class="tabs" style="display: none;">
+            <button class="tab-btn active" data-tab="pedidos-normal">
+                Pedidos
+                <span class="tab-badge" id="pedidos-normal-badge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pedidos-especiales-tecnico">
+                Pedidos Especiales
+                <span class="tab-badge" id="pedidos-especiales-badge">0</span>
+            </button>
+        </div>
+
         <div class="pedidos-filters-container">
             <div class="filters-row">
                 <div class="filter-group">
@@ -254,11 +273,21 @@
         </div>
 
         <main class="main-content">
-            <div id="pedidos-list" class="pedidos-list">
-                <!-- Los pedidos se cargarán dinámicamente -->
+            <div id="pedidos-normal" class="tab-content">
+                <div id="pedidos-list" class="pedidos-list">
+                    <!-- Los pedidos se cargarán dinámicamente -->
+                </div>
+                <div id="pedidos-empty" class="empty-state" style="display: none;">
+                    <p>No tienes pedidos realizados</p>
+                </div>
             </div>
-            <div id="pedidos-empty" class="empty-state" style="display: none;">
-                <p>No tienes pedidos realizados</p>
+            <div id="pedidos-especiales-tecnico" class="tab-content" style="display: none;">
+                <div id="pedidos-especiales-list" class="pedidos-list">
+                    <!-- Los pedidos especiales se cargarán dinámicamente -->
+                </div>
+                <div id="pedidos-especiales-empty" class="empty-state" style="display: none;">
+                    <p>No tienes pedidos especiales realizados</p>
+                </div>
             </div>
         </main>
 
@@ -858,6 +887,58 @@
             <div class="modal-footer">
                 <button id="btn-cancelar-producto" class="btn btn-secondary">Cancelar</button>
                 <button id="btn-guardar-producto" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear Pedido Especial -->
+    <div id="modal-pedido-especial" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Nuevo Pedido Especial</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="pedido-especial-proveedor-nombre">Nombre del Proveedor <span style="color: red;">*</span></label>
+                    <input type="text" id="pedido-especial-proveedor-nombre" class="form-input" placeholder="Nombre del proveedor" required>
+                </div>
+                <div class="form-group">
+                    <label for="pedido-especial-proveedor-descripcion">Descripción del Proveedor</label>
+                    <textarea id="pedido-especial-proveedor-descripcion" class="form-input" rows="2" placeholder="Descripción del proveedor (opcional)"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Artículos</label>
+                    <div id="pedido-especial-articulos" class="modal-pedido-especial-items">
+                        <!-- Los artículos se añadirán dinámicamente -->
+                    </div>
+                    <button type="button" id="btn-add-articulo-especial" class="btn btn-secondary" style="margin-top: 0.5rem;">
+                        + Añadir Artículo
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label>Adjuntar Documento de Pago</label>
+                    <div id="pedido-especial-documento-dropzone" class="dropzone" style="border: 2px dashed var(--border-color); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Arrastra un documento aquí o haz clic para seleccionar</p>
+                        <p style="color: var(--text-secondary); font-size: 0.875rem;">PDF, PNG, JPG (máx. 10MB)</p>
+                        <input type="file" id="pedido-especial-documento-file" accept="application/pdf,image/png,image/jpeg,image/jpg" style="display: none;">
+                        <div id="pedido-especial-documento-preview" style="margin-top: 1rem; display: none;">
+                            <div class="pedido-especial-documento-preview">
+                                <span id="pedido-especial-documento-nombre"></span>
+                                <button type="button" id="btn-remove-documento-especial" class="btn btn-secondary btn-sm">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="pedido-especial-notas">Notas del pedido</label>
+                    <textarea id="pedido-especial-notas" class="form-input" rows="3" placeholder="Notas adicionales sobre el pedido (opcional)"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-pedido-especial" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-pedido-especial" class="btn btn-primary">Guardar Pedido</button>
             </div>
         </div>
     </div>

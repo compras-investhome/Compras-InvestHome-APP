@@ -428,6 +428,33 @@ function setupEventListeners() {
     
     // Configurar listeners de filtros de pedidos
     setupPedidosFiltersListeners();
+    
+    // Botón para crear pedido especial (solo técnicos)
+    document.getElementById('btn-nuevo-pedido-especial')?.addEventListener('click', () => {
+        openModalPedidoEspecial();
+    });
+    
+    // Listeners para modal de pedido especial
+    document.getElementById('btn-cancelar-pedido-especial')?.addEventListener('click', closeAllModals);
+    document.getElementById('btn-guardar-pedido-especial')?.addEventListener('click', guardarPedidoEspecial);
+    document.getElementById('btn-add-articulo-especial')?.addEventListener('click', addArticuloEspecial);
+    
+    // Listener para dropzone de documento de pago
+    const documentoDropzone = document.getElementById('pedido-especial-documento-dropzone');
+    const documentoFileInput = document.getElementById('pedido-especial-documento-file');
+    if (documentoDropzone && documentoFileInput) {
+        documentoDropzone.addEventListener('click', () => documentoFileInput.click());
+        documentoFileInput.addEventListener('change', handleDocumentoEspecialChange);
+    }
+    document.getElementById('btn-remove-documento-especial')?.addEventListener('click', removeDocumentoEspecial);
+    
+    // Tabs de pedidos (solo para técnicos)
+    document.querySelectorAll('#pedidos-tabs .tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = e.currentTarget.dataset.tab;
+            switchTabPedidos(tab);
+        });
+    });
 }
 
 // Setup Login Listeners
@@ -688,7 +715,10 @@ function showView(viewName) {
     document.querySelectorAll('.view').forEach(view => {
         view.classList.remove('active');
     });
-    document.getElementById(`view-${viewName}`).classList.add('active');
+    const targetView = document.getElementById(`view-${viewName}`);
+    if (targetView) {
+        targetView.classList.add('active');
+    }
     
     // Asegurar que el botón de búsqueda esté visible en la vista principal para técnicos/encargados
     const searchBtn = document.getElementById('btn-search');
@@ -697,6 +727,40 @@ function showView(viewName) {
             searchBtn.style.display = 'flex';
         } else if (viewName === 'main') {
             searchBtn.style.display = 'flex';
+        }
+    }
+    
+    // Mostrar/ocultar botón de pedidos especiales solo para técnicos en vista main
+    const btnPedidoEspecial = document.getElementById('btn-nuevo-pedido-especial');
+    if (btnPedidoEspecial) {
+        if (viewName === 'main' && currentUserType === 'Técnico') {
+            btnPedidoEspecial.style.display = 'flex';
+        } else {
+            btnPedidoEspecial.style.display = 'none';
+        }
+    }
+    
+    // Mostrar/ocultar pestañas en vista de pedidos solo para técnicos
+    const pedidosTabs = document.getElementById('pedidos-tabs');
+    if (pedidosTabs) {
+        if (viewName === 'pedidos' && currentUserType === 'Técnico') {
+            pedidosTabs.style.display = 'flex';
+        } else {
+            pedidosTabs.style.display = 'none';
+        }
+    }
+    
+    // Cargar contenido según la pestaña activa en vista de pedidos
+    if (viewName === 'pedidos' && currentUser && currentUserType) {
+        if (currentUserType === 'Técnico') {
+            const activeTab = document.querySelector('#pedidos-tabs .tab-btn.active');
+            if (activeTab && activeTab.dataset.tab === 'pedidos-especiales-tecnico') {
+                loadPedidosEspecialesTecnico();
+            } else {
+                populatePedidosFilters().then(() => loadMisPedidos());
+            }
+        } else {
+            populatePedidosFilters().then(() => loadMisPedidos());
         }
     }
 }
@@ -1176,7 +1240,10 @@ async function loadMisPedidos() {
     // Obtener TODOS los pedidos de TODAS las obras (excepto completados)
     // Esto permite que cualquier técnico/encargado vea y gestione todos los pedidos de todas las obras
     const todosPedidos = await db.getAll('pedidos');
-    let pedidosFiltrados = todosPedidos.filter(p => p.estado !== 'Completado');
+    let pedidosFiltrados = todosPedidos.filter(p => {
+        // Excluir pedidos completados y pedidos especiales
+        return p.estado !== 'Completado' && !(p.esPedidoEspecial === true);
+    });
     
     // Aplicar filtros
     pedidosFiltrados = aplicarFiltrosPedidos(pedidosFiltrados);
@@ -1228,8 +1295,12 @@ async function loadMisPedidos() {
     
     // Actualizar badge del header
     const badge = document.getElementById('pedidos-total-badge');
+    const badgeNormal = document.getElementById('pedidos-normal-badge');
     if (badge) {
         badge.textContent = totalCount;
+    }
+    if (badgeNormal) {
+        badgeNormal.textContent = totalCount;
     }
 }
 
@@ -1431,6 +1502,310 @@ function setupPedidosFiltersListeners() {
             populatePedidosFilters().then(() => loadMisPedidos());
         });
     }
+}
+
+// Funciones para Pedidos Especiales
+function switchTabPedidos(tab) {
+    // Ocultar todos los contenidos de pestañas
+    document.querySelectorAll('#view-pedidos .tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    
+    // Remover active de todos los botones
+    document.querySelectorAll('#pedidos-tabs .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Mostrar el contenido de la pestaña seleccionada
+    const targetContent = document.getElementById(tab);
+    if (targetContent) {
+        targetContent.style.display = 'block';
+    }
+    
+    // Activar el botón correspondiente
+    const targetBtn = document.querySelector(`#pedidos-tabs .tab-btn[data-tab="${tab}"]`);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+    
+    // Cargar contenido según la pestaña
+    if (tab === 'pedidos-especiales-tecnico') {
+        loadPedidosEspecialesTecnico();
+    } else if (tab === 'pedidos-normal') {
+        populatePedidosFilters().then(() => loadMisPedidos());
+    }
+}
+
+function openModalPedidoEspecial() {
+    if (!currentUser || currentUserType !== 'Técnico') {
+        showAlert('Solo los técnicos pueden crear pedidos especiales');
+        return;
+    }
+    
+    const modal = document.getElementById('modal-pedido-especial');
+    if (!modal) return;
+    
+    // Limpiar formulario
+    document.getElementById('pedido-especial-proveedor-nombre').value = '';
+    document.getElementById('pedido-especial-proveedor-descripcion').value = '';
+    document.getElementById('pedido-especial-articulos').innerHTML = '';
+    document.getElementById('pedido-especial-notas').value = '';
+    document.getElementById('pedido-especial-documento-preview').style.display = 'none';
+    document.getElementById('pedido-especial-documento-file').value = '';
+    
+    // Añadir primer artículo
+    addArticuloEspecial();
+    
+    modal.classList.add('active');
+}
+
+function addArticuloEspecial() {
+    const container = document.getElementById('pedido-especial-articulos');
+    if (!container) return;
+    
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'pedido-especial-item';
+    const itemId = Date.now() + Math.random();
+    
+    itemDiv.innerHTML = `
+        <div>
+            <input type="text" class="form-input" placeholder="Nombre del artículo *" required data-articulo-nombre="${itemId}">
+        </div>
+        <div>
+            <input type="number" class="form-input" placeholder="Precio (€)" step="0.01" min="0" data-articulo-precio="${itemId}">
+        </div>
+        <div class="pedido-especial-item-actions">
+            <button type="button" onclick="this.closest('.pedido-especial-item').remove()">✕</button>
+        </div>
+    `;
+    
+    container.appendChild(itemDiv);
+}
+
+function handleDocumentoEspecialChange(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validar tipo de archivo
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+        showAlert('Tipo de archivo no permitido. Solo se permiten PDF, PNG, JPG');
+        event.target.value = '';
+        return;
+    }
+    
+    // Validar tamaño (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        showAlert('El archivo es demasiado grande. Máximo 10MB');
+        event.target.value = '';
+        return;
+    }
+    
+    const preview = document.getElementById('pedido-especial-documento-preview');
+    const nombre = document.getElementById('pedido-especial-documento-nombre');
+    
+    if (preview && nombre) {
+        nombre.textContent = file.name;
+        preview.style.display = 'block';
+    }
+}
+
+function removeDocumentoEspecial() {
+    const preview = document.getElementById('pedido-especial-documento-preview');
+    const fileInput = document.getElementById('pedido-especial-documento-file');
+    
+    if (preview) preview.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+}
+
+async function guardarPedidoEspecial() {
+    if (!currentUser || currentUserType !== 'Técnico') {
+        showAlert('Solo los técnicos pueden crear pedidos especiales');
+        return;
+    }
+    
+    if (!currentObra) {
+        showAlert('No hay obra seleccionada en la sesión');
+        return;
+    }
+    
+    // Validar proveedor
+    const proveedorNombre = document.getElementById('pedido-especial-proveedor-nombre').value.trim();
+    if (!proveedorNombre) {
+        showAlert('El nombre del proveedor es obligatorio');
+        return;
+    }
+    
+    // Recopilar artículos
+    const articulos = [];
+    const items = document.querySelectorAll('.pedido-especial-item');
+    let hasError = false;
+    
+    items.forEach(item => {
+        const nombreInput = item.querySelector('[data-articulo-nombre]');
+        const precioInput = item.querySelector('[data-articulo-precio]');
+        
+        if (!nombreInput || !nombreInput.value.trim()) {
+            hasError = true;
+            return;
+        }
+        
+        articulos.push({
+            nombre: nombreInput.value.trim(),
+            precio: precioInput && precioInput.value ? parseFloat(precioInput.value) : null
+        });
+    });
+    
+    if (hasError || articulos.length === 0) {
+        showAlert('Debe añadir al menos un artículo con nombre');
+        return;
+    }
+    
+    // Procesar documento de pago
+    let documentoPagoBase64 = null;
+    const fileInput = document.getElementById('pedido-especial-documento-file');
+    if (fileInput && fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        documentoPagoBase64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+    
+    // Recopilar datos
+    const pedidoData = {
+        esPedidoEspecial: true,
+        proveedorNombre: proveedorNombre,
+        proveedorDescripcion: document.getElementById('pedido-especial-proveedor-descripcion').value.trim() || null,
+        articulos: articulos,
+        documentoPago: documentoPagoBase64,
+        notas: document.getElementById('pedido-especial-notas').value.trim() || null,
+        persona: currentUser.username || currentUser.nombre || 'Usuario desconocido',
+        obraId: currentObra.id,
+        obraNombre: currentObra.nombreComercial || currentObra.nombre,
+        estado: 'Nuevo',
+        estadoPago: 'Sin Asignar',
+        fecha: new Date(),
+        createdAt: new Date()
+    };
+    
+    try {
+        await db.add('pedidos', pedidoData);
+        showAlert('Pedido especial creado correctamente');
+        closeAllModals();
+        
+        // Recargar pedidos especiales si estamos en esa pestaña
+        const activeTab = document.querySelector('#pedidos-tabs .tab-btn.active');
+        if (activeTab && activeTab.dataset.tab === 'pedidos-especiales-tecnico') {
+            loadPedidosEspecialesTecnico();
+        }
+    } catch (error) {
+        console.error('Error al guardar pedido especial:', error);
+        showAlert('Error al guardar el pedido especial: ' + error.message);
+    }
+}
+
+async function loadPedidosEspecialesTecnico() {
+    if (!currentUser || currentUserType !== 'Técnico') {
+        return;
+    }
+    
+    const container = document.getElementById('pedidos-especiales-list');
+    const emptyState = document.getElementById('pedidos-especiales-empty');
+    
+    if (!container || !emptyState) return;
+    
+    try {
+        const todosPedidos = await db.getAll('pedidos');
+        const pedidosEspeciales = todosPedidos.filter(p => {
+            return p.esPedidoEspecial === true && 
+                   p.persona === (currentUser.username || currentUser.nombre);
+        });
+        
+        if (pedidosEspeciales.length === 0) {
+            container.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        container.innerHTML = '';
+        
+        // Ordenar por fecha (más recientes primero)
+        pedidosEspeciales.sort((a, b) => {
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : new Date(0));
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : new Date(0));
+            return fechaB - fechaA;
+        });
+        
+        // Agrupar por obra
+        const pedidosPorObra = {};
+        pedidosEspeciales.forEach(pedido => {
+            const obraId = pedido.obraId || 'sin-obra';
+            if (!pedidosPorObra[obraId]) {
+                pedidosPorObra[obraId] = [];
+            }
+            pedidosPorObra[obraId].push(pedido);
+        });
+        
+        // Crear cards agrupadas por obra
+        for (const [obraId, pedidos] of Object.entries(pedidosPorObra)) {
+            const obra = obraId !== 'sin-obra' ? await db.get('obras', obraId) : null;
+            const obraNombre = obra ? (obra.nombreComercial || obra.nombre) : 'Sin obra asignada';
+            
+            const obraSection = document.createElement('div');
+            obraSection.className = 'obra-pedidos-section';
+            obraSection.innerHTML = `
+                <div class="obra-pedidos-header">
+                    <h3>${escapeHtml(obraNombre)}</h3>
+                    <span class="obra-pedidos-count">${pedidos.length}</span>
+                </div>
+                <div class="obra-pedidos-content">
+                    ${pedidos.map(p => createPedidoEspecialCard(p)).join('')}
+                </div>
+            `;
+            container.appendChild(obraSection);
+        }
+        
+        // Actualizar badge
+        const badge = document.getElementById('pedidos-especiales-badge');
+        if (badge) {
+            badge.textContent = pedidosEspeciales.length;
+        }
+    } catch (error) {
+        console.error('Error al cargar pedidos especiales:', error);
+        showAlert('Error al cargar pedidos especiales');
+    }
+}
+
+function createPedidoEspecialCard(pedido) {
+    const fecha = pedido.fecha?.toDate ? pedido.fecha.toDate() : (pedido.fecha ? new Date(pedido.fecha) : new Date());
+    const fechaStr = fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    const total = pedido.articulos?.reduce((sum, a) => sum + (a.precio || 0), 0) || 0;
+    
+    return `
+        <div class="pedido-card">
+            <div class="pedido-header">
+                <div>
+                    <h3>${escapeHtml(pedido.proveedorNombre || 'Proveedor desconocido')}</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                        ${escapeHtml(pedido.proveedorDescripcion || '')}
+                    </p>
+                </div>
+                <span class="estado-${pedido.estado?.toLowerCase().replace(' ', '-') || 'nuevo'}">${pedido.estado || 'Nuevo'}</span>
+            </div>
+            <div class="pedido-info">
+                <p><strong>Fecha:</strong> ${fechaStr}</p>
+                <p><strong>Artículos:</strong> ${pedido.articulos?.length || 0}</p>
+                <p><strong>Total:</strong> ${total.toFixed(2)} €</p>
+                ${pedido.documentoPago ? '<p><strong>Documento de pago:</strong> Adjuntado</p>' : ''}
+            </div>
+            ${pedido.notas ? `<div class="pedido-notas"><p>${escapeHtml(pedido.notas)}</p></div>` : ''}
+        </div>
+    `;
 }
 
 async function createPedidoCard(pedido, tienda) {
