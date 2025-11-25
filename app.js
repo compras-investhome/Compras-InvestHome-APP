@@ -3519,9 +3519,8 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                     <span>Estado de envío:</span>
                     <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
                 </div>
-                </div>
-            <div class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</div>
-                </div>
+            </div>
+        </div>
         <div class="contab-info-grid">
             <div class="contab-info-card">
                 <div class="contab-card-title">Datos del pedido</div>
@@ -3561,6 +3560,9 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                 <span class="chevron">▼</span>
             </button>
             <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
+                <div class="pedido-items-header">
+                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                </div>
                 <div class="pedido-items-list">
                     ${itemsHtml}
                 </div>
