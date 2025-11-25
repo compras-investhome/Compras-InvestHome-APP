@@ -771,6 +771,13 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 1rem;
+    max-width: 50%;
+}
+
+@media (max-width: 768px) {
+    .contab-info-grid {
+        max-width: 100%;
+    }
 }
 
 .contab-info-card {
@@ -922,9 +929,8 @@ body {
 
 .pedido-item {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0.5rem;
+    align-items: flex-start;
+    gap: 1rem;
     padding-bottom: 0.75rem;
     border-bottom: 1px solid var(--border-color);
 }
@@ -933,27 +939,57 @@ body {
     border-bottom: none;
 }
 
+.pedido-item-foto {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.pedido-item-foto-placeholder {
+    width: 80px;
+    height: 80px;
+    background: var(--bg-color);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
 .pedido-item-info {
-    max-width: 320px;
+    flex: 1;
+    min-width: 0;
 }
 
 .pedido-item-name {
     font-weight: 600;
-    margin: 0;
+    margin: 0 0 0.25rem 0;
     color: var(--text-primary);
+    font-size: 0.95rem;
 }
 
-.pedido-item-ref {
-    margin: 0.15rem 0 0;
+.pedido-item-ref-ean {
+    margin: 0 0 0.5rem 0;
     font-size: 0.85rem;
     color: var(--text-secondary);
 }
 
 .pedido-item-meta {
     display: flex;
-    gap: 0.75rem;
+    gap: 1rem;
     font-size: 0.85rem;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.pedido-item-meta span {
+    color: var(--text-primary);
+    font-weight: 500;
 }
 
 .contab-note-input {

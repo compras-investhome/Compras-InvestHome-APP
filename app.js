@@ -3022,7 +3022,7 @@ async function loadPedidosContabilidad() {
     const obras = await getObrasCatalog(pedidosPendientes);
     const container = document.getElementById('pedidos-contabilidad-list');
     const emptyState = document.getElementById('pedidos-contabilidad-empty');
-    container.innerHTML = '';
+        container.innerHTML = '';
     
     if (obras.length === 0) {
         emptyState.style.display = 'block';
@@ -3048,9 +3048,9 @@ async function loadPedidosContabilidad() {
         });
         
         for (const pedido of pedidosObra) {
-            const card = await createPedidoContabilidadCard(pedido);
+        const card = await createPedidoContabilidadCard(pedido);
             content.appendChild(card);
-        }
+    }
         
         container.appendChild(section);
     }
@@ -3065,7 +3065,7 @@ async function loadPedidosPagadosContabilidad() {
     );
     const container = document.getElementById('pedidos-pagados-contabilidad-list');
     const emptyState = document.getElementById('pedidos-pagados-contabilidad-empty');
-    container.innerHTML = '';
+        container.innerHTML = '';
     
     const obras = await getObrasCatalog(pedidosPagados);
     if (obras.length === 0) {
@@ -3082,10 +3082,10 @@ async function loadPedidosPagadosContabilidad() {
         const pedidosObra = pedidosPagados
             .filter(p => (p.obraId || 'sin-obra') === obraId)
             .sort((a, b) => {
-                const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-                const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-                return fechaB - fechaA;
-            });
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+            return fechaB - fechaA;
+        });
         totalCount += pedidosObra.length;
         
         const { section, content } = createCascadeSection({
@@ -3116,7 +3116,7 @@ async function loadCuentasContabilidad() {
     const container = document.getElementById('cuentas-contabilidad-list');
     const emptyState = document.getElementById('cuentas-contabilidad-empty');
     
-    container.innerHTML = '';
+        container.innerHTML = '';
     
     if (tiendasConCuenta.length === 0) {
         emptyState.style.display = 'block';
@@ -3313,7 +3313,7 @@ function createCuentaInfoBlock(tienda, gastado) {
             <p><strong>Disponible:</strong> ${disponible.toFixed(2)} €</p>
             <div style="margin-top: 0.5rem; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden;">
                 <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra};"></div>
-            </div>
+                </div>
             <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">${porcentaje.toFixed(1)}% utilizado</p>
         `;
     } else {
@@ -3340,63 +3340,63 @@ function createPagoCuentaCard(pedido, tienda) {
     
     const items = Array.isArray(pedido.items) ? pedido.items : [];
     const precioTotalPedido = items.reduce((total, item) => {
-        const precioItem = item.precio || 0;
-        const cantidad = item.cantidad || 0;
-        return total + (precioItem * cantidad);
-    }, 0);
-    
-    let fecha;
-    let fechaObj;
-    if (pedido.fecha && pedido.fecha.toDate) {
-        fechaObj = pedido.fecha.toDate();
-    } else if (pedido.fecha) {
-        fechaObj = new Date(pedido.fecha);
-    } else {
-        fechaObj = new Date();
-    }
-    const dia = fechaObj.getDate().toString().padStart(2, '0');
-    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
-    const año = fechaObj.getFullYear();
-    fecha = `${dia}/${mes}/${año}`;
-    
+                const precioItem = item.precio || 0;
+                const cantidad = item.cantidad || 0;
+                return total + (precioItem * cantidad);
+            }, 0);
+            
+            let fecha;
+            let fechaObj;
+            if (pedido.fecha && pedido.fecha.toDate) {
+                fechaObj = pedido.fecha.toDate();
+            } else if (pedido.fecha) {
+                fechaObj = new Date(pedido.fecha);
+            } else {
+                fechaObj = new Date();
+            }
+            const dia = fechaObj.getDate().toString().padStart(2, '0');
+            const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+            const año = fechaObj.getFullYear();
+            fecha = `${dia}/${mes}/${año}`;
+            
     card.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
-            <div style="flex: 1;">
-                <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Pedido #${pedido.id}</p>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">📅 ${fecha}</p>
-                <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>🏗️ Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
-                <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>👤 Usuario:</strong> ${pedido.persona || 'Desconocido'}</p>
-            </div>
-            <div style="text-align: right; margin-left: 1rem;">
-                <p style="font-weight: 700; font-size: 1.25rem; color: var(--primary-color); margin-bottom: 0.25rem;">${precioTotalPedido.toFixed(2)} €</p>
-                <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">Pago A cuenta</span>
-            </div>
-        </div>
-        ${pedido.pedidoSistemaPDF ? `
-            <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px;">
-                <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">📄 Documento del Sistema:</p>
-                <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
-                    📥 Ver/Descargar Documento
-                </a>
-            </div>
-        ` : ''}
-        ${!pedido.transferenciaPDF ? `
-            <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 8px;">
-                <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
-                    💳 Adjuntar PDF del Pago
-                </label>
-                <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; cursor: pointer;">
-            </div>
-        ` : `
-            <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border: 2px solid #10b981; border-radius: 8px;">
-                <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                    ✓ Pago adjuntado y confirmado
-                </p>
-                <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
-                    📥 Ver PDF del Pago
-                </a>
-            </div>
-        `}
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                        <div style="flex: 1;">
+                            <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Pedido #${pedido.id}</p>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">📅 ${fecha}</p>
+                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>🏗️ Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
+                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>👤 Usuario:</strong> ${pedido.persona || 'Desconocido'}</p>
+                        </div>
+                        <div style="text-align: right; margin-left: 1rem;">
+                            <p style="font-weight: 700; font-size: 1.25rem; color: var(--primary-color); margin-bottom: 0.25rem;">${precioTotalPedido.toFixed(2)} €</p>
+                            <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">Pago A cuenta</span>
+                        </div>
+                    </div>
+                    ${pedido.pedidoSistemaPDF ? `
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px;">
+                            <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">📄 Documento del Sistema:</p>
+                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
+                                📥 Ver/Descargar Documento
+                            </a>
+                        </div>
+                    ` : ''}
+                    ${!pedido.transferenciaPDF ? `
+                        <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 8px;">
+                            <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
+                                💳 Adjuntar PDF del Pago
+                            </label>
+                            <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; cursor: pointer;">
+                        </div>
+                    ` : `
+                        <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border: 2px solid #10b981; border-radius: 8px;">
+                            <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                                ✓ Pago adjuntado y confirmado
+                            </p>
+                            <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
+                                📥 Ver PDF del Pago
+                            </a>
+                        </div>
+                    `}
     `;
     
     return card;
@@ -3447,22 +3447,35 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     }, 0);
     
     const itemsHtml = items.length
-        ? items.map((item) => {
+        ? items.map((item, index) => {
             const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
             const referencia = escapeHtml(item.designacion || item.referencia || '');
+            const ean = escapeHtml(item.ean || '');
             const cantidad = Number(item.cantidad) || 0;
             const precio = formatCurrency(item.precio || 0);
             const subtotal = formatCurrency((item.precio || 0) * cantidad);
+            const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+            const placeholderId = `foto-placeholder-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
+            const refEanParts = [];
+            if (referencia) refEanParts.push(referencia);
+            if (ean) refEanParts.push(ean);
+            const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
             return `
                 <div class="pedido-item">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
                     <div class="pedido-item-info">
                         <p class="pedido-item-name">${nombre}</p>
-                        ${referencia ? `<p class="pedido-item-ref">${referencia}</p>` : ''}
-                    </div>
-                    <div class="pedido-item-meta">
-                        <span>Cant: ${cantidad}</span>
-                        <span>Precio: ${precio}</span>
-                        <span>Total: ${subtotal}</span>
+                        ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
                     </div>
                 </div>
             `;
@@ -3506,9 +3519,9 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                     <span>Estado de envío:</span>
                     <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
                 </div>
-            </div>
+                </div>
             <div class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</div>
-        </div>
+                </div>
         <div class="contab-info-grid">
             <div class="contab-info-card">
                 <div class="contab-card-title">Datos del pedido</div>
@@ -3517,7 +3530,7 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                 <div class="contab-info-row">
                     <span>Obra</span>
                     <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
-                </div>
+            </div>
                 <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
                 <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
             </div>
@@ -3534,7 +3547,7 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                 <div class="contab-info-row">
                     <span>Documento de pago</span>
                     <div class="doc-actions">${documentoPagoContent}</div>
-                </div>
+            </div>
                 <div class="contab-info-row">
                     <span>Factura</span>
                     <div class="doc-actions">${facturaContent}</div>
@@ -3554,10 +3567,6 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
             </div>
         </div>
         <div class="contab-notes-block">
-            <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
-            <div class="contab-note-actions">
-                <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
-            </div>
             <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
                 <div class="toggle-label">
                     <span class="toggle-text">Ver comentarios del pedido</span>
@@ -3566,6 +3575,10 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
                 <span class="chevron">▼</span>
             </button>
             <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
+                <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
+                <div class="contab-note-actions">
+                    <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
+                </div>
                 <div id="${notasListId}" class="pedido-notas-list"></div>
             </div>
         </div>
