@@ -704,6 +704,326 @@ body {
     padding: 1rem;
 }
 
+.contab-pedido-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.contab-pedido-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.pedido-code {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: var(--text-primary);
+}
+
+.contab-estado-envio {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.estado-envio-pill {
+    padding: 0.15rem 0.75rem;
+    border-radius: 999px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.estado-envio-pill.estado-completado {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.estado-envio-pill.estado-en-curso,
+.estado-envio-pill.estado-en-proceso {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+}
+
+.estado-envio-pill.estado-pendiente {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.contab-total {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 0.95rem;
+}
+
+.contab-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.contab-info-card {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+}
+
+.contab-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.contab-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.contab-info-row span:first-child {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.contab-info-row strong,
+.contab-info-row a,
+.contab-info-row div {
+    color: var(--text-primary);
+}
+
+.contab-info-row:last-child {
+    margin-bottom: 0;
+}
+
+.estado-pago-pill {
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: white;
+}
+
+.estado-pago-pendiente {
+    background: #ef4444;
+}
+
+.estado-pago-cuenta {
+    background: #3b82f6;
+}
+
+.estado-pago-pagado {
+    background: #10b981;
+}
+
+.doc-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.doc-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: var(--primary-color);
+}
+
+.doc-link:hover {
+    border-color: var(--primary-color);
+}
+
+.doc-placeholder {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.emoji-btn {
+    border: none;
+    background: transparent;
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.emoji-btn.danger {
+    color: #ef4444;
+}
+
+.contab-toggle {
+    width: 100%;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    background: var(--card-bg);
+}
+
+.contab-toggle .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.contab-toggle .toggle-extra {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.contab-toggle .chevron {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.contab-collapse {
+    margin-top: 0.65rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 0.85rem;
+    background: var(--bg-color);
+}
+
+.pedido-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.pedido-item {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pedido-item:last-child {
+    border-bottom: none;
+}
+
+.pedido-item-info {
+    max-width: 320px;
+}
+
+.pedido-item-name {
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.pedido-item-ref {
+    margin: 0.15rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.pedido-item-meta {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    align-items: center;
+}
+
+.contab-note-input {
+    width: 100%;
+    min-height: 90px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.contab-note-actions {
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.pedido-notas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.pedido-nota-entry {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.contab-notes-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.pedido-nota-entry:last-child {
+    border-bottom: none;
+}
+
+.nota-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+}
+
+.nota-meta strong {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.nota-rol {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-left: 0.25rem;
+}
+
+.nota-fecha {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.pedido-nota-entry p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
 .cascade-section {
     border: 1px solid var(--border-color);
     border-radius: 12px;

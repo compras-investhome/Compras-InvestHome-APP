@@ -2656,6 +2656,235 @@ function sanitizeCascadeId(value) {
     return sanitized || 'sin-obra';
 }
 
+function formatDateTime(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return '';
+    }
+    return date.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatCurrency(value) {
+    const number = Number(value) || 0;
+    try {
+        return new Intl.NumberFormat('es-ES', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(number);
+    } catch (error) {
+        return `${number.toFixed(2)} €`;
+    }
+}
+
+function getEstadoPagoPillClass(estado) {
+    const normalized = (estado || '').toLowerCase();
+    if (normalized.includes('cuenta')) {
+        return 'estado-pago-cuenta';
+    }
+    if (normalized.includes('pagad')) {
+        return 'estado-pago-pagado';
+    }
+    return 'estado-pago-pendiente';
+}
+
+function buildObraMapsLink(obraInfo, obraNombre) {
+    let link = obraInfo?.direccionGoogleMaps || '';
+    if (link && /^https?:\/\//i.test(link)) {
+        return link;
+    }
+    const query = link || obraNombre;
+    if (!query) return null;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function escapeHtml(value = '') {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderPedidoNotasUI(pedidoId, notas = [], listElement, countElement) {
+    const listEl = listElement || document.getElementById(`pedido-notas-list-${pedidoId}`);
+    const countEl = countElement || document.getElementById(`pedido-notas-count-${pedidoId}`);
+    if (countEl) {
+        countEl.textContent = notas.length || 0;
+    }
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!Array.isArray(notas) || notas.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'cascade-empty';
+        empty.textContent = 'No hay comentarios registrados';
+        listEl.appendChild(empty);
+        return;
+    }
+    const sorted = [...notas].sort((a, b) => {
+        const fechaA = new Date(a.timestamp || 0).getTime();
+        const fechaB = new Date(b.timestamp || 0).getTime();
+        return fechaB - fechaA;
+    });
+    sorted.forEach((nota) => {
+        const entry = document.createElement('div');
+        entry.className = 'pedido-nota-entry';
+        const meta = document.createElement('div');
+        meta.className = 'nota-meta';
+
+        const left = createNoteHeaderLeft(nota);
+        const fecha = document.createElement('span');
+        fecha.className = 'nota-fecha';
+        fecha.textContent = formatDateTime(new Date(nota.timestamp || Date.now()));
+
+        meta.appendChild(left);
+        meta.appendChild(fecha);
+
+        const body = document.createElement('p');
+        body.textContent = nota.mensaje || '';
+
+        entry.appendChild(meta);
+        entry.appendChild(body);
+        listEl.appendChild(entry);
+    });
+}
+
+function createNoteHeaderLeft(nota) {
+    const left = document.createElement('div');
+    const nombre = document.createElement('strong');
+    nombre.textContent = nota?.usuarioNombre || 'Usuario';
+    left.appendChild(nombre);
+    if (nota?.usuarioTipo) {
+        const rol = document.createElement('span');
+        rol.className = 'nota-rol';
+        rol.textContent = nota.usuarioTipo;
+        left.appendChild(rol);
+    }
+    return left;
+}
+
+function reloadActiveContabilidadTab() {
+    const active = document.querySelector('#view-contabilidad .tab-btn.active');
+    if (!active) return;
+    const tab = active.dataset.tab;
+    if (tab === 'pedidos-contabilidad') {
+        loadPedidosContabilidad();
+    } else if (tab === 'pedidos-pagados-contabilidad') {
+        loadPedidosPagadosContabilidad();
+    } else if (tab === 'cuentas-contabilidad') {
+        loadCuentasContabilidad();
+    } else if (tab === 'pedidos-especiales-contabilidad') {
+        loadPedidosEspecialesContabilidad();
+    } else if (tab === 'facturas-pendientes-contabilidad') {
+        loadFacturasPendientesContabilidad();
+    }
+}
+
+window.togglePedidoSection = function(sectionId, triggerEl) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const isHidden = section.style.display === 'none' || getComputedStyle(section).display === 'none';
+    section.style.display = isHidden ? 'block' : 'none';
+    if (triggerEl) {
+        const textEl = triggerEl.querySelector('.toggle-text');
+        if (textEl) {
+            textEl.textContent = isHidden
+                ? (triggerEl.dataset.openLabel || textEl.textContent)
+                : (triggerEl.dataset.closeLabel || textEl.textContent);
+        }
+        const chevron = triggerEl.querySelector('.chevron');
+        if (chevron) {
+            chevron.textContent = isHidden ? '▲' : '▼';
+        }
+    }
+};
+
+window.handlePedidoPagoUpload = async function(pedidoId, inputId) {
+    const input = document.getElementById(inputId);
+    if (!input || !input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('No se pudo encontrar el pedido seleccionado', 'Error');
+            return;
+        }
+        if (pedido.estadoPago === 'Pago A cuenta') {
+            await uploadPagoCuenta(pedidoId, file, pedido.tiendaId);
+        } else {
+            await uploadTransferencia(pedidoId, file);
+        }
+    } catch (error) {
+        console.error('Error al adjuntar documento de pago:', error);
+        await showAlert('No se pudo adjuntar el documento: ' + error.message, 'Error');
+    } finally {
+        input.value = '';
+    }
+};
+
+window.removePedidoPaymentDocument = async function(pedidoId) {
+    const confirmar = await showConfirm('¿Desea eliminar el documento de pago adjunto?', 'Eliminar documento');
+    if (!confirmar) return;
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.transferenciaPDF) {
+            await showAlert('Este pedido no tiene documento de pago para eliminar', 'Información');
+            return;
+        }
+        await db.update('pedidos', { id: pedidoId, transferenciaPDF: null });
+        await showAlert('Documento eliminado correctamente', 'Éxito');
+        reloadActiveContabilidadTab();
+    } catch (error) {
+        console.error('Error al eliminar documento de pago:', error);
+        await showAlert('No se pudo eliminar el documento: ' + error.message, 'Error');
+    }
+};
+
+window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const mensaje = input.value.trim();
+    if (!mensaje) {
+        await showAlert('Por favor, escribe un comentario antes de guardar', 'Atención');
+        return;
+    }
+    if (!currentUser) {
+        await showAlert('Debes iniciar sesión para añadir comentarios', 'Error');
+        return;
+    }
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        const notas = Array.isArray(pedido.notas) ? [...pedido.notas] : [];
+        notas.push({
+            id: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            usuarioId: currentUser.id || null,
+            usuarioNombre: currentUser.username || currentUser.nombre || 'Usuario',
+            usuarioTipo: currentUserType || currentUser?.tipo || 'Usuario',
+            mensaje,
+            timestamp: new Date().toISOString()
+        });
+        await db.update('pedidos', { id: pedidoId, notas });
+        input.value = '';
+        const listEl = document.getElementById(listId);
+        const countEl = document.getElementById(countId);
+        renderPedidoNotasUI(pedidoId, notas, listEl, countEl);
+    } catch (error) {
+        console.error('Error al guardar nota:', error);
+        await showAlert('No se pudo guardar la nota: ' + error.message, 'Error');
+    }
+};
+
 async function getObrasCatalog(pedidosReferencia = []) {
     let obras = [];
     if (typeof db.getAllObras === 'function') {
@@ -3175,11 +3404,11 @@ function createPagoCuentaCard(pedido, tienda) {
 
 async function createPedidoContabilidadCard(pedido, isPagado = false) {
     const card = document.createElement('div');
-    card.className = 'pedido-gestion-card';
+    card.className = 'pedido-gestion-card contab-pedido-card';
     
     const tienda = await db.get('tiendas', pedido.tiendaId);
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
-    let fecha;
     let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
         fechaObj = pedido.fecha.toDate();
@@ -3192,84 +3421,171 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     } else {
         fechaObj = new Date();
     }
+    const fechaFormateada = formatDateTime(fechaObj);
     
-    const dia = fechaObj.getDate().toString().padStart(2, '0');
-    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
-    const año = fechaObj.getFullYear();
-    fecha = `${dia}/${mes}/${año}`;
+    const estadoEnvio = pedido.estado || 'Sin estado';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+    const estadoPago = pedido.estadoPago || (isPagado ? 'Pagado' : 'Pendiente de pago');
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
     
-    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
-    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    const tiendaNombre = escapeHtml(tienda?.nombre || 'Desconocida');
+    const persona = escapeHtml(pedido.persona || pedido.usuarioNombre || 'Sin especificar');
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
     
-    const precioTotalPedido = pedido.items.reduce((total, item) => {
-        const precioItem = item.precio || 0;
-        const cantidad = item.cantidad || 0;
-        return total + (precioItem * cantidad);
+    const items = Array.isArray(pedido.items) ? pedido.items : [];
+    const notas = Array.isArray(pedido.notas) ? pedido.notas : [];
+    const totalPedido = items.reduce((total, item) => {
+        const precioItem = Number(item.precio) || 0;
+        const cantidadItem = Number(item.cantidad) || 0;
+        return total + precioItem * cantidadItem;
     }, 0);
     
+    const itemsHtml = items.length
+        ? items.map((item) => {
+            const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+            const referencia = escapeHtml(item.designacion || item.referencia || '');
+            const cantidad = Number(item.cantidad) || 0;
+            const precio = formatCurrency(item.precio || 0);
+            const subtotal = formatCurrency((item.precio || 0) * cantidad);
+            return `
+                <div class="pedido-item">
+                    <div class="pedido-item-info">
+                        <p class="pedido-item-name">${nombre}</p>
+                        ${referencia ? `<p class="pedido-item-ref">${referencia}</p>` : ''}
+                    </div>
+                    <div class="pedido-item-meta">
+                        <span>Cant: ${cantidad}</span>
+                        <span>Precio: ${precio}</span>
+                        <span>Total: ${subtotal}</span>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+    const pedidoRealContent = pedidoRealLink
+        ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+        : '<span class="doc-placeholder">Sin documento adjunto</span>';
+    
+    const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+    const facturaContent = facturaLink
+        ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
+        : '<span class="doc-placeholder">Sin factura adjunta</span>';
+    
+    const tienePago = Boolean(pedido.transferenciaPDF);
+    const puedeGestionarPago = currentUserType === 'Contabilidad';
+    const pagoInputId = `pago-upload-${pedido.id}`;
+    
+    const documentoPagoContent = `
+        ${tienePago ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>` : '<span class="doc-placeholder">Sin documento adjunto</span>'}
+        ${puedeGestionarPago ? (
+            tienePago
+                ? `<button class="emoji-btn danger" type="button" aria-label="Eliminar documento de pago" onclick="removePedidoPaymentDocument('${pedido.id}')">✖️</button>`
+                : `<button class="emoji-btn" type="button" aria-label="Adjuntar documento de pago" onclick="document.getElementById('${pagoInputId}').click()">➕</button>`
+        ) : ''}
+    `;
+    
+    const itemsSectionId = `pedido-items-${pedido.id}`;
+    const notasSectionId = `pedido-notas-${pedido.id}`;
+    const notasListId = `pedido-notas-list-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-${pedido.id}`;
+    
     card.innerHTML = `
-        <div class="pedido-gestion-header">
-            <div class="pedido-gestion-info">
-                <h4>Pedido #${pedido.id}</h4>
-                <p><strong>Tienda:</strong> ${tienda ? tienda.nombre : 'Desconocida'}</p>
-                <p><strong>Usuario:</strong> ${pedido.persona}</p>
-                <p><strong>Obra:</strong> ${obraNombre}</p>
-                <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
-                <p style="font-size: 0.875rem; margin-top: 0.5rem;">
-                    <strong>Estado de Pago:</strong> 
-                    <span style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; 
-                        background-color: ${estadoPago === 'Pendiente de pago' ? '#ef4444' : estadoPago === 'Pago A cuenta' ? '#3b82f6' : '#10b981'}; 
-                        color: white; margin-left: 0.5rem;">
-                        ${estadoPago}
-                    </span>
-                </p>
-                <p style="font-size: 1rem; margin-top: 0.5rem; font-weight: 600; color: var(--primary-color);">
-                    Total: ${precioTotalPedido.toFixed(2)} €
-                </p>
+        <div class="contab-pedido-header">
+            <div>
+                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                </div>
+            </div>
+            <div class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</div>
+        </div>
+        <div class="contab-info-grid">
+            <div class="contab-info-card">
+                <div class="contab-card-title">Datos del pedido</div>
+                <div class="contab-info-row"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            <div class="contab-info-card">
+                <div class="contab-card-title">Estado de pago</div>
+                <div class="contab-info-row">
+                    <span>Estado</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+                <div class="contab-info-row">
+                    <span>Pedido real</span>
+                    <div class="doc-actions">${pedidoRealContent}</div>
+                </div>
+                <div class="contab-info-row">
+                    <span>Documento de pago</span>
+                    <div class="doc-actions">${documentoPagoContent}</div>
+                </div>
+                <div class="contab-info-row">
+                    <span>Factura</span>
+                    <div class="doc-actions">${facturaContent}</div>
+                </div>
+                ${puedeGestionarPago ? `<input type="file" id="${pagoInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="handlePedidoPagoUpload('${pedido.id}', '${pagoInputId}')">` : ''}
             </div>
         </div>
-        ${pedido.pedidoSistemaPDF ? `
-            <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Documento del Pedido del Sistema (con el pago real):</p>
-                <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-block; padding: 0.5rem 1rem; background: var(--primary-color-light); border-radius: 6px;">
-                    📄 Ver/Descargar Documento del Sistema
-                </a>
+        <div>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
+                <span class="toggle-text">Ver artículos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
+                <div class="pedido-items-list">
+                    ${itemsHtml}
+                </div>
             </div>
-        ` : ''}
-        ${!isPagado && estadoPago === 'Pendiente de pago' ? `
-            <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                <label for="transferencia-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem;">
-                    📎 Adjuntar PDF de Transferencia
-                </label>
-                <input type="file" id="transferencia-${pedido.id}" accept=".pdf" onchange="uploadTransferencia('${pedido.id}', this.files[0])" style="width: 100%;">
+        </div>
+        <div class="contab-notes-block">
+            <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
+            <div class="contab-note-actions">
+                <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
             </div>
-        ` : ''}
-        ${isPagado && pedido.transferenciaPDF ? `
-            <div style="margin-top: 1rem;">
-                <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none;">
-                    📄 Ver PDF de Transferencia
-                </a>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
+                <div class="toggle-label">
+                    <span class="toggle-text">Ver comentarios del pedido</span>
+                    <span class="toggle-extra">( <span id="${notasCountId}">${notas.length}</span> )</span>
+                </div>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
+                <div id="${notasListId}" class="pedido-notas-list"></div>
             </div>
-        ` : ''}
-        ${pedido.albaran ? `
-            <div style="margin-top: 1rem;">
-                <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Albarán/Factura:</p>
-                <a href="${pedido.albaran}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                    📄 Ver/Descargar Albarán/Factura
-                </a>
-            </div>
-        ` : ''}
+        </div>
     `;
+    
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
     
     return card;
 }
 
 
+const PAGO_ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+
 window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
     if (!file) return;
     
-    if (file.type !== 'application/pdf') {
-        await showAlert('Por favor, seleccione un archivo PDF', 'Error');
+    if (!PAGO_ALLOWED_MIME.includes(file.type)) {
+        await showAlert('Formato no soportado. Adjunte un PDF o imagen (JPG/PNG).', 'Error');
         return;
     }
     
@@ -3319,8 +3635,8 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
 window.uploadTransferencia = async function(pedidoId, file) {
     if (!file) return;
     
-    if (file.type !== 'application/pdf') {
-        await showAlert('Por favor, seleccione un archivo PDF', 'Error');
+    if (!PAGO_ALLOWED_MIME.includes(file.type)) {
+        await showAlert('Formato no soportado. Adjunte un PDF o imagen (JPG/PNG).', 'Error');
         return;
     }
     
