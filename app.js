@@ -11,17 +11,11 @@ let carrito = [];
 let searchResults = [];
 let editingUsuarioId = null;
 let editingObraId = null;
-const contabilidadObraFilters = {
-    pendientes: 'all',
-    cuentas: 'all',
-    historico: 'all',
-    especiales: 'all'
-};
-const contabilidadObraFilterSelectors = {
-    pendientes: 'contabilidad-obra-filter-pendientes',
-    cuentas: 'contabilidad-obra-filter-cuentas',
-    historico: 'contabilidad-obra-filter-historico',
-    especiales: 'contabilidad-obra-filter-especiales'
+const contabilidadTabBadgeMap = {
+    pendientes: 'tab-count-pendientes',
+    cuentas: 'tab-count-cuentas',
+    especiales: 'tab-count-especiales',
+    historico: 'tab-count-historico'
 };
 
 // Funciones personalizadas para popups
@@ -130,7 +124,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await db.init();
         await db.initDefaultData();
-        await populateContabilidadObraFilters();
         
         // Verificar si hay sesión activa
         const sesion = await db.getSesionCompleta();
@@ -420,12 +413,6 @@ function setupEventListeners() {
         });
     });
 
-    document.querySelectorAll('.contabilidad-obra-filter').forEach(select => {
-        select.addEventListener('change', (e) => {
-            const filterKey = e.currentTarget.dataset.filterKey;
-            handleContabilidadObraFilterChange(filterKey, e.currentTarget.value);
-        });
-    });
     
     // Menú de contabilidad
     document.getElementById('btn-menu-contabilidad')?.addEventListener('click', () => {
@@ -2656,87 +2643,99 @@ window.updateEstadoPago = async function(pedidoId, nuevoEstadoPago) {
 
 // ========== VISTA DE CONTABILIDAD ==========
 
-async function populateContabilidadObraFilters() {
-    try {
-        const obras = await db.getAllObras?.() || [];
-        const obraOptions = obras
-            .map(obra => ({
-                value: obra.id,
-                label: obra.nombreComercial || obra.nombre || obra.alias || 'Obra sin nombre'
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
-        const options = [
-            { value: 'all', label: 'Todas las obras' },
-            { value: 'sin-obra', label: 'Sin obra vinculada' },
-            ...obraOptions
-        ];
-        
-        Object.entries(contabilidadObraFilterSelectors).forEach(([key, selectId]) => {
-            const select = document.getElementById(selectId);
-            if (!select) return;
-            
-            select.innerHTML = options
-                .map(option => `<option value="${option.value}">${option.label}</option>`)
-                .join('');
-            
-            const previousValue = contabilidadObraFilters[key] || 'all';
-            if (options.some(option => option.value === previousValue)) {
-                select.value = previousValue;
-            } else {
-                select.value = 'all';
-                contabilidadObraFilters[key] = 'all';
-            }
+function sanitizeCascadeId(value) {
+    const base = (value || 'sin-obra').toString();
+    const sanitized = base.replace(/[^a-zA-Z0-9_-]/g, '-');
+    return sanitized || 'sin-obra';
+}
+
+async function getObrasCatalog(pedidosReferencia = []) {
+    let obras = [];
+    if (typeof db.getAllObras === 'function') {
+        const result = await db.getAllObras();
+        if (Array.isArray(result)) {
+            obras = result;
+        }
+    }
+    
+    const obraMap = new Map();
+    obras.forEach(obra => {
+        const obraId = obra.id || 'sin-obra';
+        obraMap.set(obraId, {
+            ...obra,
+            id: obraId,
+            nombreComercial: obra.nombreComercial || obra.nombre || obra.alias || 'Obra sin nombre'
         });
-    } catch (error) {
-        console.error('Error al cargar obras para filtros de contabilidad:', error);
+    });
+    
+    pedidosReferencia.forEach(pedido => {
+        const obraId = pedido?.obraId || 'sin-obra';
+        if (!obraMap.has(obraId)) {
+            obraMap.set(obraId, {
+                id: obraId,
+                nombreComercial: pedido?.obraNombreComercial || pedido?.obra || 'Obra sin nombre'
+            });
+        }
+    });
+    
+    const ordered = Array.from(obraMap.values());
+    ordered.sort((a, b) => (a.nombreComercial || '').localeCompare(b.nombreComercial || '', 'es', { sensitivity: 'base' }));
+    return ordered;
+}
+
+function createCascadeSection({ prefix, uniqueId, title, count, emptyMessage, defaultOpen = true }) {
+    const sanitizedId = sanitizeCascadeId(uniqueId);
+    const contentId = `${prefix}-content-${sanitizedId}`;
+    const arrowId = `${prefix}-arrow-${sanitizedId}`;
+    const section = document.createElement('div');
+    section.className = 'cascade-section';
+    section.innerHTML = `
+        <div class="cascade-header" onclick="toggleContabSection('${contentId}', '${arrowId}')">
+            <span class="cascade-header-title">${title}</span>
+            <div class="cascade-header-meta">
+                <span class="cascade-badge">${count}</span>
+                <span class="cascade-arrow" id="${arrowId}">${defaultOpen ? '▼' : '▶'}</span>
+            </div>
+        </div>
+        <div class="cascade-content" id="${contentId}" style="display: ${defaultOpen ? 'block' : 'none'};">
+            ${count === 0 && emptyMessage ? `<p class="cascade-empty">${emptyMessage}</p>` : ''}
+        </div>
+    `;
+    
+    const content = section.querySelector(`#${contentId}`);
+    return { section, content, contentId, arrowId };
+}
+
+function updateContabilidadTabBadge(tabKey, count) {
+    const badgeId = contabilidadTabBadgeMap[tabKey];
+    if (!badgeId) return;
+    const badge = document.getElementById(badgeId);
+    if (badge) {
+        badge.textContent = count;
     }
 }
 
-function handleContabilidadObraFilterChange(filterKey, value) {
-    if (!filterKey || !(filterKey in contabilidadObraFilters)) return;
-    contabilidadObraFilters[filterKey] = value || 'all';
+window.toggleContabSection = function(contentId, arrowId) {
+    const content = document.getElementById(contentId);
+    const arrow = document.getElementById(arrowId);
+    if (!content || !arrow) return;
     
-    switch (filterKey) {
-        case 'pendientes':
-            loadPedidosContabilidad();
-            break;
-        case 'historico':
-            loadPedidosPagadosContabilidad();
-            break;
-        case 'cuentas':
-            loadCuentasContabilidad();
-            break;
-        case 'especiales':
-            loadPedidosEspecialesContabilidad();
-            break;
-        default:
-            break;
-    }
-}
-
-function updateContabilidadEmptyState(emptyState, defaultMessage, filterValue) {
-    if (!emptyState) return;
-    const messageElement = emptyState.querySelector('p');
-    if (!messageElement) return;
-    
-    if (filterValue && filterValue !== 'all') {
-        messageElement.textContent = 'No hay registros para la obra seleccionada';
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        arrow.textContent = '▼';
     } else {
-        messageElement.textContent = defaultMessage;
+        content.style.display = 'none';
+        arrow.textContent = '▶';
     }
-}
+};
 
-function getPedidoObraKey(pedido) {
-    return pedido?.obraId || 'sin-obra';
-}
-
-function pedidoMatchesObraFilter(pedido, filterValue) {
-    if (!filterValue || filterValue === 'all') return true;
-    const obraKey = getPedidoObraKey(pedido);
-    if (filterValue === 'sin-obra') {
-        return obraKey === 'sin-obra';
-    }
-    return obraKey === filterValue;
+function isPedidoEspecial(pedido) {
+    return Boolean(
+        pedido?.esPedidoEspecial ||
+        pedido?.pedidoEspecial ||
+        pedido?.tipo === 'Especial' ||
+        pedido?.tipoPedido === 'Especial'
+    );
 }
 
 function switchTabContabilidad(tab) {
@@ -2769,44 +2768,55 @@ function switchTabContabilidad(tab) {
 async function loadPedidosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
     
-    // Filtrar pedidos pendientes de pago que tengan documento del sistema adjuntado
-    const pedidosFiltrados = [];
-    for (const pedido of todosPedidos) {
-        if (pedido.estado === 'Completado' || pedido.estadoPago !== 'Pendiente de pago') continue;
-        
-        // Solo mostrar pedidos que tengan el documento del sistema adjuntado (para todos los tipos de tienda)
-        if (pedido.pedidoSistemaPDF) {
-            pedidosFiltrados.push(pedido);
-        }
-    }
+    const pedidosPendientes = todosPedidos.filter(pedido => {
+        if (pedido.estado === 'Completado') return false;
+        if (pedido.estadoPago !== 'Pendiente de pago') return false;
+        return Boolean(pedido.pedidoSistemaPDF);
+    });
     
-    const obraFilterValue = contabilidadObraFilters.pendientes || 'all';
-    const pedidosFiltradosPorObra = pedidosFiltrados.filter(pedido => pedidoMatchesObraFilter(pedido, obraFilterValue));
-    
-    const container = document.getElementById('pedidos-contabilidad-list');
-    const emptyState = document.getElementById('pedidos-contabilidad-empty');
-    updateContabilidadEmptyState(emptyState, 'No hay pedidos pendientes', obraFilterValue);
-    
-    if (pedidosFiltradosPorObra.length === 0) {
-        container.innerHTML = '';
-        emptyState.style.display = 'block';
-        return;
-    }
-    
-    emptyState.style.display = 'none';
-    container.innerHTML = '';
-    
-    // Ordenar por fecha
-    pedidosFiltrados.sort((a, b) => {
+    pedidosPendientes.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    for (const pedido of pedidosFiltradosPorObra) {
-        const card = await createPedidoContabilidadCard(pedido);
-        container.appendChild(card);
+    const obras = await getObrasCatalog(pedidosPendientes);
+    const container = document.getElementById('pedidos-contabilidad-list');
+    const emptyState = document.getElementById('pedidos-contabilidad-empty');
+    container.innerHTML = '';
+    
+    if (obras.length === 0) {
+        emptyState.style.display = 'block';
+        updateContabilidadTabBadge('pendientes', 0);
+        return;
     }
+    
+    emptyState.style.display = 'none';
+    
+    let totalCount = 0;
+    for (const obra of obras) {
+        const obraId = obra.id || 'sin-obra';
+        const pedidosObra = pedidosPendientes.filter(p => (p.obraId || 'sin-obra') === obraId);
+        totalCount += pedidosObra.length;
+        
+        const { section, content } = createCascadeSection({
+            prefix: 'pendientes-obra',
+            uniqueId: obraId,
+            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+            count: pedidosObra.length,
+            emptyMessage: 'Sin pedidos pendientes para esta obra',
+            defaultOpen: pedidosObra.length > 0
+        });
+        
+        for (const pedido of pedidosObra) {
+            const card = await createPedidoContabilidadCard(pedido);
+            content.appendChild(card);
+        }
+        
+        container.appendChild(section);
+    }
+    
+    updateContabilidadTabBadge('pendientes', totalCount);
 }
 
 async function loadPedidosPagadosContabilidad() {
@@ -2814,132 +2824,289 @@ async function loadPedidosPagadosContabilidad() {
     const pedidosPagados = todosPedidos.filter(p => 
         p.estadoPago === 'Pagado' && p.transferenciaPDF
     );
-    const obraFilterValue = contabilidadObraFilters.historico || 'all';
-    const pedidosFiltrados = pedidosPagados.filter(pedido => pedidoMatchesObraFilter(pedido, obraFilterValue));
-    
     const container = document.getElementById('pedidos-pagados-contabilidad-list');
     const emptyState = document.getElementById('pedidos-pagados-contabilidad-empty');
-    updateContabilidadEmptyState(emptyState, 'No hay registros históricos', obraFilterValue);
+    container.innerHTML = '';
     
-    if (pedidosFiltrados.length === 0) {
-        container.innerHTML = '';
+    const obras = await getObrasCatalog(pedidosPagados);
+    if (obras.length === 0) {
         emptyState.style.display = 'block';
+        updateContabilidadTabBadge('historico', 0);
         return;
     }
     
     emptyState.style.display = 'none';
-    container.innerHTML = '';
+    let totalCount = 0;
     
-    // Agrupar por obra
-    const pedidosPorObra = {};
-    for (const pedido of pedidosFiltrados) {
-        const obraId = pedido.obraId || 'sin-obra';
-        const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Sin obra';
+    for (const obra of obras) {
+        const obraId = obra.id || 'sin-obra';
+        const pedidosObra = pedidosPagados
+            .filter(p => (p.obraId || 'sin-obra') === obraId)
+            .sort((a, b) => {
+                const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+                const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+                return fechaB - fechaA;
+            });
+        totalCount += pedidosObra.length;
         
-        if (!pedidosPorObra[obraId]) {
-            pedidosPorObra[obraId] = {
-                nombre: obraNombre,
-                pedidos: []
-            };
-        }
-        pedidosPorObra[obraId].pedidos.push(pedido);
-    }
-    
-    // Ordenar pedidos por fecha dentro de cada obra
-    for (const obraId in pedidosPorObra) {
-        pedidosPorObra[obraId].pedidos.sort((a, b) => {
-            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-            return fechaB - fechaA;
+        const { section, content } = createCascadeSection({
+            prefix: 'historico-obra',
+            uniqueId: obraId,
+            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+            count: pedidosObra.length,
+            emptyMessage: 'Sin registros históricos para esta obra',
+            defaultOpen: false
         });
-    }
-    
-    // Crear secciones por obra
-    for (const obraId in pedidosPorObra) {
-        const obra = pedidosPorObra[obraId];
         
-        const obraSection = document.createElement('div');
-        obraSection.className = 'obra-section';
-        obraSection.innerHTML = `
-            <div class="obra-header" style="padding: 1rem; background: var(--primary-color-light); border-radius: 8px; margin-bottom: 1rem; cursor: pointer;" onclick="toggleObraSection('${obraId}')">
-                <h3 style="margin: 0; display: flex; align-items: center; justify-content: space-between;">
-                    <span>${obra.nombre}</span>
-                    <span class="toggle-icon" id="toggle-${obraId}">▼</span>
-                </h3>
-                <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: var(--text-secondary);">
-                    ${obra.pedidos.length} pedido${obra.pedidos.length !== 1 ? 's' : ''} pagado${obra.pedidos.length !== 1 ? 's' : ''}
-                </p>
-            </div>
-            <div class="obra-content" id="obra-content-${obraId}" style="display: block;">
-        `;
-        
-        const obraContent = obraSection.querySelector(`#obra-content-${obraId}`);
-        
-        for (const pedido of obra.pedidos) {
+        for (const pedido of pedidosObra) {
             const card = await createPedidoContabilidadCard(pedido, true);
-            obraContent.appendChild(card);
+            content.appendChild(card);
         }
         
-        obraSection.appendChild(obraContent);
-        container.appendChild(obraSection);
+        container.appendChild(section);
     }
-}
-
-window.toggleObraSection = function(obraId) {
-    const content = document.getElementById(`obra-content-${obraId}`);
-    const toggle = document.getElementById(`toggle-${obraId}`);
     
-    if (content.style.display === 'none') {
-        content.style.display = 'block';
-        toggle.textContent = '▼';
-    } else {
-        content.style.display = 'none';
-        toggle.textContent = '▶';
-    }
+    updateContabilidadTabBadge('historico', totalCount);
 }
 
 async function loadCuentasContabilidad() {
     const tiendas = await db.getAll('tiendas');
     // Incluir tiendas con cuenta (con o sin límite)
     const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta);
-    const obraFilterValue = contabilidadObraFilters.cuentas || 'all';
     
     const container = document.getElementById('cuentas-contabilidad-list');
     const emptyState = document.getElementById('cuentas-contabilidad-empty');
-    updateContabilidadEmptyState(emptyState, 'No hay tiendas con cuenta', obraFilterValue);
+    
+    container.innerHTML = '';
     
     if (tiendasConCuenta.length === 0) {
-        container.innerHTML = '';
         emptyState.style.display = 'block';
+        updateContabilidadTabBadge('cuentas', 0);
         return;
     }
     
     emptyState.style.display = 'none';
-    container.innerHTML = '';
-    let renderedCuentas = 0;
+    
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosCuentaGlobal = todosPedidos.filter(p => 
+        p.estadoPago === 'Pago A cuenta' &&
+        p.estado !== 'Completado' &&
+        p.pedidoSistemaPDF &&
+        !p.transferenciaPDF
+    );
+    
+    pedidosCuentaGlobal.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+    
+    const obras = await getObrasCatalog(pedidosCuentaGlobal);
+    let totalPedidos = 0;
     
     for (const tienda of tiendasConCuenta) {
+        const pedidosTienda = pedidosCuentaGlobal.filter(p => p.tiendaId === tienda.id);
+        totalPedidos += pedidosTienda.length;
         const gastado = await calcularGastadoCuenta(tienda.id);
-        const card = await createCuentaContabilidadCard(tienda, gastado, obraFilterValue);
-        if (card) {
-            container.appendChild(card);
-            renderedCuentas++;
+        
+        const { section, content } = createCascadeSection({
+            prefix: 'cuentas-tienda',
+            uniqueId: tienda.id,
+            title: tienda.nombre,
+            count: pedidosTienda.length,
+            emptyMessage: 'No hay pedidos asociados a esta tienda.',
+            defaultOpen: false
+        });
+        
+        const infoBlock = createCuentaInfoBlock(tienda, gastado);
+        content.appendChild(infoBlock);
+        
+        const obrasWrapper = document.createElement('div');
+        obrasWrapper.className = 'cascade-inner';
+        
+        for (const obra of obras) {
+            const obraId = obra.id || 'sin-obra';
+            const pedidosObra = pedidosTienda.filter(p => (p.obraId || 'sin-obra') === obraId);
+            
+            const obraSection = createCascadeSection({
+                prefix: `cuentas-obra-${sanitizeCascadeId(tienda.id)}`,
+                uniqueId: `${tienda.id}-${obraId}`,
+                title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+                count: pedidosObra.length,
+                emptyMessage: 'Sin pedidos para esta obra',
+                defaultOpen: false
+            });
+            obraSection.section.classList.add('nested-cascade');
+            
+            for (const pedido of pedidosObra) {
+                const card = createPagoCuentaCard(pedido, tienda);
+                obraSection.content.appendChild(card);
+            }
+            
+            obrasWrapper.appendChild(obraSection.section);
         }
+        
+        content.appendChild(obrasWrapper);
+        container.appendChild(section);
     }
     
-    if (renderedCuentas === 0) {
-        container.innerHTML = '';
-        emptyState.style.display = 'block';
-    }
+    updateContabilidadTabBadge('cuentas', totalPedidos);
 }
 
-function loadPedidosEspecialesContabilidad() {
+async function loadPedidosEspecialesContabilidad() {
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosEspeciales = todosPedidos.filter(isPedidoEspecial);
+    
+    pedidosEspeciales.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+    
+    const obras = await getObrasCatalog(pedidosEspeciales);
+    const container = document.getElementById('pedidos-especiales-contabilidad-list');
     const emptyState = document.getElementById('pedidos-especiales-contabilidad-empty');
-    const filterValue = contabilidadObraFilters.especiales || 'all';
-    updateContabilidadEmptyState(emptyState, 'Los pedidos especiales estarán disponibles próximamente.', filterValue);
-    if (emptyState) {
+    
+    container.innerHTML = '';
+    
+    if (obras.length === 0) {
         emptyState.style.display = 'block';
+        updateContabilidadTabBadge('especiales', 0);
+        return;
     }
+    
+    emptyState.style.display = 'none';
+    let totalCount = 0;
+    
+    for (const obra of obras) {
+        const obraId = obra.id || 'sin-obra';
+        const pedidosObra = pedidosEspeciales.filter(p => (p.obraId || 'sin-obra') === obraId);
+        totalCount += pedidosObra.length;
+        
+        const { section, content } = createCascadeSection({
+            prefix: 'especiales-obra',
+            uniqueId: obraId,
+            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+            count: pedidosObra.length,
+            emptyMessage: 'Sin pedidos especiales para esta obra',
+            defaultOpen: false
+        });
+        
+        for (const pedido of pedidosObra) {
+            const card = await createPedidoContabilidadCard(pedido);
+            content.appendChild(card);
+        }
+        
+        container.appendChild(section);
+    }
+    
+    updateContabilidadTabBadge('especiales', totalCount);
+}
+
+function createCuentaInfoBlock(tienda, gastado) {
+    const info = document.createElement('div');
+    info.className = 'cascade-store-info';
+    
+    if (tienda.limiteCuenta) {
+        const limite = Number(tienda.limiteCuenta) || 0;
+        const porcentaje = limite ? (gastado / limite) * 100 : 0;
+        const disponible = Math.max(0, limite - gastado);
+        const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
+        
+        info.innerHTML = `
+            <h4>Resumen de cuenta</h4>
+            <p><strong>Límite:</strong> ${limite.toFixed(2)} €</p>
+            <p><strong>Gastado:</strong> ${gastado.toFixed(2)} €</p>
+            <p><strong>Disponible:</strong> ${disponible.toFixed(2)} €</p>
+            <div style="margin-top: 0.5rem; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra};"></div>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">${porcentaje.toFixed(1)}% utilizado</p>
+        `;
+    } else {
+        info.innerHTML = `
+            <h4>Resumen de cuenta</h4>
+            <p><strong>Gastado:</strong> ${gastado.toFixed(2)} €</p>
+            <p style="margin-top: 0.5rem; padding: 0.5rem; background: #d1fae5; border-radius: 6px; color: #065f46; font-weight: 600;">
+                Cuenta sin límite de gasto
+            </p>
+        `;
+    }
+    
+    return info;
+}
+
+function createPagoCuentaCard(pedido, tienda) {
+    const card = document.createElement('div');
+    card.style.padding = '1.25rem';
+    card.style.background = 'white';
+    card.style.borderRadius = '12px';
+    card.style.marginBottom = '0.5rem';
+    card.style.border = '2px solid var(--border-color)';
+    card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+    
+    const items = Array.isArray(pedido.items) ? pedido.items : [];
+    const precioTotalPedido = items.reduce((total, item) => {
+        const precioItem = item.precio || 0;
+        const cantidad = item.cantidad || 0;
+        return total + (precioItem * cantidad);
+    }, 0);
+    
+    let fecha;
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
+    } else {
+        fechaObj = new Date();
+    }
+    const dia = fechaObj.getDate().toString().padStart(2, '0');
+    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+    const año = fechaObj.getFullYear();
+    fecha = `${dia}/${mes}/${año}`;
+    
+    card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <div style="flex: 1;">
+                <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Pedido #${pedido.id}</p>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">📅 ${fecha}</p>
+                <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>🏗️ Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
+                <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>👤 Usuario:</strong> ${pedido.persona || 'Desconocido'}</p>
+            </div>
+            <div style="text-align: right; margin-left: 1rem;">
+                <p style="font-weight: 700; font-size: 1.25rem; color: var(--primary-color); margin-bottom: 0.25rem;">${precioTotalPedido.toFixed(2)} €</p>
+                <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">Pago A cuenta</span>
+            </div>
+        </div>
+        ${pedido.pedidoSistemaPDF ? `
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px;">
+                <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">📄 Documento del Sistema:</p>
+                <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
+                    📥 Ver/Descargar Documento
+                </a>
+            </div>
+        ` : ''}
+        ${!pedido.transferenciaPDF ? `
+            <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 8px;">
+                <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
+                    💳 Adjuntar PDF del Pago
+                </label>
+                <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; cursor: pointer;">
+            </div>
+        ` : `
+            <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border: 2px solid #10b981; border-radius: 8px;">
+                <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    ✓ Pago adjuntado y confirmado
+                </p>
+                <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
+                    📥 Ver PDF del Pago
+                </a>
+            </div>
+        `}
+    `;
+    
+    return card;
 }
 
 async function createPedidoContabilidadCard(pedido, isPagado = false) {
@@ -3033,193 +3200,6 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     return card;
 }
 
-async function createCuentaContabilidadCard(tienda, gastado, obraFilterValue = 'all') {
-    const card = document.createElement('div');
-    card.className = 'tienda-card';
-    
-    // Obtener pedidos "Pago A cuenta" con documento del sistema que NO estén pagados
-    const todosPedidos = await db.getAll('pedidos');
-    const pedidosCuenta = todosPedidos.filter(p => 
-        p.tiendaId === tienda.id && 
-        p.estadoPago === 'Pago A cuenta' && 
-        p.estado !== 'Completado' &&
-        p.pedidoSistemaPDF &&
-        !p.transferenciaPDF // No mostrar los que ya tienen PDF de pago (ya están pagados)
-    );
-    const pedidosParaMostrar = obraFilterValue === 'all'
-        ? pedidosCuenta
-        : pedidosCuenta.filter(pedido => pedidoMatchesObraFilter(pedido, obraFilterValue));
-    
-    if (obraFilterValue !== 'all' && pedidosParaMostrar.length === 0) {
-        return null;
-    }
-    
-    // Calcular porcentaje solo si tiene límite
-    const porcentaje = tienda.limiteCuenta ? (gastado / tienda.limiteCuenta) * 100 : 0;
-    const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
-    
-    // Ordenar pedidos por fecha
-    pedidosParaMostrar.sort((a, b) => {
-        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-        return fechaB - fechaA;
-    });
-    
-    let pedidosHtml = '';
-    if (pedidosParaMostrar.length > 0) {
-        pedidosHtml = `
-            <div style="margin-top: 1.5rem; border-top: 2px solid var(--border-color); padding-top: 1.5rem;">
-                <div class="obra-header" style="padding: 1rem; background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color-dark) 100%); border-radius: 12px; margin-bottom: 1rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: all 0.3s;" onclick="toggleCuentaPedidos('${tienda.id}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'">
-                    <h4 style="margin: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1.1rem; color: white; font-weight: 600;">
-                        <span>📋 Pendientes de Pago (${pedidosParaMostrar.length})</span>
-                        <span class="toggle-icon" id="toggle-cuenta-${tienda.id}" style="color: white; font-size: 1.2rem; transition: transform 0.3s;">▼</span>
-                    </h4>
-                </div>
-                <div class="cuenta-pedidos-content" id="cuenta-pedidos-${tienda.id}" style="display: block;">
-        `;
-        
-        for (const pedido of pedidosParaMostrar) {
-            const precioTotalPedido = pedido.items.reduce((total, item) => {
-                const precioItem = item.precio || 0;
-                const cantidad = item.cantidad || 0;
-                return total + (precioItem * cantidad);
-            }, 0);
-            
-            let fecha;
-            let fechaObj;
-            if (pedido.fecha && pedido.fecha.toDate) {
-                fechaObj = pedido.fecha.toDate();
-            } else if (pedido.fecha) {
-                fechaObj = new Date(pedido.fecha);
-            } else {
-                fechaObj = new Date();
-            }
-            const dia = fechaObj.getDate().toString().padStart(2, '0');
-            const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
-            const año = fechaObj.getFullYear();
-            fecha = `${dia}/${mes}/${año}`;
-            
-            pedidosHtml += `
-                <div style="padding: 1.25rem; background: white; border-radius: 12px; margin-bottom: 1rem; border: 2px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)'">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
-                        <div style="flex: 1;">
-                            <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Pedido #${pedido.id}</p>
-                            <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">📅 ${fecha}</p>
-                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>🏗️ Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
-                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>👤 Usuario:</strong> ${pedido.persona || 'Desconocido'}</p>
-                        </div>
-                        <div style="text-align: right; margin-left: 1rem;">
-                            <p style="font-weight: 700; font-size: 1.25rem; color: var(--primary-color); margin-bottom: 0.25rem;">${precioTotalPedido.toFixed(2)} €</p>
-                            <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">Pago A cuenta</span>
-                        </div>
-                    </div>
-                    ${pedido.pedidoSistemaPDF ? `
-                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px;">
-                            <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">📄 Documento del Sistema:</p>
-                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
-                                📥 Ver/Descargar Documento
-                            </a>
-                        </div>
-                    ` : ''}
-                    ${!pedido.transferenciaPDF ? `
-                        <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 8px;">
-                            <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
-                                💳 Adjuntar PDF del Pago
-                            </label>
-                            <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; cursor: pointer;">
-                        </div>
-                    ` : `
-                        <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border: 2px solid #10b981; border-radius: 8px;">
-                            <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                                ✓ Pago adjuntado y confirmado
-                            </p>
-                            <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
-                                📥 Ver PDF del Pago
-                            </a>
-                        </div>
-                    `}
-                </div>
-            `;
-        }
-        
-        pedidosHtml += `
-                </div>
-            </div>
-        `;
-    }
-    
-    // HTML diferente según si tiene límite o no
-    let infoHtml = '';
-    if (tienda.limiteCuenta) {
-        // Tienda con límite
-        infoHtml = `
-            <div style="margin-bottom: 0.5rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <span>Límite:</span>
-                    <strong>${tienda.limiteCuenta}€</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Gastado:</span>
-                    <strong style="color: ${porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : 'var(--text-primary)'};">
-                        ${gastado.toFixed(2)}€
-                    </strong>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span>Disponible:</span>
-                    <strong style="color: ${(tienda.limiteCuenta - gastado) < 0 ? '#ef4444' : 'var(--text-primary)'};">
-                        ${Math.max(0, tienda.limiteCuenta - gastado).toFixed(2)}€
-                    </strong>
-                </div>
-            </div>
-            <div style="margin-top: 1rem; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden;">
-                <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra}; transition: width 0.3s;"></div>
-            </div>
-            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;">
-                ${porcentaje.toFixed(1)}% utilizado
-            </p>
-        `;
-    } else {
-        // Tienda sin límite
-        infoHtml = `
-            <div style="margin-bottom: 0.5rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Gastado:</span>
-                    <strong style="color: var(--text-primary);">
-                        ${gastado.toFixed(2)}€
-                    </strong>
-                </div>
-                <div style="padding: 0.75rem; background: #d1fae5; border-radius: 8px; text-align: center;">
-                    <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin: 0;">
-                        ✓ Cuenta sin límite de gasto
-                    </p>
-                </div>
-            </div>
-        `;
-    }
-    
-    card.innerHTML = `
-        <div style="padding: 1.5rem;">
-            <h3 style="margin-bottom: 1rem;">${tienda.nombre}</h3>
-            ${infoHtml}
-            ${pedidosHtml}
-        </div>
-    `;
-    
-    return card;
-}
-
-window.toggleCuentaPedidos = function(tiendaId) {
-    const content = document.getElementById(`cuenta-pedidos-${tiendaId}`);
-    const toggle = document.getElementById(`toggle-cuenta-${tiendaId}`);
-    
-    if (content.style.display === 'none') {
-        content.style.display = 'block';
-        toggle.textContent = '▼';
-    } else {
-        content.style.display = 'none';
-        toggle.textContent = '▶';
-    }
-}
 
 window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
     if (!file) return;

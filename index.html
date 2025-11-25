@@ -289,20 +289,26 @@
         </header>
 
         <div class="tabs">
-            <button class="tab-btn active" data-tab="pedidos-contabilidad">Pendientes de Pago</button>
-            <button class="tab-btn" data-tab="cuentas-contabilidad">Cuentas</button>
-            <button class="tab-btn" data-tab="pedidos-especiales-contabilidad">Pedidos Especiales</button>
-            <button class="tab-btn" data-tab="pedidos-pagados-contabilidad">Histórico</button>
+            <button class="tab-btn active" data-tab="pedidos-contabilidad">
+                Pendientes de Pago
+                <span class="tab-badge" id="tab-count-pendientes">0</span>
+            </button>
+            <button class="tab-btn" data-tab="cuentas-contabilidad">
+                Cuentas
+                <span class="tab-badge" id="tab-count-cuentas">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pedidos-especiales-contabilidad">
+                Pedidos Especiales
+                <span class="tab-badge" id="tab-count-especiales">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pedidos-pagados-contabilidad">
+                Histórico
+                <span class="tab-badge" id="tab-count-historico">0</span>
+            </button>
         </div>
 
         <main class="main-content">
             <div id="pedidos-contabilidad" class="tab-content active">
-                <div class="contabilidad-obra-filter-group">
-                    <label for="contabilidad-obra-filter-pendientes">Filtrar por obra</label>
-                    <select id="contabilidad-obra-filter-pendientes" class="form-select contabilidad-obra-filter" data-filter-key="pendientes">
-                        <option value="all">Todas las obras</option>
-                    </select>
-                </div>
                 <div id="pedidos-contabilidad-list" class="pedidos-gestion-list">
                     <!-- Los pedidos se cargarán dinámicamente -->
                 </div>
@@ -311,12 +317,6 @@
                 </div>
             </div>
             <div id="cuentas-contabilidad" class="tab-content">
-                <div class="contabilidad-obra-filter-group">
-                    <label for="contabilidad-obra-filter-cuentas">Filtrar por obra</label>
-                    <select id="contabilidad-obra-filter-cuentas" class="form-select contabilidad-obra-filter" data-filter-key="cuentas">
-                        <option value="all">Todas las obras</option>
-                    </select>
-                </div>
                 <div id="cuentas-contabilidad-list" class="tiendas-list">
                     <!-- Las cuentas se cargarán dinámicamente -->
                 </div>
@@ -325,23 +325,14 @@
                 </div>
             </div>
             <div id="pedidos-especiales-contabilidad" class="tab-content">
-                <div class="contabilidad-obra-filter-group">
-                    <label for="contabilidad-obra-filter-especiales">Filtrar por obra</label>
-                    <select id="contabilidad-obra-filter-especiales" class="form-select contabilidad-obra-filter" data-filter-key="especiales">
-                        <option value="all">Todas las obras</option>
-                    </select>
+                <div id="pedidos-especiales-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos especiales se cargarán dinámicamente -->
                 </div>
-                <div id="pedidos-especiales-contabilidad-empty" class="empty-state" style="display: block;">
-                    <p>Los pedidos especiales estarán disponibles próximamente.</p>
+                <div id="pedidos-especiales-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos especiales registrados</p>
                 </div>
             </div>
             <div id="pedidos-pagados-contabilidad" class="tab-content">
-                <div class="contabilidad-obra-filter-group">
-                    <label for="contabilidad-obra-filter-historico">Filtrar por obra</label>
-                    <select id="contabilidad-obra-filter-historico" class="form-select contabilidad-obra-filter" data-filter-key="historico">
-                        <option value="all">Todas las obras</option>
-                    </select>
-                </div>
                 <div id="pedidos-pagados-contabilidad-list" class="pedidos-gestion-list">
                     <!-- Los pedidos pagados se cargarán dinámicamente -->
                 </div>
