@@ -1178,59 +1178,43 @@ async function loadMisPedidos() {
     emptyState.style.display = 'none';
     container.innerHTML = '';
     
-    // Agrupar pedidos por obra
-    const pedidosPorObra = {};
-    for (const pedido of pedidosNoCompletados) {
-        const obraId = pedido.obraId;
-        if (!pedidosPorObra[obraId]) {
-            const obra = await db.get('obras', obraId);
-            pedidosPorObra[obraId] = {
-                obra: obra,
-                pedidos: []
-            };
-        }
-        pedidosPorObra[obraId].pedidos.push(pedido);
-    }
-    
-    // Ordenar obras por nombre
-    const obrasOrdenadas = Object.values(pedidosPorObra).sort((a, b) => {
-        const nombreA = a.obra?.nombreComercial || '';
-        const nombreB = b.obra?.nombreComercial || '';
-        return nombreA.localeCompare(nombreB);
+    // Ordenar pedidos por fecha (más recientes primero)
+    pedidosNoCompletados.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
     });
     
-    // Crear desplegables por obra
-    for (const grupo of obrasOrdenadas) {
-        const obra = grupo.obra;
-        const pedidos = grupo.pedidos;
+    // Obtener catálogo de obras (todas las obras, incluso sin pedidos)
+    const obras = await getObrasCatalog(pedidosNoCompletados);
+    
+    let totalCount = 0;
+    for (const obra of obras) {
+        const obraId = obra.id || 'sin-obra';
+        const pedidosObra = pedidosNoCompletados.filter(p => (p.obraId || 'sin-obra') === obraId);
+        totalCount += pedidosObra.length;
         
-        // Ordenar pedidos por fecha (más recientes primero)
-        pedidos.sort((a, b) => {
-            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-            return fechaB - fechaA;
+        const { section, content } = createCascadeSection({
+            prefix: 'pedidos-obra',
+            uniqueId: obraId,
+            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+            count: pedidosObra.length,
+            emptyMessage: 'Sin pedidos para esta obra',
+            defaultOpen: pedidosObra.length > 0
         });
         
-        const obraSection = document.createElement('div');
-        obraSection.className = 'obra-pedidos-section';
-        obraSection.innerHTML = `
-            <div class="obra-pedidos-header" onclick="toggleObraPedidos('${obra.id}')">
-                <h3>${obra.nombreComercial || 'Obra sin nombre'}</h3>
-                <span class="obra-pedidos-count">${pedidos.length} pedido${pedidos.length !== 1 ? 's' : ''}</span>
-                <span class="obra-pedidos-toggle" id="toggle-${obra.id}">▼</span>
-            </div>
-            <div class="obra-pedidos-content" id="content-${obra.id}" style="display: none;">
-                <!-- Los pedidos se cargarán aquí -->
-            </div>
-        `;
-        container.appendChild(obraSection);
-        
-        const contentDiv = obraSection.querySelector(`#content-${obra.id}`);
-        for (const pedido of pedidos) {
-            const tienda = await db.get('tiendas', pedido.tiendaId);
-            const card = await createPedidoCard(pedido, tienda);
-            contentDiv.appendChild(card);
+        for (const pedido of pedidosObra) {
+            const card = await createPedidoTecnicoCard(pedido);
+            content.appendChild(card);
         }
+        
+        container.appendChild(section);
+    }
+    
+    // Actualizar badge del header
+    const badge = document.getElementById('pedidos-total-badge');
+    if (badge) {
+        badge.textContent = totalCount;
     }
 }
 
@@ -1469,7 +1453,9 @@ window.solicitarModificacionCantidad = async function(pedidoId, itemIndex, canti
         
         await db.add('solicitudesModificacion', solicitud);
         await showAlert('Solicitud de modificación de cantidad enviada a la tienda', 'Éxito');
-        loadMisPedidos();
+        if (currentUserType === 'Técnico' || currentUserType === 'Encargado') {
+            loadMisPedidos();
+        }
     } catch (error) {
         console.error('Error al solicitar modificación:', error);
         await showAlert('Error al solicitar modificación: ' + error.message, 'Error');
@@ -1502,7 +1488,9 @@ window.solicitarAnulacionItem = async function(pedidoId, itemIndex) {
         
         await db.add('solicitudesAnulacion', solicitud);
         await showAlert('Solicitud de anulación enviada a la tienda', 'Éxito');
-        loadMisPedidos();
+        if (currentUserType === 'Técnico' || currentUserType === 'Encargado') {
+            loadMisPedidos();
+        }
     } catch (error) {
         console.error('Error al solicitar anulación:', error);
         await showAlert('Error al solicitar anulación: ' + error.message, 'Error');
@@ -1531,7 +1519,9 @@ window.solicitarAnulacionPedido = async function(pedidoId) {
         
         await db.add('solicitudesAnulacion', solicitud);
         await showAlert('Solicitud de anulación del pedido enviada a la tienda', 'Éxito');
-        loadMisPedidos();
+        if (currentUserType === 'Técnico' || currentUserType === 'Encargado') {
+            loadMisPedidos();
+        }
     } catch (error) {
         console.error('Error al solicitar anulación:', error);
         await showAlert('Error al solicitar anulación: ' + error.message, 'Error');
@@ -3511,6 +3501,197 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
             <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
                 <div class="pedido-items-header">
                     <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                </div>
+                <div class="pedido-items-list">
+                    ${itemsHtml}
+                </div>
+            </div>
+        </div>
+        <div class="contab-notes-block">
+            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
+                <div class="toggle-label">
+                    <span class="toggle-text">Ver comentarios del pedido</span>
+                    <span class="toggle-extra">( <span id="${notasCountId}">${notas.length}</span> )</span>
+                </div>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
+                <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
+                <div class="contab-note-actions">
+                    <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
+                </div>
+                <div id="${notasListId}" class="pedido-notas-list"></div>
+            </div>
+        </div>
+    `;
+    
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
+    
+    return card;
+}
+
+async function createPedidoTecnicoCard(pedido) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card contab-pedido-card';
+    
+    const tienda = await db.get('tiendas', pedido.tiendaId);
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
+    } else if (pedido.createdAt && pedido.createdAt.toDate) {
+        fechaObj = pedido.createdAt.toDate();
+    } else if (pedido.createdAt) {
+        fechaObj = new Date(pedido.createdAt);
+    } else {
+        fechaObj = new Date();
+    }
+    const fechaFormateada = formatDateTime(fechaObj);
+    
+    const estadoEnvio = pedido.estado || 'Sin estado';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    
+    const tiendaNombre = escapeHtml(tienda?.nombre || 'Desconocida');
+    const persona = escapeHtml(pedido.persona || pedido.usuarioNombre || 'Sin especificar');
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
+    
+    const items = Array.isArray(pedido.items) ? pedido.items : [];
+    const notas = Array.isArray(pedido.notas) ? pedido.notas : [];
+    const totalPedido = items.reduce((total, item) => {
+        const precioItem = Number(item.precio) || 0;
+        const cantidadItem = Number(item.cantidad) || 0;
+        return total + precioItem * cantidadItem;
+    }, 0);
+    
+    // Generar HTML para items con botones de anulación y cambio de cantidad
+    const itemsHtml = items.length
+        ? items.map((item, index) => {
+            const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+            const referencia = escapeHtml(item.designacion || item.referencia || '');
+            const ean = escapeHtml(item.ean || '');
+            const cantidad = Number(item.cantidad) || 0;
+            const precio = formatCurrency(item.precio || 0);
+            const subtotal = formatCurrency((item.precio || 0) * cantidad);
+            const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+            const placeholderId = `foto-placeholder-tec-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
+            const refEanParts = [];
+            if (referencia) refEanParts.push(referencia);
+            if (ean) refEanParts.push(ean);
+            const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
+            return `
+                <div class="pedido-item">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info">
+                        <p class="pedido-item-name">${nombre}</p>
+                        ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
+                    </div>
+                    <div class="pedido-item-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="emoji-btn" type="button" aria-label="Solicitar cambio de cantidad" onclick="solicitarModificacionCantidad('${pedido.id}', ${index}, ${cantidad})" title="Solicitar cambio de cantidad">✏️</button>
+                        <button class="emoji-btn danger" type="button" aria-label="Solicitar anulación del artículo" onclick="solicitarAnulacionItem('${pedido.id}', ${index})" title="Solicitar anulación del artículo">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    // Documentos (solo visualización/descarga, sin botones de edición)
+    const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+    const pedidoRealContent = pedidoRealLink
+        ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+        : '<span class="doc-placeholder">Sin documento adjunto</span>';
+    
+    const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+    const facturaContent = facturaLink
+        ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
+        : '<span class="doc-placeholder">Sin factura adjunta</span>';
+    
+    const tienePago = Boolean(pedido.transferenciaPDF);
+    const documentoPagoContent = tienePago
+        ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+        : '<span class="doc-placeholder">Sin documento adjunto</span>';
+    
+    const itemsSectionId = `pedido-items-tec-${pedido.id}`;
+    const notasSectionId = `pedido-notas-tec-${pedido.id}`;
+    const notasListId = `pedido-notas-list-tec-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-tec-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-tec-${pedido.id}`;
+    
+    card.innerHTML = `
+        <div class="contab-pedido-header">
+            <div>
+                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                </div>
+            </div>
+        </div>
+        <div class="contab-info-grid">
+            <div class="contab-info-card">
+                <div class="contab-card-title">Datos del pedido</div>
+                <div class="contab-info-row"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            <div class="contab-info-card">
+                <div class="contab-card-title">Estado de pago</div>
+                <div class="contab-info-row">
+                    <span>Estado</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+                <div class="contab-info-row">
+                    <span>Pedido real</span>
+                    <div class="doc-actions">${pedidoRealContent}</div>
+                </div>
+                <div class="contab-info-row">
+                    <span>Documento de pago</span>
+                    <div class="doc-actions">${documentoPagoContent}</div>
+                </div>
+                <div class="contab-info-row">
+                    <span>Factura</span>
+                    <div class="doc-actions">${facturaContent}</div>
+                </div>
+            </div>
+        </div>
+        <div>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
+                <span class="toggle-text">Ver artículos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
+                <div class="pedido-items-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                    <button class="btn btn-secondary" type="button" onclick="solicitarAnulacionPedido('${pedido.id}')" style="font-size: 0.875rem; padding: 0.5rem 1rem;">
+                        Solicitar Anulación del Pedido
+                    </button>
                 </div>
                 <div class="pedido-items-list">
                     ${itemsHtml}
