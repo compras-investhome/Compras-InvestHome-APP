@@ -366,7 +366,7 @@ function setupEventListeners() {
                 loadTiendas();
             } else if (view === 'pedidos') {
                 showView('pedidos');
-                loadMisPedidos();
+                populatePedidosFilters().then(() => loadMisPedidos());
             }
             
             // Actualizar estado activo
@@ -425,6 +425,9 @@ function setupEventListeners() {
     document.getElementById('btn-menu-contabilidad')?.addEventListener('click', () => {
         document.getElementById('sidebar').classList.add('active');
     });
+    
+    // Configurar listeners de filtros de pedidos
+    setupPedidosFiltersListeners();
 }
 
 // Setup Login Listeners
@@ -1152,6 +1155,15 @@ async function finalizarPedido() {
 }
 
 // Mis Pedidos
+let pedidosFiltros = {
+    obra: '',
+    tienda: '',
+    estadoEnvio: '',
+    estadoPago: '',
+    fecha: '',
+    persona: ''
+};
+
 async function loadMisPedidos() {
     if (!currentUser) {
         const container = document.getElementById('pedidos-list');
@@ -1164,12 +1176,15 @@ async function loadMisPedidos() {
     // Obtener TODOS los pedidos de TODAS las obras (excepto completados)
     // Esto permite que cualquier técnico/encargado vea y gestione todos los pedidos de todas las obras
     const todosPedidos = await db.getAll('pedidos');
-    const pedidosNoCompletados = todosPedidos.filter(p => p.estado !== 'Completado');
+    let pedidosFiltrados = todosPedidos.filter(p => p.estado !== 'Completado');
+    
+    // Aplicar filtros
+    pedidosFiltrados = aplicarFiltrosPedidos(pedidosFiltrados);
     
     const container = document.getElementById('pedidos-list');
     const emptyState = document.getElementById('pedidos-empty');
     
-    if (pedidosNoCompletados.length === 0) {
+    if (pedidosFiltrados.length === 0) {
         container.innerHTML = '';
         emptyState.style.display = 'block';
         return;
@@ -1179,19 +1194,19 @@ async function loadMisPedidos() {
     container.innerHTML = '';
     
     // Ordenar pedidos por fecha (más recientes primero)
-    pedidosNoCompletados.sort((a, b) => {
+    pedidosFiltrados.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
     // Obtener catálogo de obras (todas las obras, incluso sin pedidos)
-    const obras = await getObrasCatalog(pedidosNoCompletados);
+    const obras = await getObrasCatalog(pedidosFiltrados);
     
     let totalCount = 0;
     for (const obra of obras) {
         const obraId = obra.id || 'sin-obra';
-        const pedidosObra = pedidosNoCompletados.filter(p => (p.obraId || 'sin-obra') === obraId);
+        const pedidosObra = pedidosFiltrados.filter(p => (p.obraId || 'sin-obra') === obraId);
         totalCount += pedidosObra.length;
         
         const { section, content } = createCascadeSection({
@@ -1215,6 +1230,206 @@ async function loadMisPedidos() {
     const badge = document.getElementById('pedidos-total-badge');
     if (badge) {
         badge.textContent = totalCount;
+    }
+}
+
+function aplicarFiltrosPedidos(pedidos) {
+    let filtrados = [...pedidos];
+    
+    // Filtro por obra
+    if (pedidosFiltros.obra) {
+        filtrados = filtrados.filter(p => (p.obraId || 'sin-obra') === pedidosFiltros.obra);
+    }
+    
+    // Filtro por tienda
+    if (pedidosFiltros.tienda) {
+        filtrados = filtrados.filter(p => p.tiendaId === pedidosFiltros.tienda);
+    }
+    
+    // Filtro por estado de envío
+    if (pedidosFiltros.estadoEnvio) {
+        filtrados = filtrados.filter(p => p.estado === pedidosFiltros.estadoEnvio);
+    }
+    
+    // Filtro por estado de pago
+    if (pedidosFiltros.estadoPago) {
+        filtrados = filtrados.filter(p => {
+            const estadoPago = p.estadoPago || 'Sin Asignar';
+            return estadoPago === pedidosFiltros.estadoPago;
+        });
+    }
+    
+    // Filtro por fecha
+    if (pedidosFiltros.fecha) {
+        const ahora = new Date();
+        let fechaLimite = new Date();
+        
+        switch (pedidosFiltros.fecha) {
+            case 'ultima-semana':
+                fechaLimite.setDate(ahora.getDate() - 7);
+                break;
+            case 'ultimo-mes':
+                fechaLimite.setMonth(ahora.getMonth() - 1);
+                break;
+            case 'ultimos-3-meses':
+                fechaLimite.setMonth(ahora.getMonth() - 3);
+                break;
+            case 'ultimos-6-meses':
+                fechaLimite.setMonth(ahora.getMonth() - 6);
+                break;
+        }
+        
+        filtrados = filtrados.filter(p => {
+            let fechaPedido;
+            if (p.fecha && p.fecha.toDate) {
+                fechaPedido = p.fecha.toDate();
+            } else if (p.fecha) {
+                fechaPedido = new Date(p.fecha);
+            } else if (p.createdAt && p.createdAt.toDate) {
+                fechaPedido = p.createdAt.toDate();
+            } else if (p.createdAt) {
+                fechaPedido = new Date(p.createdAt);
+            } else {
+                return false;
+            }
+            return fechaPedido >= fechaLimite;
+        });
+    }
+    
+    // Filtro por persona
+    if (pedidosFiltros.persona) {
+        filtrados = filtrados.filter(p => {
+            const persona = p.persona || p.usuarioNombre || '';
+            return persona === pedidosFiltros.persona;
+        });
+    }
+    
+    return filtrados;
+}
+
+async function populatePedidosFilters() {
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosNoCompletados = todosPedidos.filter(p => p.estado !== 'Completado');
+    
+    // Poblar obras
+    const obras = await getObrasCatalog(pedidosNoCompletados);
+    const selectObra = document.getElementById('filter-obra');
+    if (selectObra) {
+        const obrasOptions = obras.map(obra => {
+            const selected = pedidosFiltros.obra === obra.id ? 'selected' : '';
+            return `<option value="${obra.id || 'sin-obra'}" ${selected}>${escapeHtml(obra.nombreComercial || obra.nombre || 'Obra sin nombre')}</option>`;
+        }).join('');
+        selectObra.innerHTML = '<option value="">Todas las obras</option>' + obrasOptions;
+    }
+    
+    // Poblar tiendas
+    const tiendasIds = [...new Set(pedidosNoCompletados.map(p => p.tiendaId).filter(Boolean))];
+    const tiendas = await Promise.all(tiendasIds.map(id => db.get('tiendas', id)));
+    const selectTienda = document.getElementById('filter-tienda');
+    if (selectTienda) {
+        const tiendasOptions = tiendas
+            .filter(t => t)
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+            .map(tienda => {
+                const selected = pedidosFiltros.tienda === tienda.id ? 'selected' : '';
+                return `<option value="${tienda.id}" ${selected}>${escapeHtml(tienda.nombre || 'Sin nombre')}</option>`;
+            }).join('');
+        selectTienda.innerHTML = '<option value="">Todas las tiendas</option>' + tiendasOptions;
+    }
+    
+    // Poblar personas
+    const personas = [...new Set(pedidosNoCompletados.map(p => p.persona || p.usuarioNombre).filter(Boolean))];
+    const selectPersona = document.getElementById('filter-persona');
+    if (selectPersona) {
+        const personasOptions = personas
+            .sort()
+            .map(persona => {
+                const selected = pedidosFiltros.persona === persona ? 'selected' : '';
+                return `<option value="${escapeHtml(persona)}" ${selected}>${escapeHtml(persona)}</option>`;
+            }).join('');
+        selectPersona.innerHTML = '<option value="">Todas las personas</option>' + personasOptions;
+    }
+    
+    // Establecer valores de filtros de estado
+    const selectEstadoEnvio = document.getElementById('filter-estado-envio');
+    if (selectEstadoEnvio && pedidosFiltros.estadoEnvio) {
+        selectEstadoEnvio.value = pedidosFiltros.estadoEnvio;
+    }
+    
+    const selectEstadoPago = document.getElementById('filter-estado-pago');
+    if (selectEstadoPago && pedidosFiltros.estadoPago) {
+        selectEstadoPago.value = pedidosFiltros.estadoPago;
+    }
+    
+    const selectFecha = document.getElementById('filter-fecha');
+    if (selectFecha && pedidosFiltros.fecha) {
+        selectFecha.value = pedidosFiltros.fecha;
+    }
+}
+
+function setupPedidosFiltersListeners() {
+    const selectObra = document.getElementById('filter-obra');
+    const selectTienda = document.getElementById('filter-tienda');
+    const selectEstadoEnvio = document.getElementById('filter-estado-envio');
+    const selectEstadoPago = document.getElementById('filter-estado-pago');
+    const selectFecha = document.getElementById('filter-fecha');
+    const selectPersona = document.getElementById('filter-persona');
+    const btnLimpiar = document.getElementById('btn-limpiar-filtros');
+    
+    if (selectObra) {
+        selectObra.addEventListener('change', (e) => {
+            pedidosFiltros.obra = e.target.value;
+            loadMisPedidos();
+        });
+    }
+    
+    if (selectTienda) {
+        selectTienda.addEventListener('change', (e) => {
+            pedidosFiltros.tienda = e.target.value;
+            loadMisPedidos();
+        });
+    }
+    
+    if (selectEstadoEnvio) {
+        selectEstadoEnvio.addEventListener('change', (e) => {
+            pedidosFiltros.estadoEnvio = e.target.value;
+            loadMisPedidos();
+        });
+    }
+    
+    if (selectEstadoPago) {
+        selectEstadoPago.addEventListener('change', (e) => {
+            pedidosFiltros.estadoPago = e.target.value;
+            loadMisPedidos();
+        });
+    }
+    
+    if (selectFecha) {
+        selectFecha.addEventListener('change', (e) => {
+            pedidosFiltros.fecha = e.target.value;
+            loadMisPedidos();
+        });
+    }
+    
+    if (selectPersona) {
+        selectPersona.addEventListener('change', (e) => {
+            pedidosFiltros.persona = e.target.value;
+            loadMisPedidos();
+        });
+    }
+    
+    if (btnLimpiar) {
+        btnLimpiar.addEventListener('click', () => {
+            pedidosFiltros = {
+                obra: '',
+                tienda: '',
+                estadoEnvio: '',
+                estadoPago: '',
+                fecha: '',
+                persona: ''
+            };
+            populatePedidosFilters().then(() => loadMisPedidos());
+        });
     }
 }
 

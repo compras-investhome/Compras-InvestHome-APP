@@ -196,6 +196,63 @@
             <div style="width: 24px;"></div>
         </header>
 
+        <div class="pedidos-filters-container">
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label for="filter-obra">Obra</label>
+                    <select id="filter-obra" class="filter-select">
+                        <option value="">Todas las obras</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-tienda">Tienda</label>
+                    <select id="filter-tienda" class="filter-select">
+                        <option value="">Todas las tiendas</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-estado-envio">Estado de Envío</label>
+                    <select id="filter-estado-envio" class="filter-select">
+                        <option value="">Todos los estados</option>
+                        <option value="Nuevo">Nuevo</option>
+                        <option value="En curso">En curso</option>
+                        <option value="En proceso">En proceso</option>
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Completado">Completado</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-estado-pago">Estado de Pago</label>
+                    <select id="filter-estado-pago" class="filter-select">
+                        <option value="">Todos los estados</option>
+                        <option value="Pendiente de pago">Pendiente de pago</option>
+                        <option value="Pago A cuenta">Pago A cuenta</option>
+                        <option value="Pagado">Pagado</option>
+                        <option value="Sin Asignar">Sin Asignar</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-fecha">Período</label>
+                    <select id="filter-fecha" class="filter-select">
+                        <option value="">Todos</option>
+                        <option value="ultima-semana">Última semana</option>
+                        <option value="ultimo-mes">Último mes</option>
+                        <option value="ultimos-3-meses">Últimos 3 meses</option>
+                        <option value="ultimos-6-meses">Últimos 6 meses</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-persona">Persona</label>
+                    <select id="filter-persona" class="filter-select">
+                        <option value="">Todas las personas</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filters-actions">
+                <button id="btn-limpiar-filtros" class="btn btn-secondary">Limpiar Filtros</button>
+            </div>
+        </div>
+
         <main class="main-content">
             <div id="pedidos-list" class="pedidos-list">
                 <!-- Los pedidos se cargarán dinámicamente -->
