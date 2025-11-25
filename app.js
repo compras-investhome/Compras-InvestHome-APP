@@ -2838,9 +2838,29 @@ window.removePedidoPaymentDocument = async function(pedidoId) {
             await showAlert('Este pedido no tiene documento de pago para eliminar', 'Información');
             return;
         }
-        await db.update('pedidos', { id: pedidoId, transferenciaPDF: null });
+        
+        // Determinar el estado original basado en la tienda
+        const tienda = await db.get('tiendas', pedido.tiendaId);
+        const tieneCuenta = tienda && tienda.tieneCuenta;
+        
+        // Eliminar el documento de pago y restaurar el estado
+        pedido.transferenciaPDF = null;
+        // Si el estado actual es "Pagado", restaurar según el tipo de tienda
+        if (pedido.estadoPago === 'Pagado') {
+            pedido.estadoPago = tieneCuenta ? 'Pago A cuenta' : 'Pendiente de pago';
+        }
+        
+        await db.update('pedidos', pedido);
         await showAlert('Documento eliminado correctamente', 'Éxito');
+        
+        // Recargar todas las pestañas relevantes
         reloadActiveContabilidadTab();
+        loadFacturasPendientesContabilidad();
+        if (tieneCuenta) {
+            loadCuentasContabilidad();
+        } else {
+            loadPedidosContabilidad();
+        }
     } catch (error) {
         console.error('Error al eliminar documento de pago:', error);
         await showAlert('No se pudo eliminar el documento: ' + error.message, 'Error');
@@ -3010,7 +3030,9 @@ async function loadPedidosContabilidad() {
     const pedidosPendientes = todosPedidos.filter(pedido => {
         if (pedido.estado === 'Completado') return false;
         if (pedido.estadoPago !== 'Pendiente de pago') return false;
-        return Boolean(pedido.pedidoSistemaPDF);
+        if (!pedido.pedidoSistemaPDF) return false; // Debe tener pedido real adjunto
+        if (pedido.transferenciaPDF) return false; // No debe estar pagado aún
+        return true;
     });
     
     pedidosPendientes.sort((a, b) => {
@@ -3061,7 +3083,7 @@ async function loadPedidosContabilidad() {
 async function loadPedidosPagadosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
     const pedidosPagados = todosPedidos.filter(p => 
-        p.estadoPago === 'Pagado' && p.transferenciaPDF
+        p.transferenciaPDF && p.albaran // Debe tener documento de pago Y factura
     );
     const container = document.getElementById('pedidos-pagados-contabilidad-list');
     const emptyState = document.getElementById('pedidos-pagados-contabilidad-empty');
@@ -3560,14 +3582,10 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         
         await showAlert('PDF del pago adjuntado correctamente. El pedido se ha marcado como pagado y se ha descontado del gastado de la cuenta.', 'Éxito');
         
-        // Recargar la vista de cuentas (el pedido desaparecerá del desplegable)
-        loadCuentasContabilidad();
-        
-        // Si estamos en la pestaña de pedidos pagados, recargarla también (el pedido aparecerá ahí)
-        const tabActivo = document.querySelector('.tab-btn.active[data-tab]');
-        if (tabActivo && tabActivo.dataset.tab === 'pedidos-pagados-contabilidad') {
-            loadPedidosPagadosContabilidad();
-        }
+        // Recargar las pestañas relevantes
+        reloadActiveContabilidadTab();
+        // El pedido ahora debe aparecer en "Facturas Pendientes"
+        loadFacturasPendientesContabilidad();
     } catch (error) {
         console.error('Error al subir pago de cuenta:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
@@ -3613,12 +3631,11 @@ window.uploadTransferencia = async function(pedidoId, file) {
         }
         
         await showAlert('PDF de transferencia adjuntado y pedido marcado como pagado', 'Éxito');
-        loadPedidosContabilidad();
-        // Si estamos en la pestaña de pagados, recargarla también
-        const tabActivo = document.querySelector('.tab-btn.active[data-tab]');
-        if (tabActivo && tabActivo.dataset.tab === 'pedidos-pagados-contabilidad') {
-            loadPedidosPagadosContabilidad();
-        }
+        
+        // Recargar las pestañas relevantes
+        reloadActiveContabilidadTab();
+        // El pedido ahora debe aparecer en "Facturas Pendientes"
+        loadFacturasPendientesContabilidad();
     } catch (error) {
         console.error('Error al subir transferencia:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
@@ -3661,15 +3678,39 @@ window.uploadPedidoSistema = async function(pedidoId, file) {
 window.uploadAlbaran = async function(pedidoId, file) {
     if (!file) return;
     
+    if (!PAGO_ALLOWED_MIME.includes(file.type)) {
+        await showAlert('Formato no soportado. Adjunte un PDF o imagen (JPG/PNG).', 'Error');
+        return;
+    }
+    
     // Convertir archivo a base64 para almacenarlo
     const reader = new FileReader();
     reader.onload = async (e) => {
-        const pedido = await db.get('pedidos', pedidoId);
-        if (!pedido) return;
-        
-        pedido.albaran = e.target.result;
-        await db.update('pedidos', pedido);
-        loadPedidosEnCurso();
+        try {
+            const pedido = await db.get('pedidos', pedidoId);
+            if (!pedido) {
+                await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+                return;
+            }
+            
+            pedido.albaran = e.target.result;
+            await db.update('pedidos', pedido);
+            
+            await showAlert('Factura adjuntada correctamente. El pedido se ha movido al histórico.', 'Éxito');
+            
+            // Recargar la vista de la tienda
+            loadPedidosEnCurso();
+            
+            // Si estamos en la vista de contabilidad, recargar las pestañas relevantes
+            if (currentUserType === 'Contabilidad') {
+                reloadActiveContabilidadTab();
+                // El pedido ahora debe aparecer en "Histórico"
+                loadPedidosPagadosContabilidad();
+            }
+        } catch (error) {
+            console.error('Error al subir factura:', error);
+            await showAlert('Error al subir la factura: ' + error.message, 'Error');
+        }
     };
     reader.readAsDataURL(file);
 }
