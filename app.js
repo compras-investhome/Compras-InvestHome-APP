@@ -3178,7 +3178,7 @@ async function loadCuentasContabilidad() {
             obraSection.section.classList.add('nested-cascade');
             
             for (const pedido of pedidosObra) {
-                const card = createPagoCuentaCard(pedido, tienda);
+                const card = await createPedidoContabilidadCard(pedido, false);
                 obraSection.content.appendChild(card);
             }
             
@@ -3327,79 +3327,6 @@ function createCuentaInfoBlock(tienda, gastado) {
     }
     
     return info;
-}
-
-function createPagoCuentaCard(pedido, tienda) {
-    const card = document.createElement('div');
-    card.style.padding = '1.25rem';
-    card.style.background = 'white';
-    card.style.borderRadius = '12px';
-    card.style.marginBottom = '0.5rem';
-    card.style.border = '2px solid var(--border-color)';
-    card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
-    
-    const items = Array.isArray(pedido.items) ? pedido.items : [];
-    const precioTotalPedido = items.reduce((total, item) => {
-                const precioItem = item.precio || 0;
-                const cantidad = item.cantidad || 0;
-                return total + (precioItem * cantidad);
-            }, 0);
-            
-            let fecha;
-            let fechaObj;
-            if (pedido.fecha && pedido.fecha.toDate) {
-                fechaObj = pedido.fecha.toDate();
-            } else if (pedido.fecha) {
-                fechaObj = new Date(pedido.fecha);
-            } else {
-                fechaObj = new Date();
-            }
-            const dia = fechaObj.getDate().toString().padStart(2, '0');
-            const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
-            const año = fechaObj.getFullYear();
-            fecha = `${dia}/${mes}/${año}`;
-            
-    card.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
-                        <div style="flex: 1;">
-                            <p style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Pedido #${pedido.id}</p>
-                            <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">📅 ${fecha}</p>
-                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>🏗️ Obra:</strong> ${pedido.obraNombreComercial || pedido.obra || 'Sin obra'}</p>
-                            <p style="font-size: 0.875rem; margin-top: 0.25rem;"><strong>👤 Usuario:</strong> ${pedido.persona || 'Desconocido'}</p>
-                        </div>
-                        <div style="text-align: right; margin-left: 1rem;">
-                            <p style="font-weight: 700; font-size: 1.25rem; color: var(--primary-color); margin-bottom: 0.25rem;">${precioTotalPedido.toFixed(2)} €</p>
-                            <span style="display: inline-block; padding: 0.375rem 0.75rem; background-color: #3b82f6; color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">Pago A cuenta</span>
-                        </div>
-                    </div>
-                    ${pedido.pedidoSistemaPDF ? `
-                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--primary-color-light); border-radius: 8px;">
-                            <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">📄 Documento del Sistema:</p>
-                            <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
-                                📥 Ver/Descargar Documento
-                            </a>
-                        </div>
-                    ` : ''}
-                    ${!pedido.transferenciaPDF ? `
-                        <div style="margin-top: 1rem; padding: 1rem; background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 8px;">
-                            <label for="pago-cuenta-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.75rem; font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
-                                💳 Adjuntar PDF del Pago
-                            </label>
-                            <input type="file" id="pago-cuenta-${pedido.id}" accept=".pdf" onchange="uploadPagoCuenta('${pedido.id}', this.files[0], '${tienda.id}')" style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; cursor: pointer;">
-                        </div>
-                    ` : `
-                        <div style="margin-top: 1rem; padding: 1rem; background: #d1fae5; border: 2px solid #10b981; border-radius: 8px;">
-                            <p style="font-size: 0.875rem; color: #065f46; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                                ✓ Pago adjuntado y confirmado
-                            </p>
-                            <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 6px; border: 1px solid var(--primary-color); transition: all 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='var(--primary-color)'">
-                                📥 Ver PDF del Pago
-                            </a>
-                        </div>
-                    `}
-    `;
-    
-    return card;
 }
 
 async function createPedidoContabilidadCard(pedido, isPagado = false) {
