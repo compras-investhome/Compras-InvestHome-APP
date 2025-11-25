@@ -301,6 +301,10 @@
                 Pedidos Especiales
                 <span class="tab-badge" id="tab-count-especiales">0</span>
             </button>
+            <button class="tab-btn" data-tab="facturas-pendientes-contabilidad">
+                Facturas Pendientes
+                <span class="tab-badge" id="tab-count-facturas">0</span>
+            </button>
             <button class="tab-btn" data-tab="pedidos-pagados-contabilidad">
                 Histórico
                 <span class="tab-badge" id="tab-count-historico">0</span>
@@ -330,6 +334,14 @@
                 </div>
                 <div id="pedidos-especiales-contabilidad-empty" class="empty-state" style="display: none;">
                     <p>No hay pedidos especiales registrados</p>
+                </div>
+            </div>
+            <div id="facturas-pendientes-contabilidad" class="tab-content">
+                <div id="facturas-pendientes-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Las facturas pendientes se cargarán dinámicamente -->
+                </div>
+                <div id="facturas-pendientes-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay facturas pendientes registradas</p>
                 </div>
             </div>
             <div id="pedidos-pagados-contabilidad" class="tab-content">

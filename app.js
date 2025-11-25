@@ -15,6 +15,7 @@ const contabilidadTabBadgeMap = {
     pendientes: 'tab-count-pendientes',
     cuentas: 'tab-count-cuentas',
     especiales: 'tab-count-especiales',
+    facturas: 'tab-count-facturas',
     historico: 'tab-count-historico'
 };
 
@@ -405,7 +406,13 @@ function setupEventListeners() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const tab = e.currentTarget.dataset.tab;
-            if (tab === 'pedidos-contabilidad' || tab === 'pedidos-pagados-contabilidad' || tab === 'cuentas-contabilidad' || tab === 'pedidos-especiales-contabilidad') {
+            if (
+                tab === 'pedidos-contabilidad' ||
+                tab === 'pedidos-pagados-contabilidad' ||
+                tab === 'cuentas-contabilidad' ||
+                tab === 'pedidos-especiales-contabilidad' ||
+                tab === 'facturas-pendientes-contabilidad'
+            ) {
                 switchTabContabilidad(tab);
             } else {
                 switchTab(tab);
@@ -2762,6 +2769,9 @@ function switchTabContabilidad(tab) {
     } else if (tab === 'pedidos-especiales-contabilidad') {
         document.getElementById('pedidos-especiales-contabilidad').classList.add('active');
         loadPedidosEspecialesContabilidad();
+    } else if (tab === 'facturas-pendientes-contabilidad') {
+        document.getElementById('facturas-pendientes-contabilidad').classList.add('active');
+        loadFacturasPendientesContabilidad();
     }
 }
 
@@ -3001,6 +3011,60 @@ async function loadPedidosEspecialesContabilidad() {
     }
     
     updateContabilidadTabBadge('especiales', totalCount);
+}
+
+async function loadFacturasPendientesContabilidad() {
+    const todosPedidos = await db.getAll('pedidos');
+    const facturasPendientes = todosPedidos.filter(pedido => {
+        const pagado = pedido.estadoPago === 'Pagado' || Boolean(pedido.transferenciaPDF);
+        const sinFactura = !pedido.albaran;
+        return pagado && sinFactura;
+    });
+    
+    facturasPendientes.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+    
+    const obras = await getObrasCatalog(facturasPendientes);
+    const container = document.getElementById('facturas-pendientes-contabilidad-list');
+    const emptyState = document.getElementById('facturas-pendientes-contabilidad-empty');
+    
+    container.innerHTML = '';
+    
+    if (obras.length === 0) {
+        emptyState.style.display = 'block';
+        updateContabilidadTabBadge('facturas', 0);
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    let totalCount = 0;
+    
+    for (const obra of obras) {
+        const obraId = obra.id || 'sin-obra';
+        const pedidosObra = facturasPendientes.filter(p => (p.obraId || 'sin-obra') === obraId);
+        totalCount += pedidosObra.length;
+        
+        const { section, content } = createCascadeSection({
+            prefix: 'facturas-obra',
+            uniqueId: obraId,
+            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+            count: pedidosObra.length,
+            emptyMessage: 'Sin facturas pendientes para esta obra',
+            defaultOpen: false
+        });
+        
+        for (const pedido of pedidosObra) {
+            const card = await createPedidoContabilidadCard(pedido, true);
+            content.appendChild(card);
+        }
+        
+        container.appendChild(section);
+    }
+    
+    updateContabilidadTabBadge('facturas', totalCount);
 }
 
 function createCuentaInfoBlock(tienda, gastado) {
