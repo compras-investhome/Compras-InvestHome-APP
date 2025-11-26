@@ -2087,6 +2087,14 @@ async function createPedidoEspecialCard(pedido) {
                 ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
                 : '';
             const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">✕</div>`;
+            // Solo mostrar botones si el pedido no está pagado
+            const puedeModificar = estadoPago !== 'Pagado';
+            const botonesHtml = puedeModificar ? `
+                <div class="pedido-item-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="emoji-btn" type="button" aria-label="Modificar cantidad" onclick="modificarCantidadArticuloEspecial('${pedido.id}', ${index}, ${cantidad})" title="Modificar cantidad">✏️</button>
+                    <button class="emoji-btn danger" type="button" aria-label="Eliminar artículo" onclick="eliminarArticuloEspecial('${pedido.id}', ${index})" title="Eliminar artículo">🗑️</button>
+                </div>
+            ` : '';
             return `
                 <div class="pedido-item">
                     ${fotoHtml}
@@ -2099,6 +2107,7 @@ async function createPedidoEspecialCard(pedido) {
                             <span>Total línea: ${subtotal}</span>
                         </div>
                     </div>
+                    ${botonesHtml}
                 </div>
             `;
         }).join('')
@@ -2156,8 +2165,13 @@ async function createPedidoEspecialCard(pedido) {
                 <span class="chevron">▼</span>
             </button>
             <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
-                <div class="pedido-items-header">
+                <div class="pedido-items-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                    ${estadoPago !== 'Pagado' ? `
+                    <button class="btn btn-secondary" type="button" onclick="anularPedidoEspecial('${pedido.id}')" style="font-size: 0.875rem; padding: 0.5rem 1rem;">
+                        Anular Pedido
+                    </button>
+                    ` : ''}
                 </div>
                 <div class="pedido-items-list">
                     ${itemsHtml}
@@ -4236,6 +4250,125 @@ async function loadPedidosEspecialesContabilidad() {
     
     updateContabilidadTabBadge('especiales', totalCount);
 }
+
+// Funciones para gestionar pedidos especiales (sin solicitar permiso a tienda)
+window.modificarCantidadArticuloEspecial = async function(pedidoId, itemIndex, cantidadActual) {
+    const nuevaCantidadStr = await showPrompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad:`, cantidadActual.toString(), 'Modificar Cantidad');
+    
+    if (nuevaCantidadStr === null) return; // Usuario canceló
+    
+    const nuevaCantidad = parseInt(nuevaCantidadStr);
+    
+    if (isNaN(nuevaCantidad) || nuevaCantidad < 0) {
+        await showAlert('Por favor, ingrese una cantidad válida', 'Error');
+        return;
+    }
+    
+    if (nuevaCantidad === cantidadActual) {
+        await showAlert('La cantidad es igual a la actual', 'Información');
+        return;
+    }
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.articulos || itemIndex >= pedido.articulos.length) {
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+            return;
+        }
+        
+        if (!isPedidoEspecial(pedido)) {
+            await showAlert('Este no es un pedido especial', 'Error');
+            return;
+        }
+        
+        // Modificar directamente la cantidad
+        pedido.articulos[itemIndex].cantidad = nuevaCantidad;
+        await db.update('pedidos', pedido);
+        
+        await showAlert('Cantidad modificada correctamente', 'Éxito');
+        
+        // Recargar pedidos especiales
+        const activeTab = document.querySelector('#pedidos-tabs .tab-btn.active');
+        if (activeTab && activeTab.dataset.tab === 'pedidos-especiales-tecnico') {
+            loadPedidosEspecialesTecnico();
+        }
+    } catch (error) {
+        console.error('Error al modificar cantidad:', error);
+        await showAlert('Error al modificar cantidad: ' + error.message, 'Error');
+    }
+};
+
+window.eliminarArticuloEspecial = async function(pedidoId, itemIndex) {
+    const confirmar = await showConfirm('¿Está seguro de eliminar este artículo del pedido?', 'Confirmar Eliminación');
+    if (!confirmar) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.articulos || itemIndex >= pedido.articulos.length) {
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+            return;
+        }
+        
+        if (!isPedidoEspecial(pedido)) {
+            await showAlert('Este no es un pedido especial', 'Error');
+            return;
+        }
+        
+        // Eliminar el artículo directamente
+        pedido.articulos.splice(itemIndex, 1);
+        
+        // Si no quedan artículos, eliminar el pedido completo
+        if (pedido.articulos.length === 0) {
+            await db.delete('pedidos', pedidoId);
+            await showAlert('Artículo eliminado. El pedido se ha eliminado porque no quedan artículos.', 'Éxito');
+        } else {
+            await db.update('pedidos', pedido);
+            await showAlert('Artículo eliminado correctamente', 'Éxito');
+        }
+        
+        // Recargar pedidos especiales
+        const activeTab = document.querySelector('#pedidos-tabs .tab-btn.active');
+        if (activeTab && activeTab.dataset.tab === 'pedidos-especiales-tecnico') {
+            loadPedidosEspecialesTecnico();
+        }
+    } catch (error) {
+        console.error('Error al eliminar artículo:', error);
+        await showAlert('Error al eliminar artículo: ' + error.message, 'Error');
+    }
+};
+
+window.anularPedidoEspecial = async function(pedidoId) {
+    const confirmar = await showConfirm('¿Está seguro de anular este pedido especial? Esta acción no se puede deshacer.', 'Confirmar Anulación');
+    if (!confirmar) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        if (!isPedidoEspecial(pedido)) {
+            await showAlert('Este no es un pedido especial', 'Error');
+            return;
+        }
+        
+        // Cambiar el estado a "Anulado"
+        pedido.estado = 'Anulado';
+        await db.update('pedidos', pedido);
+        
+        await showAlert('Pedido anulado correctamente', 'Éxito');
+        
+        // Recargar pedidos especiales
+        const activeTab = document.querySelector('#pedidos-tabs .tab-btn.active');
+        if (activeTab && activeTab.dataset.tab === 'pedidos-especiales-tecnico') {
+            loadPedidosEspecialesTecnico();
+        }
+    } catch (error) {
+        console.error('Error al anular pedido:', error);
+        await showAlert('Error al anular pedido: ' + error.message, 'Error');
+    }
+};
 
 async function createPedidoEspecialContabilidadCard(pedido) {
     const card = document.createElement('div');
