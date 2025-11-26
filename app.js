@@ -1939,14 +1939,16 @@ async function loadPedidosEspecialesHistoricoTecnico() {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
-        // Solo mostrar pedidos especiales pagados del técnico actual
-        const pedidosEspeciales = todosPedidos.filter(p => {
-            return isPedidoEspecial(p) && 
-                   p.persona === (currentUser.username || currentUser.nombre) &&
-                   p.estadoPago === 'Pagado';
+        const persona = currentUser.username || currentUser.nombre;
+        
+        // Filtrar pedidos pagados del técnico actual (tanto normales como especiales)
+        const pedidosPagados = todosPedidos.filter(p => {
+            const esDelTecnico = p.persona === persona || p.usuarioNombre === persona;
+            const estaPagado = p.estadoPago === 'Pagado';
+            return esDelTecnico && estaPagado;
         });
         
-        if (pedidosEspeciales.length === 0) {
+        if (pedidosPagados.length === 0) {
             container.innerHTML = '';
             emptyState.style.display = 'block';
             // Actualizar badge
@@ -1961,19 +1963,19 @@ async function loadPedidosEspecialesHistoricoTecnico() {
         container.innerHTML = '';
         
         // Ordenar por fecha (más recientes primero)
-        pedidosEspeciales.sort((a, b) => {
+        pedidosPagados.sort((a, b) => {
             const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : new Date(0));
             const fechaB = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : new Date(0));
             return fechaB - fechaA;
         });
         
         // Obtener catálogo de obras
-        const obras = await getObrasCatalog(pedidosEspeciales);
+        const obras = await getObrasCatalog(pedidosPagados);
         
         let totalCount = 0;
         for (const obra of obras) {
             const obraId = obra.id || 'sin-obra';
-            const pedidosObra = pedidosEspeciales
+            const pedidosObra = pedidosPagados
                 .filter(p => (p.obraId || 'sin-obra') === obraId)
                 .sort((a, b) => {
                     const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : new Date(0));
@@ -1984,16 +1986,19 @@ async function loadPedidosEspecialesHistoricoTecnico() {
             totalCount += pedidosObra.length;
             
             const { section, content } = createCascadeSection({
-                prefix: 'pedidos-especiales-historico-obra',
+                prefix: 'pedidos-historico-obra',
                 uniqueId: obraId,
                 title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
                 count: pedidosObra.length,
-                emptyMessage: 'Sin pedidos especiales en el histórico para esta obra',
+                emptyMessage: 'Sin pedidos en el histórico para esta obra',
                 defaultOpen: true
             });
             
             for (const pedido of pedidosObra) {
-                const card = await createPedidoEspecialCard(pedido);
+                // Usar la función correcta según el tipo de pedido
+                const card = isPedidoEspecial(pedido)
+                    ? await createPedidoEspecialCard(pedido)
+                    : await createPedidoTecnicoCard(pedido);
                 content.appendChild(card);
             }
             
@@ -2003,11 +2008,11 @@ async function loadPedidosEspecialesHistoricoTecnico() {
         // Actualizar badge
         const badge = document.getElementById('pedidos-especiales-historico-badge');
         if (badge) {
-            badge.textContent = pedidosEspeciales.length;
+            badge.textContent = pedidosPagados.length;
         }
     } catch (error) {
-        console.error('Error al cargar histórico de pedidos especiales:', error);
-        showAlert('Error al cargar histórico de pedidos especiales');
+        console.error('Error al cargar histórico de pedidos:', error);
+        showAlert('Error al cargar histórico de pedidos');
     }
 }
 
@@ -4457,7 +4462,11 @@ window.confirmarPagoPedidoEspecial = async function(pedidoId) {
 
 async function loadFacturasPendientesContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
+    // Solo mostrar pedidos NORMALES pagados sin factura (excluir pedidos especiales)
     const facturasPendientes = todosPedidos.filter(pedido => {
+        // Excluir pedidos especiales
+        if (isPedidoEspecial(pedido)) return false;
+        // Solo pedidos normales pagados sin factura
         const pagado = pedido.estadoPago === 'Pagado' || Boolean(pedido.transferenciaPDF);
         const sinFactura = !pedido.albaran;
         return pagado && sinFactura;
@@ -5086,8 +5095,9 @@ window.uploadAlbaran = async function(pedidoId, file) {
             // Si estamos en la vista de contabilidad, recargar las pestañas relevantes
             if (currentUserType === 'Contabilidad') {
                 reloadActiveContabilidadTab();
-                // El pedido ahora debe aparecer en "Histórico"
+                // El pedido ahora debe aparecer en "Histórico" y desaparecer de "Facturas Pendientes"
                 loadPedidosPagadosContabilidad();
+                loadFacturasPendientesContabilidad();
             }
         } catch (error) {
             console.error('Error al subir factura:', error);
