@@ -1572,7 +1572,21 @@ function addArticuloEspecial() {
             <input type="text" class="form-input" placeholder="Nombre del artículo *" required data-articulo-nombre="${itemId}">
         </div>
         <div>
+            <input type="number" class="form-input" placeholder="Cantidad" step="1" min="1" value="1" data-articulo-cantidad="${itemId}">
+        </div>
+        <div>
             <input type="number" class="form-input" placeholder="Precio (€)" step="0.01" min="0" data-articulo-precio="${itemId}">
+        </div>
+        <div class="articulo-foto-container" data-articulo-foto="${itemId}">
+            <div class="articulo-foto-dropzone" data-dropzone="${itemId}">
+                <input type="file" class="articulo-foto-input" accept="image/png,image/jpeg,image/jpg" data-foto-input="${itemId}" style="display: none;">
+                <div class="articulo-foto-placeholder" data-foto-placeholder="${itemId}">
+                    <span style="font-size: 1.5rem;">📷</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Arrastra foto</span>
+                </div>
+                <img class="articulo-foto-preview" data-foto-preview="${itemId}" style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">
+                <button type="button" class="articulo-foto-remove" data-foto-remove="${itemId}" style="display: none; position: absolute; top: -8px; right: -8px; background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 0.75rem;">✕</button>
+            </div>
         </div>
         <div class="pedido-especial-item-actions">
             <button type="button" onclick="this.closest('.pedido-especial-item').remove()">✕</button>
@@ -1580,6 +1594,115 @@ function addArticuloEspecial() {
     `;
     
     container.appendChild(itemDiv);
+    
+    // Configurar drag and drop para este artículo
+    setupArticuloFotoDropzone(itemId);
+}
+
+function setupArticuloFotoDropzone(itemId) {
+    const dropzone = document.querySelector(`[data-dropzone="${itemId}"]`);
+    const fileInput = document.querySelector(`[data-foto-input="${itemId}"]`);
+    const placeholder = document.querySelector(`[data-foto-placeholder="${itemId}"]`);
+    const preview = document.querySelector(`[data-foto-preview="${itemId}"]`);
+    const removeBtn = document.querySelector(`[data-foto-remove="${itemId}"]`);
+    
+    if (!dropzone || !fileInput || !placeholder || !preview || !removeBtn) return;
+    
+    // Click en el dropzone para abrir el selector de archivos
+    dropzone.addEventListener('click', (e) => {
+        if (e.target !== removeBtn) {
+            fileInput.click();
+        }
+    });
+    
+    // Cambio de archivo desde el input
+    fileInput.addEventListener('change', (e) => {
+        handleArticuloFotoChange(e, itemId);
+    });
+    
+    // Drag and drop
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+    });
+    
+    dropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+    });
+    
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+                fileInput.files = files;
+                handleArticuloFotoChange({ target: fileInput }, itemId);
+            } else {
+                showAlert('Por favor, selecciona solo archivos de imagen');
+            }
+        }
+    });
+    
+    // Botón para eliminar foto
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeArticuloFoto(itemId);
+    });
+}
+
+function handleArticuloFotoChange(event, itemId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+        showAlert('Por favor, selecciona solo archivos de imagen');
+        return;
+    }
+    
+    // Validar tamaño (máx. 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        showAlert('La imagen es demasiado grande. Máximo 5MB');
+        return;
+    }
+    
+    const placeholder = document.querySelector(`[data-foto-placeholder="${itemId}"]`);
+    const preview = document.querySelector(`[data-foto-preview="${itemId}"]`);
+    const removeBtn = document.querySelector(`[data-foto-remove="${itemId}"]`);
+    
+    if (!placeholder || !preview || !removeBtn) return;
+    
+    // Mostrar preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        preview.src = e.target.result;
+        placeholder.style.display = 'none';
+        preview.style.display = 'block';
+        removeBtn.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeArticuloFoto(itemId) {
+    const fileInput = document.querySelector(`[data-foto-input="${itemId}"]`);
+    const placeholder = document.querySelector(`[data-foto-placeholder="${itemId}"]`);
+    const preview = document.querySelector(`[data-foto-preview="${itemId}"]`);
+    const removeBtn = document.querySelector(`[data-foto-remove="${itemId}"]`);
+    
+    if (fileInput) fileInput.value = '';
+    if (placeholder) placeholder.style.display = 'flex';
+    if (preview) {
+        preview.src = '';
+        preview.style.display = 'none';
+    }
+    if (removeBtn) removeBtn.style.display = 'none';
 }
 
 function handleDocumentoEspecialChange(event) {
@@ -1641,20 +1764,38 @@ async function guardarPedidoEspecial() {
     const items = document.querySelectorAll('.pedido-especial-item');
     let hasError = false;
     
-    items.forEach(item => {
+    for (const item of items) {
         const nombreInput = item.querySelector('[data-articulo-nombre]');
+        const cantidadInput = item.querySelector('[data-articulo-cantidad]');
         const precioInput = item.querySelector('[data-articulo-precio]');
         
         if (!nombreInput || !nombreInput.value.trim()) {
             hasError = true;
-            return;
+            continue;
+        }
+        
+        // Obtener el ID del artículo para buscar su foto
+        const itemId = nombreInput.getAttribute('data-articulo-nombre');
+        const fotoInput = document.querySelector(`[data-foto-input="${itemId}"]`);
+        
+        let fotoBase64 = null;
+        if (fotoInput && fotoInput.files.length > 0) {
+            const file = fotoInput.files[0];
+            fotoBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
         
         articulos.push({
             nombre: nombreInput.value.trim(),
-            precio: precioInput && precioInput.value ? parseFloat(precioInput.value) : null
+            cantidad: cantidadInput && cantidadInput.value ? parseInt(cantidadInput.value) : 1,
+            precio: precioInput && precioInput.value ? parseFloat(precioInput.value) : null,
+            foto: fotoBase64
         });
-    });
+    }
     
     if (hasError || articulos.length === 0) {
         showAlert('Debe añadir al menos un artículo con nombre');
