@@ -1827,7 +1827,7 @@ async function guardarPedidoEspecial() {
         obraId: currentObra.id,
         obraNombre: currentObra.nombreComercial || currentObra.nombre,
         estado: 'Nuevo',
-        estadoPago: 'Sin Asignar',
+        estadoPago: 'Pendiente de pago',
         fecha: new Date(),
         createdAt: new Date()
     };
@@ -3952,9 +3952,15 @@ async function loadPedidosContabilidad() {
 
 async function loadPedidosPagadosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
-    const pedidosPagados = todosPedidos.filter(p => 
-        p.transferenciaPDF && p.albaran // Debe tener documento de pago Y factura
-    );
+    // Pedidos normales pagados: deben tener documento de pago Y factura
+    // Pedidos especiales pagados: deben tener estadoPago === 'Pagado' y documentoPago
+    const pedidosPagados = todosPedidos.filter(p => {
+        if (isPedidoEspecial(p)) {
+            return p.estadoPago === 'Pagado' && p.documentoPago;
+        } else {
+            return p.transferenciaPDF && p.albaran;
+        }
+    });
     const container = document.getElementById('pedidos-pagados-contabilidad-list');
     const emptyState = document.getElementById('pedidos-pagados-contabilidad-empty');
         container.innerHTML = '';
@@ -3990,7 +3996,10 @@ async function loadPedidosPagadosContabilidad() {
         });
         
         for (const pedido of pedidosObra) {
-            const card = await createPedidoContabilidadCard(pedido, true);
+            // Usar la función correcta según el tipo de pedido
+            const card = isPedidoEspecial(pedido)
+                ? await createPedidoEspecialContabilidadCard(pedido)
+                : await createPedidoContabilidadCard(pedido, true);
             content.appendChild(card);
         }
         
@@ -4086,7 +4095,10 @@ async function loadCuentasContabilidad() {
 
 async function loadPedidosEspecialesContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
-    const pedidosEspeciales = todosPedidos.filter(isPedidoEspecial);
+    // Solo mostrar pedidos especiales con estado "Pendiente de pago"
+    const pedidosEspeciales = todosPedidos.filter(p => 
+        isPedidoEspecial(p) && (p.estadoPago === 'Pendiente de pago' || !p.estadoPago || p.estadoPago === 'Sin Asignar')
+    );
     
     pedidosEspeciales.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
@@ -4124,7 +4136,7 @@ async function loadPedidosEspecialesContabilidad() {
         });
         
         for (const pedido of pedidosObra) {
-            const card = await createPedidoContabilidadCard(pedido);
+            const card = await createPedidoEspecialContabilidadCard(pedido);
             content.appendChild(card);
         }
         
@@ -4133,6 +4145,218 @@ async function loadPedidosEspecialesContabilidad() {
     
     updateContabilidadTabBadge('especiales', totalCount);
 }
+
+async function createPedidoEspecialContabilidadCard(pedido) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card contab-pedido-card';
+    
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
+    } else if (pedido.createdAt && pedido.createdAt.toDate) {
+        fechaObj = pedido.createdAt.toDate();
+    } else if (pedido.createdAt) {
+        fechaObj = new Date(pedido.createdAt);
+    } else {
+        fechaObj = new Date();
+    }
+    const fechaFormateada = formatDateTime(fechaObj);
+    
+    const estadoEnvio = pedido.estado || 'Sin estado';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    
+    const proveedorNombre = escapeHtml(pedido.proveedorNombre || 'Proveedor desconocido');
+    const proveedorDescripcion = escapeHtml(pedido.proveedorDescripcion || '');
+    const persona = escapeHtml(pedido.persona || 'Sin especificar');
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombre || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
+    
+    const articulos = Array.isArray(pedido.articulos) ? pedido.articulos : [];
+    // Convertir notas de string a array si es necesario
+    let notas = [];
+    if (Array.isArray(pedido.notas)) {
+        notas = pedido.notas;
+    } else if (pedido.notas && typeof pedido.notas === 'string') {
+        notas = [{
+            id: 'nota-original',
+            usuarioId: null,
+            usuarioNombre: pedido.persona || 'Usuario',
+            usuarioTipo: 'Técnico',
+            mensaje: pedido.notas,
+            timestamp: pedido.fecha?.toDate ? pedido.fecha.toDate().toISOString() : (pedido.fecha ? new Date(pedido.fecha).toISOString() : new Date().toISOString())
+        }];
+    }
+    const totalPedido = articulos.reduce((total, articulo) => {
+        const precioItem = Number(articulo.precio) || 0;
+        const cantidadItem = Number(articulo.cantidad) || 1;
+        return total + precioItem * cantidadItem;
+    }, 0);
+    
+    // Generar HTML para artículos
+    const itemsHtml = articulos.length
+        ? articulos.map((articulo, index) => {
+            const nombre = escapeHtml(articulo.nombre || 'Artículo sin nombre');
+            const cantidad = Number(articulo.cantidad) || 1;
+            const precio = formatCurrency(articulo.precio || 0);
+            const subtotal = formatCurrency((articulo.precio || 0) * cantidad);
+            const fotoUrl = articulo.foto ? escapeHtml(articulo.foto) : null;
+            const placeholderId = `foto-placeholder-especial-contab-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">✕</div>`;
+            return `
+                <div class="pedido-item">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info">
+                        <p class="pedido-item-name">${nombre}</p>
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    // Documento de pago (ya viene adjunto al crear el pedido)
+    const tieneDocumentoPago = Boolean(pedido.documentoPago);
+    const puedeConfirmarPago = currentUserType === 'Contabilidad';
+    const documentoPagoContent = tieneDocumentoPago
+        ? `<a href="${escapeHtml(pedido.documentoPago)}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento de pago</a>`
+        : '<span class="doc-placeholder">Sin documento adjunto</span>';
+    
+    const itemsSectionId = `pedido-items-especial-contab-${pedido.id}`;
+    const notasSectionId = `pedido-notas-especial-contab-${pedido.id}`;
+    const notasListId = `pedido-notas-list-especial-contab-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-especial-contab-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-especial-contab-${pedido.id}`;
+    
+    card.innerHTML = `
+        <div class="contab-pedido-header">
+            <div>
+                <p class="pedido-code">Pedido Especial #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                </div>
+            </div>
+        </div>
+        <div class="contab-info-grid">
+            <div class="contab-info-card">
+                <div class="contab-card-title">Datos del pedido</div>
+                <div class="contab-info-row"><span>Proveedor</span><strong>${proveedorNombre}</strong></div>
+                ${proveedorDescripcion ? `<div class="contab-info-row"><span>Descripción</span><strong>${proveedorDescripcion}</strong></div>` : ''}
+                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            <div class="contab-info-card">
+                <div class="contab-card-title">Estado de pago</div>
+                <div class="contab-info-row">
+                    <span>Estado</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+                <div class="contab-info-row">
+                    <span>Documento de pago</span>
+                    <div class="doc-actions">${documentoPagoContent}</div>
+                </div>
+                ${puedeConfirmarPago && tieneDocumentoPago && estadoPago === 'Pendiente de pago' ? `
+                    <div class="contab-info-row" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                        <button class="btn btn-primary" type="button" onclick="confirmarPagoPedidoEspecial('${pedido.id}')" style="width: 100%;">
+                            ✓ Confirmar Pago
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+        <div>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
+                <span class="toggle-text">Ver artículos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
+                <div class="pedido-items-header">
+                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                </div>
+                <div class="pedido-items-list">
+                    ${itemsHtml}
+                </div>
+            </div>
+        </div>
+        <div class="contab-notes-block">
+            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
+                <div class="toggle-label">
+                    <span class="toggle-text">Ver comentarios del pedido</span>
+                    <span class="toggle-extra">( <span id="${notasCountId}">${notas.length}</span> )</span>
+                </div>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
+                <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
+                <div class="contab-note-actions">
+                    <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
+                </div>
+                <div id="${notasListId}" class="pedido-notas-list"></div>
+            </div>
+        </div>
+    `;
+    
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
+    
+    return card;
+}
+
+window.confirmarPagoPedidoEspecial = async function(pedidoId) {
+    const confirmar = await showConfirm('¿Desea confirmar que este pedido especial ha sido pagado?', 'Confirmar Pago');
+    if (!confirmar) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('No se pudo encontrar el pedido seleccionado', 'Error');
+            return;
+        }
+        
+        if (!isPedidoEspecial(pedido)) {
+            await showAlert('Este no es un pedido especial', 'Error');
+            return;
+        }
+        
+        // Cambiar estado de pago a "Pagado"
+        pedido.estadoPago = 'Pagado';
+        
+        await db.update('pedidos', pedido);
+        await showAlert('Pago confirmado correctamente. El pedido se ha movido al histórico.', 'Éxito');
+        
+        // Recargar las pestañas relevantes
+        reloadActiveContabilidadTab();
+        loadPedidosPagadosContabilidad();
+    } catch (error) {
+        console.error('Error al confirmar pago:', error);
+        await showAlert('No se pudo confirmar el pago: ' + error.message, 'Error');
+    }
+};
 
 async function loadFacturasPendientesContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
