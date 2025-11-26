@@ -213,6 +213,10 @@
                 Pedidos Especiales
                 <span class="tab-badge" id="pedidos-especiales-badge">0</span>
             </button>
+            <button class="tab-btn" data-tab="pedidos-especiales-historico-tecnico">
+                Histórico
+                <span class="tab-badge" id="pedidos-especiales-historico-badge">0</span>
+            </button>
         </div>
 
         <div class="pedidos-filters-container">
@@ -287,6 +291,14 @@
                 </div>
                 <div id="pedidos-especiales-empty" class="empty-state" style="display: none;">
                     <p>No tienes pedidos especiales realizados</p>
+                </div>
+            </div>
+            <div id="pedidos-especiales-historico-tecnico" class="tab-content" style="display: none;">
+                <div id="pedidos-especiales-historico-list" class="pedidos-list">
+                    <!-- El histórico de pedidos especiales se cargará dinámicamente -->
+                </div>
+                <div id="pedidos-especiales-historico-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos especiales en el histórico</p>
                 </div>
             </div>
         </main>

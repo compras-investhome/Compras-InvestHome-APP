@@ -1531,6 +1531,8 @@ function switchTabPedidos(tab) {
     // Cargar contenido según la pestaña
     if (tab === 'pedidos-especiales-tecnico') {
         loadPedidosEspecialesTecnico();
+    } else if (tab === 'pedidos-especiales-historico-tecnico') {
+        loadPedidosEspecialesHistoricoTecnico();
     } else if (tab === 'pedidos-normal') {
         populatePedidosFilters().then(() => loadMisPedidos());
     }
@@ -1922,6 +1924,90 @@ async function loadPedidosEspecialesTecnico() {
     } catch (error) {
         console.error('Error al cargar pedidos especiales:', error);
         showAlert('Error al cargar pedidos especiales');
+    }
+}
+
+async function loadPedidosEspecialesHistoricoTecnico() {
+    if (!currentUser || currentUserType !== 'Técnico') {
+        return;
+    }
+    
+    const container = document.getElementById('pedidos-especiales-historico-list');
+    const emptyState = document.getElementById('pedidos-especiales-historico-empty');
+    
+    if (!container || !emptyState) return;
+    
+    try {
+        const todosPedidos = await db.getAll('pedidos');
+        // Solo mostrar pedidos especiales pagados del técnico actual
+        const pedidosEspeciales = todosPedidos.filter(p => {
+            return isPedidoEspecial(p) && 
+                   p.persona === (currentUser.username || currentUser.nombre) &&
+                   p.estadoPago === 'Pagado';
+        });
+        
+        if (pedidosEspeciales.length === 0) {
+            container.innerHTML = '';
+            emptyState.style.display = 'block';
+            // Actualizar badge
+            const badge = document.getElementById('pedidos-especiales-historico-badge');
+            if (badge) {
+                badge.textContent = '0';
+            }
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        container.innerHTML = '';
+        
+        // Ordenar por fecha (más recientes primero)
+        pedidosEspeciales.sort((a, b) => {
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : new Date(0));
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : new Date(0));
+            return fechaB - fechaA;
+        });
+        
+        // Obtener catálogo de obras
+        const obras = await getObrasCatalog(pedidosEspeciales);
+        
+        let totalCount = 0;
+        for (const obra of obras) {
+            const obraId = obra.id || 'sin-obra';
+            const pedidosObra = pedidosEspeciales
+                .filter(p => (p.obraId || 'sin-obra') === obraId)
+                .sort((a, b) => {
+                    const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : new Date(0));
+                    const fechaB = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : new Date(0));
+                    return fechaB - fechaA;
+                });
+            
+            totalCount += pedidosObra.length;
+            
+            const { section, content } = createCascadeSection({
+                prefix: 'pedidos-especiales-historico-obra',
+                uniqueId: obraId,
+                title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
+                count: pedidosObra.length,
+                emptyMessage: 'Sin pedidos especiales en el histórico para esta obra',
+                defaultOpen: true
+            });
+            
+            for (const pedido of pedidosObra) {
+                const card = await createPedidoEspecialCard(pedido);
+                content.appendChild(card);
+            }
+            
+            container.appendChild(section);
+        }
+        
+        // Actualizar badge
+        const badge = document.getElementById('pedidos-especiales-historico-badge');
+        if (badge) {
+            badge.textContent = pedidosEspeciales.length;
+        }
+    } catch (error) {
+        console.error('Error al cargar histórico de pedidos especiales:', error);
+        showAlert('Error al cargar histórico de pedidos especiales');
     }
 }
 
@@ -4168,7 +4254,11 @@ async function createPedidoEspecialContabilidadCard(pedido) {
     
     const estadoEnvio = pedido.estado || 'Sin estado';
     const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
-    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    // Para pedidos especiales, si el estado es 'Sin Asignar' o está vacío, mostrar 'Pendiente de pago'
+    let estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    if (estadoPago === 'Sin Asignar' || !estadoPago) {
+        estadoPago = 'Pendiente de pago';
+    }
     const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
     
     const proveedorNombre = escapeHtml(pedido.proveedorNombre || 'Proveedor desconocido');
@@ -4280,11 +4370,12 @@ async function createPedidoEspecialContabilidadCard(pedido) {
                     <div class="doc-actions">${documentoPagoContent}</div>
                 </div>
                 ${puedeConfirmarPago && tieneDocumentoPago && estadoPago === 'Pendiente de pago' ? `
-                    <div class="contab-info-row" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                        <button class="btn btn-primary" type="button" onclick="confirmarPagoPedidoEspecial('${pedido.id}')" style="width: 100%;">
-                            ✓ Confirmar Pago
-                        </button>
-                    </div>
+                <div class="contab-info-row">
+                    <span></span>
+                    <button class="btn btn-primary" type="button" onclick="confirmarPagoPedidoEspecial('${pedido.id}')" style="width: 100%; margin-top: 0.5rem;">
+                        ✓ Confirmar Pago
+                    </button>
+                </div>
                 ` : ''}
             </div>
         </div>
@@ -4352,6 +4443,12 @@ window.confirmarPagoPedidoEspecial = async function(pedidoId) {
         // Recargar las pestañas relevantes
         reloadActiveContabilidadTab();
         loadPedidosPagadosContabilidad();
+        
+        // Si el técnico está viendo la pestaña de histórico, recargarla también
+        const activeTab = document.querySelector('#pedidos-tabs .tab-btn.active');
+        if (activeTab && activeTab.dataset.tab === 'pedidos-especiales-historico-tecnico') {
+            loadPedidosEspecialesHistoricoTecnico();
+        }
     } catch (error) {
         console.error('Error al confirmar pago:', error);
         await showAlert('No se pudo confirmar el pago: ' + error.message, 'Error');
