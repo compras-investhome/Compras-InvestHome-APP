@@ -414,8 +414,28 @@ function setupEventListeners() {
                 tab === 'facturas-pendientes-contabilidad'
             ) {
                 switchTabContabilidad(tab);
+            } else if (
+                tab === 'seleccionar-pago' ||
+                tab === 'pendientes-pago' ||
+                tab === 'pagados' ||
+                tab === 'pago-cuenta' ||
+                tab === 'facturas-pendientes' ||
+                tab === 'historico-tienda'
+            ) {
+                switchTabTienda(tab);
             } else {
                 switchTab(tab);
+            }
+        });
+    });
+    
+    // Sub-pestañas de tienda
+    document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const subTab = e.currentTarget.dataset.subTab;
+            const mainTab = e.currentTarget.closest('.tab-content')?.id;
+            if (mainTab && subTab) {
+                switchSubTabTienda(mainTab, subTab);
             }
         });
     });
@@ -2095,7 +2115,7 @@ async function createPedidoEspecialCard(pedido) {
                     <button class="emoji-btn danger" type="button" aria-label="Eliminar artículo" onclick="eliminarArticuloEspecial('${pedido.id}', ${index})" title="Eliminar artículo">🗑️</button>
                 </div>
             ` : '';
-            return `
+    return `
                 <div class="pedido-item">
                     ${fotoHtml}
                     ${fotoPlaceholder}
@@ -2126,14 +2146,14 @@ async function createPedidoEspecialCard(pedido) {
     
     card.innerHTML = `
         <div class="contab-pedido-header">
-            <div>
+                <div>
                 <p class="pedido-code">Pedido Especial #${escapeHtml(pedido.id)}</p>
                 <div class="contab-estado-envio">
                     <span>Estado de envío:</span>
                     <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
                 </div>
             </div>
-        </div>
+            </div>
         <div class="contab-info-grid">
             <div class="contab-info-card">
                 <div class="contab-card-title">Datos del pedido</div>
@@ -2573,7 +2593,83 @@ async function showGestionTienda() {
     }
     
     showView('gestion-tienda');
-    switchTab('en-curso');
+    switchTabTienda('seleccionar-pago');
+}
+
+function switchTabTienda(tab) {
+    // Actualizar pestañas principales
+    document.querySelectorAll('#view-gestion-tienda .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tab) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Ocultar todos los contenidos de pestañas
+    document.querySelectorAll('#view-gestion-tienda .tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Mostrar el contenido de la pestaña seleccionada
+    const tabContent = document.getElementById(tab);
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
+    
+    // Cargar contenido según la pestaña
+    if (tab === 'seleccionar-pago') {
+        loadPedidosSeleccionarPago();
+    } else if (tab === 'pendientes-pago') {
+        loadPedidosPendientesPago();
+    } else if (tab === 'pagados') {
+        switchSubTabTienda('pagados', 'pagados-nuevo');
+    } else if (tab === 'pago-cuenta') {
+        switchSubTabTienda('pago-cuenta', 'pago-cuenta-nuevo');
+    } else if (tab === 'facturas-pendientes') {
+        loadPedidosFacturasPendientesTienda();
+    } else if (tab === 'historico-tienda') {
+        loadPedidosHistoricoTienda();
+    }
+}
+
+function switchSubTabTienda(mainTab, subTab) {
+    // Ocultar todas las sub-pestañas del grupo
+    const mainTabContent = document.getElementById(mainTab);
+    if (!mainTabContent) return;
+    
+    mainTabContent.querySelectorAll('.sub-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    mainTabContent.querySelectorAll('.sub-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Activar la sub-pestaña seleccionada
+    const subTabBtn = mainTabContent.querySelector(`[data-sub-tab="${subTab}"]`);
+    const subTabContent = document.getElementById(subTab);
+    
+    if (subTabBtn) subTabBtn.classList.add('active');
+    if (subTabContent) subTabContent.classList.add('active');
+    
+    // Cargar contenido según la sub-pestaña
+    if (subTab === 'pagados-nuevo') {
+        loadPedidosPagadosTienda('Nuevo');
+    } else if (subTab === 'pagados-preparando') {
+        loadPedidosPagadosTienda('Preparando');
+    } else if (subTab === 'pagados-en-ruta') {
+        loadPedidosPagadosTienda('En Ruta');
+    } else if (subTab === 'pagados-entregado') {
+        loadPedidosPagadosTienda('Entregado');
+    } else if (subTab === 'pago-cuenta-nuevo') {
+        loadPedidosPagoCuentaTienda('Nuevo');
+    } else if (subTab === 'pago-cuenta-preparando') {
+        loadPedidosPagoCuentaTienda('Preparando');
+    } else if (subTab === 'pago-cuenta-en-ruta') {
+        loadPedidosPagoCuentaTienda('En Ruta');
+    } else if (subTab === 'pago-cuenta-entregado') {
+        loadPedidosPagoCuentaTienda('Entregado');
+    }
 }
 
 function switchTab(tab) {
@@ -2588,15 +2684,269 @@ function switchTab(tab) {
         content.classList.remove('active');
     });
     
+    // Solo manejar pestañas que no sean de tienda (para mantener compatibilidad con otras vistas)
     if (tab === 'en-curso') {
-        document.getElementById('pedidos-en-curso').classList.add('active');
+        document.getElementById('pedidos-en-curso')?.classList.add('active');
         loadPedidosEnCurso();
     } else if (tab === 'cerrados') {
-        document.getElementById('pedidos-cerrados').classList.add('active');
+        document.getElementById('pedidos-cerrados')?.classList.add('active');
         loadPedidosCerrados();
     } else if (tab === 'solicitudes') {
-        document.getElementById('solicitudes').classList.add('active');
+        document.getElementById('solicitudes')?.classList.add('active');
         loadSolicitudesAnulacion();
+    }
+}
+
+// ========== FUNCIONES DE CARGA DE PEDIDOS PARA TIENDA ==========
+
+// Pestaña 1: Seleccionar Pago
+async function loadPedidosSeleccionarPago() {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    
+    // Pedidos nuevos que no tienen método de pago seleccionado ni pedido real adjunto
+    const pedidosSeleccionar = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
+        // Debe estar sin asignar método de pago y sin pedido real
+        return estadoPago === 'Sin Asignar' && !tienePedidoReal && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    
+    const container = document.getElementById('seleccionar-pago-list');
+    const emptyState = document.getElementById('seleccionar-pago-empty');
+    
+    updateTabBadge('seleccionar-pago', pedidosSeleccionar.length);
+    
+    if (pedidosSeleccionar.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    for (const pedido of pedidosSeleccionar) {
+        const card = await createPedidoTiendaCard(pedido, 'seleccionar-pago');
+        container.appendChild(card);
+    }
+}
+
+// Pestaña 2: Pendientes de Pago
+async function loadPedidosPendientesPago() {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    
+    // Pedidos con estadoPago = "Pendiente de pago" y pedido real adjunto
+    const pedidosPendientes = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
+        return estadoPago === 'Pendiente de pago' && tienePedidoReal && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    
+    const container = document.getElementById('pendientes-pago-list');
+    const emptyState = document.getElementById('pendientes-pago-empty');
+    
+    updateTabBadge('pendientes-pago', pedidosPendientes.length);
+    
+    if (pedidosPendientes.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    for (const pedido of pedidosPendientes) {
+        const card = await createPedidoTiendaCard(pedido, 'pendientes-pago');
+        container.appendChild(card);
+    }
+}
+
+// Pestaña 3: Pagados (con sub-pestañas)
+async function loadPedidosPagadosTienda(estadoLogistico) {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    
+    // Pedidos con estadoPago = "Pagado" (tiene transferenciaPDF)
+    const pedidosPagados = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tieneTransferencia = Boolean(p.transferenciaPDF);
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        return (estadoPago === 'Pagado' || tieneTransferencia) && 
+               estadoLog === estadoLogistico && 
+               p.estado !== 'Completado' && 
+               !p.esPedidoEspecial;
+    });
+    
+    // Normalizar nombre del estado para IDs
+    const estadoNormalizado = estadoLogistico.toLowerCase().replace(/\s+/g, '-');
+    const containerId = `pagados-${estadoNormalizado}-list`;
+    const emptyStateId = `pagados-${estadoNormalizado}-empty`;
+    const container = document.getElementById(containerId);
+    const emptyState = document.getElementById(emptyStateId);
+    
+    if (!container || !emptyState) return;
+    
+    // Actualizar badge total de pagados
+    const todosPagados = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tieneTransferencia = Boolean(p.transferenciaPDF);
+        return (estadoPago === 'Pagado' || tieneTransferencia) && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('pagados', todosPagados.length);
+    
+    if (pedidosPagados.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    for (const pedido of pedidosPagados) {
+        const card = await createPedidoTiendaCard(pedido, 'pagados');
+        container.appendChild(card);
+    }
+}
+
+// Pestaña 4: Pago A Cuenta (con sub-pestañas)
+async function loadPedidosPagoCuentaTienda(estadoLogistico) {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    
+    // Pedidos con estadoPago = "Pago A cuenta"
+    const pedidosCuenta = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        return estadoPago === 'Pago A cuenta' && 
+               estadoLog === estadoLogistico && 
+               p.estado !== 'Completado' && 
+               !p.esPedidoEspecial;
+    });
+    
+    // Normalizar nombre del estado para IDs
+    const estadoNormalizado = estadoLogistico.toLowerCase().replace(/\s+/g, '-');
+    const containerId = `pago-cuenta-${estadoNormalizado}-list`;
+    const emptyStateId = `pago-cuenta-${estadoNormalizado}-empty`;
+    const container = document.getElementById(containerId);
+    const emptyState = document.getElementById(emptyStateId);
+    
+    if (!container || !emptyState) return;
+    
+    // Actualizar badge total de pago a cuenta
+    const todosCuenta = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        return estadoPago === 'Pago A cuenta' && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('pago-cuenta', todosCuenta.length);
+    
+    if (pedidosCuenta.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    for (const pedido of pedidosCuenta) {
+        const card = await createPedidoTiendaCard(pedido, 'pago-cuenta');
+        container.appendChild(card);
+    }
+}
+
+// Pestaña 5: Facturas Pendientes
+async function loadPedidosFacturasPendientesTienda() {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    
+    // Pedidos que deben ir a facturas pendientes:
+    // 1. Camino 1: estadoPago = "Pagado" + estadoLogistico = "Entregado" (sin factura)
+    // 2. Camino 2: estadoPago = "Pagado" (tiene transferencia) + estadoLogistico = "Entregado" (sin factura)
+    const pedidosFacturas = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tieneTransferencia = Boolean(p.transferenciaPDF);
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tieneFactura = Boolean(p.albaran);
+        
+        const esPagado = estadoPago === 'Pagado' || tieneTransferencia;
+        const esEntregado = estadoLog === 'Entregado';
+        
+        return esPagado && esEntregado && !tieneFactura && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    
+    const container = document.getElementById('facturas-pendientes-list');
+    const emptyState = document.getElementById('facturas-pendientes-empty');
+    
+    updateTabBadge('facturas-pendientes', pedidosFacturas.length);
+    
+    if (pedidosFacturas.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    for (const pedido of pedidosFacturas) {
+        const card = await createPedidoTiendaCard(pedido, 'facturas-pendientes');
+        container.appendChild(card);
+    }
+}
+
+// Pestaña 6: Histórico
+async function loadPedidosHistoricoTienda() {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    
+    // Pedidos completados (con factura adjunta)
+    const pedidosHistorico = pedidos.filter(p => {
+        const tieneFactura = Boolean(p.albaran);
+        return tieneFactura && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    
+    const container = document.getElementById('historico-tienda-list');
+    const emptyState = document.getElementById('historico-tienda-empty');
+    
+    updateTabBadge('historico-tienda', pedidosHistorico.length);
+    
+    if (pedidosHistorico.length === 0) {
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    container.innerHTML = '';
+    
+    for (const pedido of pedidosHistorico) {
+        const card = await createPedidoTiendaCard(pedido, 'historico');
+        container.appendChild(card);
+    }
+}
+
+// Función auxiliar para actualizar badges
+function updateTabBadge(tabName, count) {
+    const badge = document.getElementById(`tab-count-${tabName}`);
+    if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'inline-flex' : 'none';
     }
 }
 
@@ -3060,6 +3410,342 @@ window.rechazarSolicitudModificacion = async function(solicitudId) {
     } catch (error) {
         console.error('Error al rechazar solicitud:', error);
         await showAlert('Error al rechazar solicitud: ' + error.message, 'Error');
+    }
+};
+
+// Función para crear cards de pedidos en la vista de tienda según la pestaña
+async function createPedidoTiendaCard(pedido, tabContext) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card';
+    
+    const tienda = await db.get('tiendas', pedido.tiendaId);
+    
+    // Formatear fecha
+    let fecha;
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
+    } else if (pedido.createdAt && pedido.createdAt.toDate) {
+        fechaObj = pedido.createdAt.toDate();
+    } else if (pedido.createdAt) {
+        fechaObj = new Date(pedido.createdAt);
+    } else {
+        fechaObj = new Date();
+    }
+    
+    const dia = fechaObj.getDate().toString().padStart(2, '0');
+    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
+    const año = fechaObj.getFullYear();
+    fecha = `${dia}/${mes}/${año}`;
+    
+    // Información de la obra
+    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraDireccion = pedido.obraDireccionGoogleMaps || '';
+    const obraEncargado = pedido.obraEncargado || '';
+    const obraTelefono = pedido.obraTelefono || '';
+    
+    const obraNombreHtml = obraDireccion 
+        ? `<a href="${obraDireccion}" target="_blank" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">${obraNombre}</a>`
+        : obraNombre;
+    
+    // Estado de pago actual
+    const estadoPago = pedido.estadoPago || 'Sin Asignar';
+    const tieneTransferencia = Boolean(pedido.transferenciaPDF);
+    const estadoLogistico = pedido.estadoLogistico || 'Nuevo';
+    
+    // Generar contenido según el contexto de la pestaña
+    let estadoPagoHtml = '';
+    let accionesHtml = '';
+    let estadoLogisticoHtml = '';
+    
+    if (tabContext === 'seleccionar-pago') {
+        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago y adjuntar pedido real
+        estadoPagoHtml = `
+            <div style="margin-top: 0.5rem;">
+                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Método de Pago:</label>
+                <select class="estado-pago-select" onchange="updateEstadoPagoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
+                    <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
+                    ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
+                </select>
+            </div>
+        `;
+        
+        accionesHtml = `
+            <div style="margin-top: 0.5rem;">
+                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Pedido Real:</label>
+                ${pedido.pedidoSistemaPDF ? `
+                    <a href="${pedido.pedidoSistemaPDF}" target="_blank" class="doc-link">📄 Ver pedido real</a>
+                ` : `
+                    <input type="file" id="pedido-real-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" style="display: none;" onchange="uploadPedidoRealTienda('${pedido.id}', this)">
+                    <button class="btn btn-secondary" onclick="document.getElementById('pedido-real-${pedido.id}').click()" style="width: 100%; margin-top: 0.25rem;">
+                        Adjuntar Pedido Real
+                    </button>
+                `}
+            </div>
+        `;
+    } else if (tabContext === 'pendientes-pago') {
+        // Pestaña 2: Pendientes de Pago - Solo visualización
+        estadoPagoHtml = `
+            <div style="margin-top: 0.5rem;">
+                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #ef4444; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Pendiente de pago</span>
+            </div>
+        `;
+    } else if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
+        // Pestaña 3 y 4: Pagados / Pago A Cuenta - Desplegable de estado logístico
+        const estadoPagoLabel = tabContext === 'pagados' ? 'Pagado' : 'Pago A cuenta';
+        const estadoPagoColor = tabContext === 'pagados' ? '#10b981' : '#f59e0b';
+        
+        estadoPagoHtml = `
+            <div style="margin-top: 0.5rem;">
+                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: ${estadoPagoColor}; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">${estadoPagoLabel}</span>
+                ${tieneTransferencia ? `
+                    <a href="${pedido.transferenciaPDF}" target="_blank" class="doc-link">📄 Ver transferencia</a>
+                ` : ''}
+            </div>
+        `;
+        
+        estadoLogisticoHtml = `
+            <div style="margin-top: 0.5rem;">
+                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Estado Logístico:</label>
+                <select class="estado-logistico-select" onchange="updateEstadoLogisticoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="Nuevo" ${estadoLogistico === 'Nuevo' ? 'selected' : ''}>Nuevo</option>
+                    <option value="Preparando" ${estadoLogistico === 'Preparando' ? 'selected' : ''}>Preparando</option>
+                    <option value="En Ruta" ${estadoLogistico === 'En Ruta' ? 'selected' : ''}>En Ruta</option>
+                    <option value="Entregado" ${estadoLogistico === 'Entregado' ? 'selected' : ''}>Entregado</option>
+                </select>
+            </div>
+        `;
+    } else if (tabContext === 'facturas-pendientes') {
+        // Pestaña 5: Facturas Pendientes - Permitir adjuntar factura
+        estadoPagoHtml = `
+            <div style="margin-top: 0.5rem;">
+                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
+                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Entregado</span>
+            </div>
+        `;
+        
+        accionesHtml = `
+            <div style="margin-top: 0.5rem;">
+                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Factura:</label>
+                ${pedido.albaran ? `
+                    <a href="${pedido.albaran}" target="_blank" class="doc-link">📄 Ver factura</a>
+                ` : `
+                    <input type="file" id="factura-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" style="display: none;" onchange="uploadFacturaTienda('${pedido.id}', this)">
+                    <button class="btn btn-primary" onclick="document.getElementById('factura-${pedido.id}').click()" style="width: 100%; margin-top: 0.25rem;">
+                        Adjuntar Factura
+                    </button>
+                `}
+            </div>
+        `;
+    } else if (tabContext === 'historico') {
+        // Pestaña 6: Histórico - Solo visualización
+        estadoPagoHtml = `
+            <div style="margin-top: 0.5rem;">
+                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
+                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Entregado</span>
+                ${pedido.albaran ? `<a href="${pedido.albaran}" target="_blank" class="doc-link">📄 Ver factura</a>` : ''}
+            </div>
+        `;
+    }
+    
+    // Generar HTML de items
+    const itemsHtml = pedido.items.map((item, index) => {
+        const foto = item.foto ? `<img src="${item.foto}" alt="${item.nombre}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; margin-right: 0.75rem;" onerror="this.style.display='none'">` : '';
+        const designacion = item.designacion ? `<strong>${item.designacion}</strong>` : '';
+        const precioUnitario = item.precio || 0;
+        const cantidad = item.cantidad || 0;
+        const precioTotalLinea = precioUnitario * cantidad;
+        
+        return `
+            <div class="pedido-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem;">
+                ${foto}
+                <div style="flex: 1;">
+                    ${designacion ? `<div style="font-weight: 600; margin-bottom: 0.25rem;">${designacion}</div>` : ''}
+                    <div style="font-size: 0.875rem; color: var(--text-primary);">${item.nombre}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        Cantidad: ${cantidad} | Precio unitario: ${formatCurrency(precioUnitario)} | Total: ${formatCurrency(precioTotalLinea)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    card.innerHTML = `
+        <div class="pedido-gestion-header">
+            <div class="pedido-gestion-info">
+                <h4>Pedido #${pedido.id}</h4>
+                <p><strong>Usuario:</strong> ${pedido.persona}</p>
+                <p><strong>Obra:</strong> ${obraNombreHtml}</p>
+                ${obraDireccion ? `<p style="font-size: 0.75rem; color: var(--text-secondary);"><a href="${obraDireccion}" target="_blank" style="color: var(--primary-color);">📍 Ver en Google Maps</a></p>` : ''}
+                ${obraEncargado ? `<p style="font-size: 0.875rem;"><strong>Encargado:</strong> ${obraEncargado}${obraTelefono ? ` | Tel: ${obraTelefono}` : ''}</p>` : ''}
+                <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
+                ${estadoPagoHtml}
+                ${estadoLogisticoHtml}
+                ${accionesHtml}
+            </div>
+        </div>
+        <div class="pedido-items">
+            ${itemsHtml}
+        </div>
+    `;
+    
+    return card;
+}
+
+// ========== FUNCIONES DE GESTIÓN DE PEDIDOS PARA TIENDA ==========
+
+// Actualizar estado de pago desde la pestaña "Seleccionar Pago"
+window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        pedido.estadoPago = nuevoEstado;
+        
+        // Si se marca como "Pago A cuenta", inicializar estado logístico
+        if (nuevoEstado === 'Pago A cuenta' && !pedido.estadoLogistico) {
+            pedido.estadoLogistico = 'Nuevo';
+        }
+        
+        await db.update('pedidos', pedido);
+        
+        // Recargar pestaña actual
+        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
+        if (activeTab === 'seleccionar-pago') {
+            loadPedidosSeleccionarPago();
+        }
+        
+    } catch (error) {
+        console.error('Error al actualizar estado de pago:', error);
+        await showAlert('Error al actualizar estado de pago: ' + error.message, 'Error');
+    }
+};
+
+// Subir pedido real desde la pestaña "Seleccionar Pago"
+window.uploadPedidoRealTienda = async function(pedidoId, input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        // Leer archivo como base64
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const base64 = e.target.result;
+                pedido.pedidoSistemaPDF = base64;
+                await db.update('pedidos', pedido);
+                
+                await showAlert('Pedido real adjuntado correctamente', 'Éxito');
+                
+                // Recargar pestaña actual
+                loadPedidosSeleccionarPago();
+            } catch (error) {
+                console.error('Error al guardar pedido real:', error);
+                await showAlert('Error al guardar pedido real: ' + error.message, 'Error');
+            }
+        };
+        reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Error al leer archivo:', error);
+        await showAlert('Error al leer archivo: ' + error.message, 'Error');
+    }
+};
+
+// Actualizar estado logístico desde "Pagados" o "Pago A Cuenta"
+window.updateEstadoLogisticoTienda = async function(pedidoId, nuevoEstadoLogistico) {
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        pedido.estadoLogistico = nuevoEstadoLogistico;
+        await db.update('pedidos', pedido);
+        
+        // Verificar si debe moverse a "Facturas Pendientes"
+        const estadoPago = pedido.estadoPago || 'Sin Asignar';
+        const tieneTransferencia = Boolean(pedido.transferenciaPDF);
+        const esPagado = estadoPago === 'Pagado' || tieneTransferencia;
+        const esEntregado = nuevoEstadoLogistico === 'Entregado';
+        const tieneFactura = Boolean(pedido.albaran);
+        
+        // Camino 1: Pagado + Entregado -> Facturas Pendientes
+        // Camino 2: Pago A cuenta + Entregado + tiene transferencia -> Facturas Pendientes
+        if (esEntregado && !tieneFactura) {
+            if (esPagado || (estadoPago === 'Pago A cuenta' && tieneTransferencia)) {
+                // El pedido se moverá automáticamente a Facturas Pendientes en la próxima carga
+                await showAlert('Estado logístico actualizado. El pedido se moverá a "Facturas Pendientes" si cumple las condiciones.', 'Éxito');
+            }
+        }
+        
+        // Recargar la pestaña/sub-pestaña actual
+        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
+        if (activeTab === 'pagados') {
+            const activeSubTab = document.querySelector('#pagados .sub-tab-btn.active')?.dataset.subTab;
+            if (activeSubTab) {
+                const estadoLog = activeSubTab.replace('pagados-', '').replace('-', ' ');
+                loadPedidosPagadosTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
+            }
+        } else if (activeTab === 'pago-cuenta') {
+            const activeSubTab = document.querySelector('#pago-cuenta .sub-tab-btn.active')?.dataset.subTab;
+            if (activeSubTab) {
+                const estadoLog = activeSubTab.replace('pago-cuenta-', '').replace('-', ' ');
+                loadPedidosPagoCuentaTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error al actualizar estado logístico:', error);
+        await showAlert('Error al actualizar estado logístico: ' + error.message, 'Error');
+    }
+};
+
+// Subir factura desde "Facturas Pendientes"
+window.uploadFacturaTienda = async function(pedidoId, input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        // Leer archivo como base64
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const base64 = e.target.result;
+                pedido.albaran = base64;
+                await db.update('pedidos', pedido);
+                
+                await showAlert('Factura adjuntada. El pedido se ha movido al "Histórico".', 'Éxito');
+                
+                // Recargar pestaña actual
+                loadPedidosFacturasPendientesTienda();
+            } catch (error) {
+                console.error('Error al guardar factura:', error);
+                await showAlert('Error al guardar factura: ' + error.message, 'Error');
+            }
+        };
+        reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Error al leer archivo:', error);
+        await showAlert('Error al leer archivo: ' + error.message, 'Error');
     }
 };
 
