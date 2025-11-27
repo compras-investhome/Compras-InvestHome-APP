@@ -3812,6 +3812,27 @@ async function createPedidoTiendaCard(pedido, tabContext) {
 
 // ========== FUNCIONES DE GESTIÓN DE PEDIDOS PARA TIENDA ==========
 
+// Función auxiliar para recargar todas las pestañas relevantes cuando cambia un estado
+function recargarPestañasTiendaRelevantes() {
+    // Recargar todas las pestañas principales que pueden verse afectadas
+    loadPedidosSeleccionarPago();
+    loadPedidosPendientesPago();
+    loadPedidosFacturasPendientesTienda();
+    loadPedidosHistoricoTienda();
+    
+    // Recargar todas las sub-pestañas de Pagados
+    loadPedidosPagadosTienda('Nuevo');
+    loadPedidosPagadosTienda('Preparando');
+    loadPedidosPagadosTienda('En Ruta');
+    loadPedidosPagadosTienda('Entregado');
+    
+    // Recargar todas las sub-pestañas de Pago A Cuenta
+    loadPedidosPagoCuentaTienda('Nuevo');
+    loadPedidosPagoCuentaTienda('Preparando');
+    loadPedidosPagoCuentaTienda('En Ruta');
+    loadPedidosPagoCuentaTienda('Entregado');
+}
+
 // Actualizar estado de pago desde la pestaña "Seleccionar Pago"
 window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
     try {
@@ -3821,6 +3842,7 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
             return;
         }
         
+        const estadoAnterior = pedido.estadoPago || 'Sin Asignar';
         pedido.estadoPago = nuevoEstado;
         
         // Si se marca como "Pago A cuenta", inicializar estado logístico
@@ -3830,11 +3852,8 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
         
         await db.update('pedidos', pedido);
         
-        // Recargar pestaña actual
-        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
-        if (activeTab === 'seleccionar-pago') {
-            loadPedidosSeleccionarPago();
-        }
+        // Recargar todas las pestañas relevantes para que el pedido se mueva correctamente
+        recargarPestañasTiendaRelevantes();
         
     } catch (error) {
         console.error('Error al actualizar estado de pago:', error);
@@ -3902,8 +3921,8 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
                 
                 await showAlert('Pedido real adjuntado correctamente', 'Éxito');
                 
-                // Recargar pestaña actual
-                loadPedidosSeleccionarPago();
+                // Recargar pestañas relevantes: el pedido puede moverse de "Seleccionar Pago" a "Pendientes de Pago"
+                recargarPestañasTiendaRelevantes();
             } catch (error) {
                 console.error('Error al guardar pedido real:', error);
                 await showAlert('Error al guardar pedido real: ' + error.message, 'Error');
@@ -3928,25 +3947,8 @@ window.updateEstadoPedidoTienda = async function(pedidoId, nuevoEstado) {
         pedido.estado = nuevoEstado;
         await db.update('pedidos', pedido);
         
-        // Recargar la pestaña/sub-pestaña actual
-        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
-        if (activeTab === 'pagados') {
-            const activeSubTab = document.querySelector('#pagados .sub-tab-btn.active')?.dataset.subTab;
-            if (activeSubTab) {
-                const estadoLog = activeSubTab.replace('pagados-', '').replace('-', ' ');
-                loadPedidosPagadosTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
-            } else {
-                loadPedidosPagadosTienda('Nuevo');
-            }
-        } else if (activeTab === 'pago-cuenta') {
-            const activeSubTab = document.querySelector('#pago-cuenta .sub-tab-btn.active')?.dataset.subTab;
-            if (activeSubTab) {
-                const estadoLog = activeSubTab.replace('pago-cuenta-', '').replace('-', ' ');
-                loadPedidosPagoCuentaTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
-            } else {
-                loadPedidosPagoCuentaTienda('Nuevo');
-            }
-        }
+        // Recargar todas las pestañas relevantes para que el pedido se mueva correctamente
+        recargarPestañasTiendaRelevantes();
         
     } catch (error) {
         console.error('Error al actualizar estado del pedido:', error);
@@ -3962,6 +3964,7 @@ window.updateEstadoLogisticoTienda = async function(pedidoId, nuevoEstadoLogisti
             return;
         }
         
+        const estadoAnterior = pedido.estadoLogistico || 'Nuevo';
         pedido.estadoLogistico = nuevoEstadoLogistico;
         await db.update('pedidos', pedido);
         
@@ -3976,26 +3979,12 @@ window.updateEstadoLogisticoTienda = async function(pedidoId, nuevoEstadoLogisti
         // Camino 2: Pago A cuenta + Entregado + tiene transferencia -> Facturas Pendientes
         if (esEntregado && !tieneFactura) {
             if (esPagado || (estadoPago === 'Pago A cuenta' && tieneTransferencia)) {
-                // El pedido se moverá automáticamente a Facturas Pendientes en la próxima carga
-                await showAlert('Estado logístico actualizado. El pedido se moverá a "Facturas Pendientes" si cumple las condiciones.', 'Éxito');
+                // El pedido se moverá automáticamente a Facturas Pendientes
             }
         }
         
-        // Recargar la pestaña/sub-pestaña actual
-        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
-        if (activeTab === 'pagados') {
-            const activeSubTab = document.querySelector('#pagados .sub-tab-btn.active')?.dataset.subTab;
-            if (activeSubTab) {
-                const estadoLog = activeSubTab.replace('pagados-', '').replace('-', ' ');
-                loadPedidosPagadosTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
-            }
-        } else if (activeTab === 'pago-cuenta') {
-            const activeSubTab = document.querySelector('#pago-cuenta .sub-tab-btn.active')?.dataset.subTab;
-            if (activeSubTab) {
-                const estadoLog = activeSubTab.replace('pago-cuenta-', '').replace('-', ' ');
-                loadPedidosPagoCuentaTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
-            }
-        }
+        // Recargar todas las pestañas relevantes: Pagados, Pago A Cuenta y Facturas Pendientes
+        recargarPestañasTiendaRelevantes();
         
     } catch (error) {
         console.error('Error al actualizar estado logístico:', error);
@@ -4025,8 +4014,8 @@ window.uploadFacturaTienda = async function(pedidoId, input) {
                 
                 await showAlert('Factura adjuntada. El pedido se ha movido al "Histórico".', 'Éxito');
                 
-                // Recargar pestaña actual
-                loadPedidosFacturasPendientesTienda();
+                // Recargar pestañas relevantes: Facturas Pendientes e Histórico
+                recargarPestañasTiendaRelevantes();
             } catch (error) {
                 console.error('Error al guardar factura:', error);
                 await showAlert('Error al guardar factura: ' + error.message, 'Error');
