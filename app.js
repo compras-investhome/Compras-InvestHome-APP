@@ -3527,22 +3527,30 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     
     if (tabContext === 'seleccionar-pago') {
         // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago con estilo pill
-        const getPillClass = (estado) => {
-            if (estado === 'Pendiente de pago') return 'estado-pago-pendiente';
-            if (estado === 'Pago A cuenta') return 'estado-pago-cuenta';
-            if (estado === 'Pagado') return 'estado-pago-pagado';
-            return 'estado-pago-pendiente'; // Por defecto (incluye "Sin Asignar")
+        const getPillColor = (estado) => {
+            if (estado === 'Pendiente de pago') return '#ef4444';
+            if (estado === 'Pago A cuenta') return '#3b82f6';
+            if (estado === 'Pagado') return '#10b981';
+            return '#9ca3af'; // "Sin Asignar" - blanco-grisáceo
         };
-        const currentPillClass = getPillClass(estadoPago);
-        const pillColor = estadoPago === 'Pendiente de pago' ? '#ef4444' : 
-                         estadoPago === 'Pago A cuenta' ? '#3b82f6' : 
-                         estadoPago === 'Pagado' ? '#10b981' : '#ef4444'; // "Sin Asignar" usa color rojo
+        const getTextColor = (estado) => {
+            if (estado === 'Sin Asignar') return '#1f2937'; // Texto oscuro para fondo claro
+            return 'white'; // Texto blanco para fondos de color
+        };
+        const getArrowColor = (estado) => {
+            if (estado === 'Sin Asignar') return '#1f2937'; // Flecha oscura para fondo claro
+            return 'white'; // Flecha blanca para fondos de color
+        };
+        
+        const pillColor = getPillColor(estadoPago);
+        const textColor = getTextColor(estadoPago);
+        const arrowColor = getArrowColor(estadoPago);
         
         const selectId = `estado-pago-select-${pedido.id}`;
         estadoPagoContent = `
-            <select id="${selectId}" class="estado-pago-select estado-pago-pill ${currentPillClass}" 
+            <select id="${selectId}" class="estado-pago-select" 
                     onchange="updateEstadoPagoTiendaSelect('${pedido.id}', this.value, '${selectId}')" 
-                    style="padding: 0.35rem 2rem 0.35rem 0.85rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: white; border: none; cursor: pointer; appearance: none; background-color: ${pillColor}; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
+                    style="padding: 0.35rem 2rem 0.35rem 0.85rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: ${textColor}; border: none; cursor: pointer; appearance: none; background-color: ${pillColor}; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
                 <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
                 <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
                 ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
@@ -3586,6 +3594,12 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        // Factura: mostrar si existe, pero no permitir adjuntar aquí (solo en facturas-pendientes)
+        const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+        facturaContent = facturaLink
+            ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
+            : '<span class="doc-placeholder">Sin factura adjunta</span>';
     } else if (tabContext === 'facturas-pendientes') {
         // Pestaña 5: Facturas Pendientes
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -3604,7 +3618,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : `<span class="doc-placeholder">Sin factura adjunta</span><button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()">➕</button>`;
+            : `<span class="doc-placeholder">Sin factura adjunta</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -3690,13 +3704,30 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         `;
     }
     
+    // Estado de envío: desplegable en pagados/pago-cuenta, pill estático en otros casos
+    const estadosEnvio = ['Nuevo', 'Preparando', 'Preparado', 'En ruta', 'Entregado', 'Completado'];
+    let estadoEnvioHtml = '';
+    if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
+        // Desplegable para estado de envío
+        estadoEnvioHtml = `
+            <select class="estado-select" onchange="updateEstadoPedidoTienda('${pedido.id}', this.value)" style="min-width: 150px;">
+                ${estadosEnvio.map(estado => `
+                    <option value="${estado}" ${estadoEnvio === estado ? 'selected' : ''}>${estado}</option>
+                `).join('')}
+            </select>
+        `;
+    } else {
+        // Pill estático
+        estadoEnvioHtml = `<span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>`;
+    }
+    
     card.innerHTML = `
         <div class="contab-pedido-header">
             <div>
                 <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
                 <div class="contab-estado-envio">
                     <span>Estado de envío:</span>
-                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                    ${estadoEnvioHtml}
                 </div>
             </div>
             ${headerRightHtml}
@@ -3727,10 +3758,10 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     <span>Documento de pago</span>
                     <div class="doc-actions">${documentoPagoContent || '<span class="doc-placeholder">Sin documento adjunto</span>'}</div>
                 </div>
-                ${(tabContext === 'facturas-pendientes' || tabContext === 'historico') ? `
+                ${(tabContext === 'pagados' || tabContext === 'pago-cuenta' || tabContext === 'facturas-pendientes' || tabContext === 'historico') ? `
                 <div class="contab-info-row">
                     <span>Factura</span>
-                    <div class="doc-actions">${facturaContent}</div>
+                    <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura adjunta</span>'}</div>
                 </div>
                 ` : ''}
                 ${tabContext === 'seleccionar-pago' ? `<input type="file" id="${pedidoRealInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)">` : ''}
@@ -3816,26 +3847,28 @@ window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, sele
         // Actualizar el color del select según el estado
         const select = document.getElementById(selectId);
         if (select) {
-            let pillClass = 'estado-pago-pendiente';
-            let bgColor = '#ef4444';
+            let bgColor = '#9ca3af'; // Por defecto: blanco-grisáceo para "Sin Asignar"
+            let textColor = '#1f2937'; // Texto oscuro para fondo claro
+            let arrowColor = '#1f2937'; // Flecha oscura para fondo claro
             
             if (nuevoEstado === 'Pendiente de pago') {
-                pillClass = 'estado-pago-pendiente';
-                bgColor = '#ef4444';
+                bgColor = '#ef4444'; // Rojo
+                textColor = 'white';
+                arrowColor = 'white';
             } else if (nuevoEstado === 'Pago A cuenta') {
-                pillClass = 'estado-pago-cuenta';
-                bgColor = '#3b82f6';
+                bgColor = '#3b82f6'; // Azul
+                textColor = 'white';
+                arrowColor = 'white';
             } else if (nuevoEstado === 'Pagado') {
-                pillClass = 'estado-pago-pagado';
-                bgColor = '#10b981';
-            } else {
-                // "Sin Asignar" o cualquier otro estado
-                pillClass = 'estado-pago-pendiente';
-                bgColor = '#ef4444';
+                bgColor = '#10b981'; // Verde
+                textColor = 'white';
+                arrowColor = 'white';
             }
             
-            select.className = `estado-pago-select estado-pago-pill ${pillClass}`;
             select.style.backgroundColor = bgColor;
+            select.style.color = textColor;
+            const arrowSvg = `url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>')`;
+            select.style.backgroundImage = arrowSvg;
         }
         
         // Actualizar el estado en la base de datos
@@ -3884,6 +3917,43 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
 };
 
 // Actualizar estado logístico desde "Pagados" o "Pago A Cuenta"
+window.updateEstadoPedidoTienda = async function(pedidoId, nuevoEstado) {
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        pedido.estado = nuevoEstado;
+        await db.update('pedidos', pedido);
+        
+        // Recargar la pestaña/sub-pestaña actual
+        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
+        if (activeTab === 'pagados') {
+            const activeSubTab = document.querySelector('#pagados .sub-tab-btn.active')?.dataset.subTab;
+            if (activeSubTab) {
+                const estadoLog = activeSubTab.replace('pagados-', '').replace('-', ' ');
+                loadPedidosPagadosTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
+            } else {
+                loadPedidosPagadosTienda('Nuevo');
+            }
+        } else if (activeTab === 'pago-cuenta') {
+            const activeSubTab = document.querySelector('#pago-cuenta .sub-tab-btn.active')?.dataset.subTab;
+            if (activeSubTab) {
+                const estadoLog = activeSubTab.replace('pago-cuenta-', '').replace('-', ' ');
+                loadPedidosPagoCuentaTienda(estadoLog.charAt(0).toUpperCase() + estadoLog.slice(1));
+            } else {
+                loadPedidosPagoCuentaTienda('Nuevo');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error al actualizar estado del pedido:', error);
+        await showAlert('Error al actualizar estado del pedido: ' + error.message, 'Error');
+    }
+};
+
 window.updateEstadoLogisticoTienda = async function(pedidoId, nuevoEstadoLogistico) {
     try {
         const pedido = await db.get('pedidos', pedidoId);
