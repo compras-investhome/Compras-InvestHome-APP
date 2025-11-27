@@ -3576,8 +3576,22 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         // Factura: no disponible aún en esta pestaña
         facturaContent = '<span class="doc-placeholder">Sin factura adjunta</span>';
     } else if (tabContext === 'pendientes-pago') {
-        // Pestaña 2: Pendientes de Pago - Solo visualización
+        // Pestaña 2: Pendientes de Pago - Permite editar pedido real
         estadoPagoContent = `<span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>`;
+        
+        // Pedido real: permite editar/reemplazar
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+        pedidoRealContent = pedidoRealLink
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
+            : `<span class="doc-placeholder">Sin documento adjunto</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+        
+        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
+        documentoPagoContent = tieneTransferencia
+            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+    } else if (tabContext === 'pagados') {
+        // Pestaña 3: Pagados - Solo visualización (no editable)
+        estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
@@ -3588,15 +3602,21 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
-    } else if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
-        // Pestaña 3 y 4: Pagados / Pago A Cuenta
-        const estadoPagoLabel = tabContext === 'pagados' ? 'Pagado' : 'Pago A cuenta';
-        estadoPagoContent = `<span class="estado-pago-pill ${tabContext === 'pagados' ? 'estado-pago-pagado' : 'estado-pago-cuenta'}">${estadoPagoLabel}</span>`;
         
+        // Factura: botón + para adjuntar o ver si ya existe
+        const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+        facturaContent = facturaLink
+            ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
+            : `<span class="doc-placeholder">Sin factura adjunta</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
+    } else if (tabContext === 'pago-cuenta') {
+        // Pestaña 4: Pago A Cuenta - Permite editar pedido real
+        estadoPagoContent = `<span class="estado-pago-pill estado-pago-cuenta">Pago A cuenta</span>`;
+        
+        // Pedido real: permite editar/reemplazar
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
-            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
+            : `<span class="doc-placeholder">Sin documento adjunto</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
@@ -3750,7 +3770,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     <span>Factura</span>
                     <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura adjunta</span>'}</div>
                 </div>
-                ${tabContext === 'seleccionar-pago' ? `<input type="file" id="${pedidoRealInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)">` : ''}
+                ${(tabContext === 'seleccionar-pago' || tabContext === 'pendientes-pago' || tabContext === 'pago-cuenta') ? `<input type="file" id="${pedidoRealInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)">` : ''}
                 ${(tabContext === 'facturas-pendientes' || tabContext === 'pagados' || tabContext === 'pago-cuenta') ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
             </div>
         </div>
