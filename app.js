@@ -3521,19 +3521,31 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     let documentoPagoContent = '';
     let facturaContent = '';
     
+    // IDs para inputs de archivos
+    const pedidoRealInputId = `pedido-real-${pedido.id}`;
+    const facturaInputId = `factura-${pedido.id}`;
+    
     if (tabContext === 'seleccionar-pago') {
-        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago
+        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago con mejor diseño
         estadoPagoContent = `
-            <select class="estado-pago-select" onchange="updateEstadoPagoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
-                <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
-                ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
-            </select>
+            <div style="position: relative;">
+                <select class="estado-pago-select" onchange="updateEstadoPagoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem 2.5rem 0.5rem 0.75rem; border-radius: 8px; border: 2px solid var(--border-color); background-color: var(--card-bg); color: var(--text-primary); font-size: 0.875rem; font-weight: 500; cursor: pointer; appearance: none; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1.25rem;">
+                    <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
+                    <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
+                    ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
+                </select>
+            </div>
         `;
         
+        // Pedido real: botón + para adjuntar o ver si ya existe
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : `<button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+        
+        // Documento de pago: solo ver (contabilidad lo sube)
+        documentoPagoContent = tieneTransferencia
+            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
     } else if (tabContext === 'pendientes-pago') {
         // Pestaña 2: Pendientes de Pago - Solo visualización
@@ -3542,6 +3554,11 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        // Documento de pago: solo ver (contabilidad lo sube)
+        documentoPagoContent = tieneTransferencia
+            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
     } else if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
         // Pestaña 3 y 4: Pagados / Pago A Cuenta
@@ -3553,6 +3570,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
+        // Documento de pago: solo ver (contabilidad lo sube)
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3565,14 +3583,16 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
+        // Documento de pago: solo ver (contabilidad lo sube)
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
+        // Factura: botón + para adjuntar o ver si ya existe
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : '<span class="doc-placeholder">Sin factura adjunta</span>';
+            : `<button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()">➕</button>`;
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -3582,6 +3602,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
+        // Documento de pago: solo ver (contabilidad lo sube)
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3638,7 +3659,11 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     
     // Secciones colapsables
     const itemsSectionId = `pedido-items-tienda-${pedido.id}`;
-    const documentosSectionId = `pedido-documentos-tienda-${pedido.id}`;
+    const notasSectionId = `pedido-notas-tienda-${pedido.id}`;
+    const notasListId = `pedido-notas-list-tienda-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-tienda-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-tienda-${pedido.id}`;
+    const notas = Array.isArray(pedido.notas) ? pedido.notas : [];
     
     // Determinar qué mostrar en el header derecho según el contexto
     let headerRightHtml = '';
@@ -3650,44 +3675,6 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 <option value="En Ruta" ${estadoLogistico === 'En Ruta' ? 'selected' : ''}>En Ruta</option>
                 <option value="Entregado" ${estadoLogistico === 'Entregado' ? 'selected' : ''}>Entregado</option>
             </select>
-        `;
-    }
-    
-    // Generar secciones de documentos según el contexto
-    let documentosSectionHtml = '';
-    if (tabContext === 'seleccionar-pago') {
-        documentosSectionHtml = `
-            <button class="contab-toggle" type="button" data-open-label="Ocultar documentos" data-close-label="Ver documentos del pedido" onclick="togglePedidoSection('${documentosSectionId}', this)">
-                <span class="toggle-text">Ver documentos del pedido</span>
-                <span class="chevron">▼</span>
-            </button>
-            <div id="${documentosSectionId}" class="contab-collapse" style="display: none;">
-                ${!pedido.pedidoSistemaPDF ? `
-                    <div class="file-upload" style="padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                        <label for="pedido-real-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
-                            📎 Adjuntar Captura/PDF del Pedido del Sistema ${pedido.estadoPago === 'Pendiente de pago' ? '(con el pago real)' : pedido.estadoPago === 'Pago A cuenta' ? '(con la cantidad real a pagar)' : ''}
-                        </label>
-                        <input type="file" id="pedido-real-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)" style="width: 100%;">
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    } else if (tabContext === 'facturas-pendientes') {
-        documentosSectionHtml = `
-            <button class="contab-toggle" type="button" data-open-label="Ocultar documentos" data-close-label="Ver documentos del pedido" onclick="togglePedidoSection('${documentosSectionId}', this)">
-                <span class="toggle-text">Ver documentos del pedido</span>
-                <span class="chevron">▼</span>
-            </button>
-            <div id="${documentosSectionId}" class="contab-collapse" style="display: none;">
-                ${!pedido.albaran ? `
-                    <div class="file-upload" style="padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                        <label for="factura-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
-                            📎 Adjuntar Albarán/Factura
-                        </label>
-                        <input type="file" id="factura-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)" style="width: 100%;">
-                    </div>
-                ` : ''}
-            </div>
         `;
     }
     
@@ -3724,18 +3711,18 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     <span>Pedido real</span>
                     <div class="doc-actions">${pedidoRealContent}</div>
                 </div>
-                ${documentoPagoContent ? `
                 <div class="contab-info-row">
                     <span>Documento de pago</span>
-                    <div class="doc-actions">${documentoPagoContent}</div>
+                    <div class="doc-actions">${documentoPagoContent || '<span class="doc-placeholder">Sin documento adjunto</span>'}</div>
                 </div>
-                ` : ''}
-                ${facturaContent ? `
+                ${(tabContext === 'facturas-pendientes' || tabContext === 'historico') ? `
                 <div class="contab-info-row">
                     <span>Factura</span>
                     <div class="doc-actions">${facturaContent}</div>
                 </div>
                 ` : ''}
+                ${tabContext === 'seleccionar-pago' ? `<input type="file" id="${pedidoRealInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)">` : ''}
+                ${tabContext === 'facturas-pendientes' ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
             </div>
         </div>
         <div>
@@ -3752,8 +3739,30 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 </div>
             </div>
         </div>
-        ${documentosSectionHtml}
+        <div class="contab-notes-block">
+            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
+                <div class="toggle-label">
+                    <span class="toggle-text">Ver comentarios del pedido</span>
+                    <span class="toggle-extra">( <span id="${notasCountId}">${notas.length}</span> )</span>
+                </div>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
+                <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
+                <div class="contab-note-actions">
+                    <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
+                </div>
+                <div id="${notasListId}" class="pedido-notas-list"></div>
+            </div>
+        </div>
     `;
+    
+    // Renderizar notas
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    if (notasListElement && notasCountElement) {
+        renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
+    }
     
     return card;
 }
