@@ -3699,35 +3699,16 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     const notaInputId = `pedido-nota-input-tienda-${pedido.id}`;
     const notas = Array.isArray(pedido.notas) ? pedido.notas : [];
     
-    // Determinar qué mostrar en el header derecho según el contexto
-    let headerRightHtml = '';
-    if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
-        headerRightHtml = `
-            <select class="estado-select" onchange="updateEstadoLogisticoTienda('${pedido.id}', this.value)">
-                <option value="Nuevo" ${estadoLogistico === 'Nuevo' ? 'selected' : ''}>Nuevo</option>
-                <option value="Preparando" ${estadoLogistico === 'Preparando' ? 'selected' : ''}>Preparando</option>
-                <option value="En Ruta" ${estadoLogistico === 'En Ruta' ? 'selected' : ''}>En Ruta</option>
-                <option value="Entregado" ${estadoLogistico === 'Entregado' ? 'selected' : ''}>Entregado</option>
-            </select>
-        `;
-    }
-    
-    // Estado de envío: desplegable en pagados/pago-cuenta, pill estático en otros casos
-    const estadosEnvio = ['Nuevo', 'Preparando', 'Preparado', 'En ruta', 'Entregado', 'Completado'];
-    let estadoEnvioHtml = '';
-    if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
-        // Desplegable para estado de envío
-        estadoEnvioHtml = `
-            <select class="estado-select" onchange="updateEstadoPedidoTienda('${pedido.id}', this.value)" style="min-width: 150px;">
-                ${estadosEnvio.map(estado => `
-                    <option value="${estado}" ${estadoEnvio === estado ? 'selected' : ''}>${estado}</option>
-                `).join('')}
-            </select>
-        `;
-    } else {
-        // Pill estático
-        estadoEnvioHtml = `<span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>`;
-    }
+    // Estado de envío: desplegable siempre visible, solo editable en pagados/pago-cuenta
+    const esEditable = (tabContext === 'pagados' || tabContext === 'pago-cuenta');
+    const estadoEnvioHtml = `
+        <select class="estado-select" ${esEditable ? `onchange="updateEstadoLogisticoTienda('${pedido.id}', this.value)"` : 'disabled'} ${!esEditable ? 'style="opacity: 0.6; cursor: not-allowed;"' : ''}>
+            <option value="Nuevo" ${estadoLogistico === 'Nuevo' ? 'selected' : ''}>Nuevo</option>
+            <option value="Preparando" ${estadoLogistico === 'Preparando' ? 'selected' : ''}>Preparando</option>
+            <option value="En Ruta" ${estadoLogistico === 'En Ruta' ? 'selected' : ''}>En Ruta</option>
+            <option value="Entregado" ${estadoLogistico === 'Entregado' ? 'selected' : ''}>Entregado</option>
+        </select>
+    `;
     
     card.innerHTML = `
         <div class="contab-pedido-header">
@@ -3738,7 +3719,6 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     ${estadoEnvioHtml}
                 </div>
             </div>
-            ${headerRightHtml}
         </div>
         <div class="contab-info-grid">
             <div class="contab-info-card">
