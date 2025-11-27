@@ -3526,24 +3526,36 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     const facturaInputId = `factura-${pedido.id}`;
     
     if (tabContext === 'seleccionar-pago') {
-        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago con mejor diseño
+        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago con estilo pill
+        const getPillClass = (estado) => {
+            if (estado === 'Pendiente de pago') return 'estado-pago-pendiente';
+            if (estado === 'Pago A cuenta') return 'estado-pago-cuenta';
+            if (estado === 'Pagado') return 'estado-pago-pagado';
+            return 'estado-pago-pendiente'; // Por defecto (incluye "Sin Asignar")
+        };
+        const currentPillClass = getPillClass(estadoPago);
+        const pillColor = estadoPago === 'Pendiente de pago' ? '#ef4444' : 
+                         estadoPago === 'Pago A cuenta' ? '#3b82f6' : 
+                         estadoPago === 'Pagado' ? '#10b981' : '#ef4444'; // "Sin Asignar" usa color rojo
+        
+        const selectId = `estado-pago-select-${pedido.id}`;
         estadoPagoContent = `
-            <div style="position: relative;">
-                <select class="estado-pago-select" onchange="updateEstadoPagoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem 2.5rem 0.5rem 0.75rem; border-radius: 8px; border: 2px solid var(--border-color); background-color: var(--card-bg); color: var(--text-primary); font-size: 0.875rem; font-weight: 500; cursor: pointer; appearance: none; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1.25rem;">
-                    <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
-                    <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
-                    ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
-                </select>
-            </div>
+            <select id="${selectId}" class="estado-pago-select estado-pago-pill ${currentPillClass}" 
+                    onchange="updateEstadoPagoTiendaSelect('${pedido.id}', this.value, '${selectId}')" 
+                    style="padding: 0.35rem 2rem 0.35rem 0.85rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: white; border: none; cursor: pointer; appearance: none; background-color: ${pillColor}; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
+                <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
+                <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
+                ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
+            </select>
         `;
         
         // Pedido real: botón + para adjuntar o ver si ya existe
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-            : `<button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+            : `<span class="doc-placeholder">Sin documento adjunto</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
-        // Documento de pago: solo ver (contabilidad lo sube)
+        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3556,7 +3568,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
-        // Documento de pago: solo ver (contabilidad lo sube)
+        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3570,7 +3582,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
-        // Documento de pago: solo ver (contabilidad lo sube)
+        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3583,7 +3595,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
-        // Documento de pago: solo ver (contabilidad lo sube)
+        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3592,7 +3604,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : `<button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()">➕</button>`;
+            : `<span class="doc-placeholder">Sin factura adjunta</span><button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()">➕</button>`;
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -3602,7 +3614,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
-        // Documento de pago: solo ver (contabilidad lo sube)
+        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
@@ -3792,6 +3804,42 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
         if (activeTab === 'seleccionar-pago') {
             loadPedidosSeleccionarPago();
         }
+        
+    } catch (error) {
+        console.error('Error al actualizar estado de pago:', error);
+        await showAlert('Error al actualizar estado de pago: ' + error.message, 'Error');
+    }
+};
+
+window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, selectId) {
+    try {
+        // Actualizar el color del select según el estado
+        const select = document.getElementById(selectId);
+        if (select) {
+            let pillClass = 'estado-pago-pendiente';
+            let bgColor = '#ef4444';
+            
+            if (nuevoEstado === 'Pendiente de pago') {
+                pillClass = 'estado-pago-pendiente';
+                bgColor = '#ef4444';
+            } else if (nuevoEstado === 'Pago A cuenta') {
+                pillClass = 'estado-pago-cuenta';
+                bgColor = '#3b82f6';
+            } else if (nuevoEstado === 'Pagado') {
+                pillClass = 'estado-pago-pagado';
+                bgColor = '#10b981';
+            } else {
+                // "Sin Asignar" o cualquier otro estado
+                pillClass = 'estado-pago-pendiente';
+                bgColor = '#ef4444';
+            }
+            
+            select.className = `estado-pago-select estado-pago-pill ${pillClass}`;
+            select.style.backgroundColor = bgColor;
+        }
+        
+        // Actualizar el estado en la base de datos
+        await updateEstadoPagoTienda(pedidoId, nuevoEstado);
         
     } catch (error) {
         console.error('Error al actualizar estado de pago:', error);
