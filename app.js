@@ -3675,6 +3675,9 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         return total + precioItem * cantidadItem;
     }, 0);
     
+    // Mostrar botones solo en las pestañas permitidas
+    const mostrarBotones = (tabContext === 'seleccionar-pago' || tabContext === 'pendientes-pago' || tabContext === 'pago-cuenta');
+    
     const itemsHtml = items.length
         ? items.map((item, index) => {
             const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
@@ -3693,11 +3696,29 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             if (referencia) refEanParts.push(referencia);
             if (ean) refEanParts.push(ean);
             const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
+            
+            const botonesHtml = mostrarBotones ? `
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto;">
+                    <button class="btn-icon-small" onclick="editarCantidadItemTienda('${pedido.id}', ${index}, ${cantidad})" title="Editar cantidad">
+                        ✏️
+                    </button>
+                    <button class="btn-icon-small" onclick="duplicarLineaPedidoTienda('${pedido.id}', ${index})" title="Duplicar artículo">
+                        📋
+                    </button>
+                    <button class="btn-icon-small" onclick="crearPedidoDesdeItemTienda('${pedido.id}', ${index})" title="Generar nuevo pedido">
+                        ➕
+                    </button>
+                    <button class="btn-icon-small" onclick="eliminarItemPedidoTienda('${pedido.id}', ${index})" title="Eliminar artículo">
+                        🗑️
+                    </button>
+                </div>
+            ` : '';
+            
             return `
-                <div class="pedido-item">
+                <div class="pedido-item" style="display: flex; align-items: center; gap: 1rem;">
                     ${fotoHtml}
                     ${fotoPlaceholder}
-                    <div class="pedido-item-info">
+                    <div class="pedido-item-info" style="flex: 1;">
                         <p class="pedido-item-name">${nombre}</p>
                         ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
                         <div class="pedido-item-meta">
@@ -3706,6 +3727,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                             <span>Total línea: ${subtotal}</span>
                         </div>
                     </div>
+                    ${botonesHtml}
                 </div>
             `;
         }).join('')
@@ -4606,6 +4628,163 @@ window.updateEstadoPago = async function(pedidoId, nuevoEstadoPago) {
         await showAlert('Error al actualizar estado de pago: ' + error.message, 'Error');
     }
 }
+
+// ========== FUNCIONES DE GESTIÓN DE ARTÍCULOS PARA VISTA DE TIENDA ==========
+
+// Editar cantidad de un artículo en vista de tienda
+window.editarCantidadItemTienda = async function(pedidoId, itemIndex, cantidadActual) {
+    const nuevaCantidadStr = await showPrompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad:`, cantidadActual.toString(), 'Editar Cantidad');
+    
+    if (nuevaCantidadStr === null) return; // Usuario canceló
+    
+    const nuevaCantidad = parseInt(nuevaCantidadStr);
+    
+    if (isNaN(nuevaCantidad) || nuevaCantidad < 0) {
+        await showAlert('Por favor, ingrese una cantidad válida', 'Error');
+        return;
+    }
+    
+    if (nuevaCantidad === cantidadActual) {
+        return; // No hay cambios
+    }
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+            return;
+        }
+        
+        const item = pedido.items[itemIndex];
+        
+        if (nuevaCantidad === 0) {
+            // Si la cantidad es 0, eliminar el artículo
+            const confirmar = await showConfirm('¿Eliminar este artículo del pedido?', 'Confirmar Eliminación');
+            if (confirmar) {
+                pedido.items.splice(itemIndex, 1);
+                
+                if (pedido.items.length === 0) {
+                    await db.delete('pedidos', pedidoId);
+                } else {
+                    await db.update('pedidos', pedido);
+                }
+                
+                recargarPestañasTiendaRelevantes();
+                await showAlert('Artículo eliminado del pedido', 'Éxito');
+            }
+            return;
+        }
+        
+        // Actualizar cantidad
+        item.cantidad = nuevaCantidad;
+        await db.update('pedidos', pedido);
+        
+        recargarPestañasTiendaRelevantes();
+        await showAlert('Cantidad actualizada correctamente', 'Éxito');
+    } catch (error) {
+        console.error('Error al editar cantidad:', error);
+        await showAlert('Error al editar la cantidad: ' + error.message, 'Error');
+    }
+};
+
+// Duplicar línea de pedido en vista de tienda
+window.duplicarLineaPedidoTienda = async function(pedidoId, itemIndex) {
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+            return;
+        }
+        
+        const item = pedido.items[itemIndex];
+        
+        // Crear una copia del artículo
+        const itemDuplicado = {
+            ...item,
+            cantidad: item.cantidad || 1
+        };
+        
+        // Agregar el artículo duplicado al mismo pedido
+        pedido.items.push(itemDuplicado);
+        await db.update('pedidos', pedido);
+        
+        recargarPestañasTiendaRelevantes();
+        await showAlert('Artículo duplicado en el pedido', 'Éxito');
+    } catch (error) {
+        console.error('Error al duplicar línea:', error);
+        await showAlert('Error al duplicar el artículo: ' + error.message, 'Error');
+    }
+};
+
+// Crear nuevo pedido desde un artículo en vista de tienda
+window.crearPedidoDesdeItemTienda = async function(pedidoId, itemIndex) {
+    try {
+        const pedidoOrigen = await db.get('pedidos', pedidoId);
+        if (!pedidoOrigen || !pedidoOrigen.items || itemIndex >= pedidoOrigen.items.length) {
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+            return;
+        }
+        
+        const itemAMover = pedidoOrigen.items[itemIndex];
+        
+        // Crear nuevo pedido
+        const nuevoPedido = {
+            tiendaId: pedidoOrigen.tiendaId,
+            userId: pedidoOrigen.userId,
+            persona: pedidoOrigen.persona,
+            obraId: pedidoOrigen.obraId,
+            obraNombreComercial: pedidoOrigen.obraNombreComercial,
+            obraDireccionGoogleMaps: pedidoOrigen.obraDireccionGoogleMaps || '',
+            obraEncargado: pedidoOrigen.obraEncargado || '',
+            obraTelefono: pedidoOrigen.obraTelefono || '',
+            items: [{ ...itemAMover }],
+            estado: 'Nuevo',
+            estadoPago: 'Sin Asignar',
+            estadoLogistico: 'Nuevo',
+            fecha: new Date(),
+            esPedidoEspecial: pedidoOrigen.esPedidoEspecial || false,
+            notas: []
+        };
+        
+        const nuevoPedidoId = await db.add('pedidos', nuevoPedido);
+        
+        recargarPestañasTiendaRelevantes();
+        await showAlert(`Nuevo pedido creado (#${nuevoPedidoId}) con el artículo seleccionado`, 'Éxito');
+    } catch (error) {
+        console.error('Error al crear nuevo pedido:', error);
+        await showAlert('Error al crear nuevo pedido: ' + error.message, 'Error');
+    }
+};
+
+// Eliminar artículo de pedido en vista de tienda
+window.eliminarItemPedidoTienda = async function(pedidoId, itemIndex) {
+    const confirmar = await showConfirm('¿Está seguro de eliminar este artículo del pedido?', 'Confirmar Eliminación');
+    if (!confirmar) return;
+    
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || !pedido.items || itemIndex >= pedido.items.length) {
+            await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+            return;
+        }
+        
+        // Eliminar el artículo
+        pedido.items.splice(itemIndex, 1);
+        
+        // Si el pedido queda sin items, eliminarlo
+        if (pedido.items.length === 0) {
+            await db.delete('pedidos', pedidoId);
+        } else {
+            await db.update('pedidos', pedido);
+        }
+        
+        recargarPestañasTiendaRelevantes();
+        await showAlert('Artículo eliminado del pedido', 'Éxito');
+    } catch (error) {
+        console.error('Error al eliminar artículo:', error);
+        await showAlert('Error al eliminar el artículo: ' + error.message, 'Error');
+    }
+};
 
 // ========== VISTA DE CONTABILIDAD ==========
 
