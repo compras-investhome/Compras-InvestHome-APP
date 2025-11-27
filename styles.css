@@ -1296,6 +1296,8 @@ body {
     border-radius: 12px;
     padding: 1rem;
     box-shadow: var(--shadow);
+    border-left: 4px solid var(--primary-color);
+    margin-bottom: 1rem;
 }
 
 .pedido-gestion-header {

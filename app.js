@@ -3474,12 +3474,12 @@ window.rechazarSolicitudModificacion = async function(solicitudId) {
 // Función para crear cards de pedidos en la vista de tienda según la pestaña
 async function createPedidoTiendaCard(pedido, tabContext) {
     const card = document.createElement('div');
-    card.className = 'pedido-gestion-card';
+    card.className = 'pedido-gestion-card contab-pedido-card';
     
     const tienda = await db.get('tiendas', pedido.tiendaId);
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
     // Formatear fecha
-    let fecha;
     let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
         fechaObj = pedido.fecha.toDate();
@@ -3492,124 +3492,157 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     } else {
         fechaObj = new Date();
     }
-    
-    const dia = fechaObj.getDate().toString().padStart(2, '0');
-    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
-    const año = fechaObj.getFullYear();
-    fecha = `${dia}/${mes}/${año}`;
+    const fechaFormateada = formatDateTime(fechaObj);
     
     // Información de la obra
-    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
-    const obraDireccion = pedido.obraDireccionGoogleMaps || '';
-    const obraEncargado = pedido.obraEncargado || '';
-    const obraTelefono = pedido.obraTelefono || '';
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo || { direccionGoogleMaps: pedido.obraDireccionGoogleMaps }, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || pedido.obraEncargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || pedido.obraTelefono || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
     
-    const obraNombreHtml = obraDireccion 
-        ? `<a href="${obraDireccion}" target="_blank" style="color: var(--primary-color); text-decoration: none; font-weight: 600;">${obraNombre}</a>`
-        : obraNombre;
-    
-    // Estado de pago actual
+    // Estado de pago y logístico
     const estadoPago = pedido.estadoPago || 'Sin Asignar';
-    const tieneTransferencia = Boolean(pedido.transferenciaPDF);
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    const estadoEnvio = pedido.estado || 'Nuevo';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
     const estadoLogistico = pedido.estadoLogistico || 'Nuevo';
+    const tieneTransferencia = Boolean(pedido.transferenciaPDF);
     
-    // Generar contenido según el contexto de la pestaña
-    let estadoPagoHtml = '';
+    // Información de la tienda y persona
+    const tiendaNombre = escapeHtml(tienda?.nombre || 'Desconocida');
+    const persona = escapeHtml(pedido.persona || pedido.usuarioNombre || 'Sin especificar');
+    
+    // Generar contenido de estado de pago según el contexto
+    let estadoPagoContent = '';
+    let pedidoRealContent = '';
+    let documentoPagoContent = '';
+    let facturaContent = '';
     
     if (tabContext === 'seleccionar-pago') {
-        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago y adjuntar pedido real
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <label style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Estado de Pago:</label>
-                <select class="estado-pago-select" onchange="updateEstadoPagoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
-                    <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
-                    ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
-                </select>
-            </div>
+        // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago
+        estadoPagoContent = `
+            <select class="estado-pago-select" onchange="updateEstadoPagoTienda('${pedido.id}', this.value)" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
+                <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
+                ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
+            </select>
         `;
+        
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+        pedidoRealContent = pedidoRealLink
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
     } else if (tabContext === 'pendientes-pago') {
         // Pestaña 2: Pendientes de Pago - Solo visualización
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #ef4444; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Pendiente de pago</span>
-            </div>
-        `;
-    } else if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
-        // Pestaña 3 y 4: Pagados / Pago A Cuenta - Desplegable de estado logístico
-        const estadoPagoLabel = tabContext === 'pagados' ? 'Pagado' : 'Pago A cuenta';
-        const estadoPagoColor = tabContext === 'pagados' ? '#10b981' : '#f59e0b';
+        estadoPagoContent = `<span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>`;
         
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: ${estadoPagoColor}; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">${estadoPagoLabel}</span>
-                ${tieneTransferencia ? `
-                    <a href="${pedido.transferenciaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                        📄 Ver PDF de Transferencia
-                    </a>
-                ` : ''}
-            </div>
-        `;
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+        pedidoRealContent = pedidoRealLink
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+    } else if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
+        // Pestaña 3 y 4: Pagados / Pago A Cuenta
+        const estadoPagoLabel = tabContext === 'pagados' ? 'Pagado' : 'Pago A cuenta';
+        estadoPagoContent = `<span class="estado-pago-pill ${tabContext === 'pagados' ? 'estado-pago-pagado' : 'estado-pago-cuenta'}">${estadoPagoLabel}</span>`;
+        
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+        pedidoRealContent = pedidoRealLink
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        documentoPagoContent = tieneTransferencia
+            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
     } else if (tabContext === 'facturas-pendientes') {
-        // Pestaña 5: Facturas Pendientes - Permitir adjuntar factura
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600;">Entregado</span>
-            </div>
-        `;
+        // Pestaña 5: Facturas Pendientes
+        estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
+        
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+        pedidoRealContent = pedidoRealLink
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        documentoPagoContent = tieneTransferencia
+            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+        facturaContent = facturaLink
+            ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
+            : '<span class="doc-placeholder">Sin factura adjunta</span>';
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
-        estadoPagoHtml = `
-            <div style="margin-top: 0.5rem;">
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Pagado</span>
-                <span style="display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 20px; font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem;">Entregado</span>
-            </div>
-        `;
+        estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
+        
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+        pedidoRealContent = pedidoRealLink
+            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        documentoPagoContent = tieneTransferencia
+            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+        facturaContent = facturaLink
+            ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
+            : '<span class="doc-placeholder">Sin factura adjunta</span>';
     }
     
-    // Generar HTML de items (igual que en createPedidoGestionCard)
-    const itemsHtml = pedido.items.map((item, index) => {
-        const foto = item.foto ? `<img src="${item.foto}" alt="${item.nombre}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; margin-right: 0.75rem;" onerror="this.style.display='none'">` : '';
-        const designacion = item.designacion ? `<strong>${item.designacion}</strong>` : '';
-        const referencia = item.referencia ? `<span style="color: var(--text-secondary); font-size: 0.875rem;">Ref: ${item.referencia}</span>` : '';
-        const ean = item.ean ? `<span style="color: var(--text-secondary); font-size: 0.875rem;">EAN: ${item.ean}</span>` : '';
-        const precioUnitario = item.precio || 0;
-        const cantidad = item.cantidad || 0;
-        const precioTotalLinea = precioUnitario * cantidad;
-        
-        return `
-            <div class="pedido-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.5rem;">
-                ${foto}
-                <div style="flex: 1;">
-                    ${designacion ? `<div style="font-weight: 600; margin-bottom: 0.25rem;">${designacion}</div>` : ''}
-                    <div style="font-size: 0.875rem; color: var(--text-primary);">${item.nombre}</div>
-                    ${item.descripcion ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${item.descripcion}</div>` : ''}
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap;">
-                        ${referencia}
-                        ${ean}
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; align-items: center;">
-                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Cantidad: <strong>x${cantidad}</strong></span>
-                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Precio unitario: <strong>${precioUnitario.toFixed(2)} €</strong></span>
-                        ${cantidad > 1 ? `<span style="font-size: 0.875rem; color: var(--primary-color); font-weight: 600;">Total línea: ${precioTotalLinea.toFixed(2)} €</span>` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    // Calcular total del pedido
-    const precioTotalPedido = pedido.items.reduce((total, item) => {
-        const precioItem = item.precio || 0;
-        const cantidad = item.cantidad || 0;
-        return total + (precioItem * cantidad);
+    // Generar HTML de items
+    const items = Array.isArray(pedido.items) ? pedido.items : [];
+    const totalPedido = items.reduce((total, item) => {
+        const precioItem = Number(item.precio) || 0;
+        const cantidadItem = Number(item.cantidad) || 0;
+        return total + precioItem * cantidadItem;
     }, 0);
     
-    // Determinar qué mostrar en el lado derecho del header según el contexto
+    const itemsHtml = items.length
+        ? items.map((item, index) => {
+            const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+            const referencia = escapeHtml(item.designacion || item.referencia || '');
+            const ean = escapeHtml(item.ean || '');
+            const cantidad = Number(item.cantidad) || 0;
+            const precio = formatCurrency(item.precio || 0);
+            const subtotal = formatCurrency((item.precio || 0) * cantidad);
+            const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+            const placeholderId = `foto-placeholder-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
+            const refEanParts = [];
+            if (referencia) refEanParts.push(referencia);
+            if (ean) refEanParts.push(ean);
+            const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
+            return `
+                <div class="pedido-item">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info">
+                        <p class="pedido-item-name">${nombre}</p>
+                        ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    // Secciones colapsables
+    const itemsSectionId = `pedido-items-tienda-${pedido.id}`;
+    const documentosSectionId = `pedido-documentos-tienda-${pedido.id}`;
+    
+    // Determinar qué mostrar en el header derecho según el contexto
     let headerRightHtml = '';
     if (tabContext === 'pagados' || tabContext === 'pago-cuenta') {
-        // Mostrar select de estado logístico a la derecha
         headerRightHtml = `
             <select class="estado-select" onchange="updateEstadoLogisticoTienda('${pedido.id}', this.value)">
                 <option value="Nuevo" ${estadoLogistico === 'Nuevo' ? 'selected' : ''}>Nuevo</option>
@@ -3621,73 +3654,105 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     }
     
     // Generar secciones de documentos según el contexto
-    let documentosHtml = '';
+    let documentosSectionHtml = '';
     if (tabContext === 'seleccionar-pago') {
-        documentosHtml = `
-            ${!pedido.pedidoSistemaPDF ? `
-                <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                    <label for="pedido-real-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
-                        📎 Adjuntar Captura/PDF del Pedido del Sistema ${pedido.estadoPago === 'Pendiente de pago' ? '(con el pago real)' : pedido.estadoPago === 'Pago A cuenta' ? '(con la cantidad real a pagar)' : ''}
-                    </label>
-                    <input type="file" id="pedido-real-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)" style="width: 100%;">
-                </div>
-            ` : `
-                <div style="margin-top: 1rem; padding: 1rem; background: var(--success-color-light); border-radius: 8px;">
-                    <p style="font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600;">Documento del pedido del sistema adjuntado:</p>
-                    <a href="${pedido.pedidoSistemaPDF}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                        📄 Ver/Descargar Documento
-                    </a>
-                </div>
-            `}
+        documentosSectionHtml = `
+            <button class="contab-toggle" type="button" data-open-label="Ocultar documentos" data-close-label="Ver documentos del pedido" onclick="togglePedidoSection('${documentosSectionId}', this)">
+                <span class="toggle-text">Ver documentos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${documentosSectionId}" class="contab-collapse" style="display: none;">
+                ${!pedido.pedidoSistemaPDF ? `
+                    <div class="file-upload" style="padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                        <label for="pedido-real-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                            📎 Adjuntar Captura/PDF del Pedido del Sistema ${pedido.estadoPago === 'Pendiente de pago' ? '(con el pago real)' : pedido.estadoPago === 'Pago A cuenta' ? '(con la cantidad real a pagar)' : ''}
+                        </label>
+                        <input type="file" id="pedido-real-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)" style="width: 100%;">
+                    </div>
+                ` : ''}
+            </div>
         `;
     } else if (tabContext === 'facturas-pendientes') {
-        documentosHtml = `
-            ${!pedido.albaran ? `
-                <div class="file-upload" style="margin-top: 1rem; padding: 1rem; background: var(--bg-color); border-radius: 8px;">
-                    <label for="factura-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
-                        📎 Adjuntar Albarán/Factura
-                    </label>
-                    <input type="file" id="factura-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)" style="width: 100%;">
-                </div>
-            ` : `
-                <div style="margin-top: 1rem; padding: 1rem; background: var(--success-color-light); border-radius: 8px;">
-                    <p style="font-size: 0.875rem; margin-bottom: 0.5rem; font-weight: 600;">Factura adjuntada:</p>
-                    <a href="${pedido.albaran}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                        📄 Ver/Descargar Factura
-                    </a>
-                </div>
-            `}
-        `;
-    } else if (tabContext === 'historico' && pedido.albaran) {
-        documentosHtml = `
-            <div class="pedido-albaran" style="margin-top: 1rem;">
-                <a href="${pedido.albaran}" target="_blank" download style="color: var(--primary-color); text-decoration: none; font-size: 0.875rem;">
-                    📄 Ver Albarán/Factura
-                </a>
+        documentosSectionHtml = `
+            <button class="contab-toggle" type="button" data-open-label="Ocultar documentos" data-close-label="Ver documentos del pedido" onclick="togglePedidoSection('${documentosSectionId}', this)">
+                <span class="toggle-text">Ver documentos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${documentosSectionId}" class="contab-collapse" style="display: none;">
+                ${!pedido.albaran ? `
+                    <div class="file-upload" style="padding: 1rem; background: var(--bg-color); border-radius: 8px;">
+                        <label for="factura-${pedido.id}" class="file-upload-label" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                            📎 Adjuntar Albarán/Factura
+                        </label>
+                        <input type="file" id="factura-${pedido.id}" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)" style="width: 100%;">
+                    </div>
+                ` : ''}
             </div>
         `;
     }
     
     card.innerHTML = `
-        <div class="pedido-gestion-header">
-            <div class="pedido-gestion-info">
-                <h4>Pedido #${pedido.id}</h4>
-                <p><strong>Usuario:</strong> ${pedido.persona}</p>
-                <p><strong>Obra:</strong> ${obraNombreHtml}</p>
-                ${obraDireccion ? `<p style="font-size: 0.75rem; color: var(--text-secondary);"><a href="${obraDireccion}" target="_blank" style="color: var(--primary-color);">📍 Ver en Google Maps</a></p>` : ''}
-                ${obraEncargado ? `<p style="font-size: 0.875rem;"><strong>Encargado:</strong> ${obraEncargado}${obraTelefono ? ` | Tel: ${obraTelefono}` : ''}</p>` : ''}
-                <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
-                ${estadoPagoHtml}
+        <div class="contab-pedido-header">
+            <div>
+                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                </div>
             </div>
             ${headerRightHtml}
         </div>
-        <div class="pedido-items" data-pedido-id="${pedido.id}">
-            ${itemsHtml}
+        <div class="contab-info-grid">
+            <div class="contab-info-card">
+                <div class="contab-card-title">Datos del pedido</div>
+                <div class="contab-info-row"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            <div class="contab-info-card">
+                <div class="contab-card-title">Estado de pago</div>
+                <div class="contab-info-row">
+                    <span>Estado</span>
+                    ${estadoPagoContent}
+                </div>
+                <div class="contab-info-row">
+                    <span>Pedido real</span>
+                    <div class="doc-actions">${pedidoRealContent}</div>
+                </div>
+                ${documentoPagoContent ? `
+                <div class="contab-info-row">
+                    <span>Documento de pago</span>
+                    <div class="doc-actions">${documentoPagoContent}</div>
+                </div>
+                ` : ''}
+                ${facturaContent ? `
+                <div class="contab-info-row">
+                    <span>Factura</span>
+                    <div class="doc-actions">${facturaContent}</div>
+                </div>
+                ` : ''}
+            </div>
         </div>
-        <div style="padding: 1rem; background: var(--primary-color-light); border-radius: 8px; margin-top: 1rem; text-align: right;">
-            <strong style="font-size: 1.125rem; color: var(--primary-color);">Total del pedido: ${precioTotalPedido.toFixed(2)} €</strong>
+        <div>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
+                <span class="toggle-text">Ver artículos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
+                <div class="pedido-items-header">
+                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                </div>
+                <div class="pedido-items-list">
+                    ${itemsHtml}
+                </div>
+            </div>
         </div>
-        ${documentosHtml}
+        ${documentosSectionHtml}
     `;
     
     return card;
