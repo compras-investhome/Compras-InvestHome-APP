@@ -2709,12 +2709,17 @@ async function loadPedidosSeleccionarPago() {
     const tiendaId = currentTienda.id;
     const pedidos = await db.getPedidosByTienda(tiendaId);
     
-    // Pedidos nuevos que no tienen método de pago seleccionado ni pedido real adjunto
+    // Pedidos que están en "Seleccionar Pago":
+    // 1. Sin asignar método de pago y sin pedido real
+    // 2. O tienen estado "Pendiente de pago" o "Pago A cuenta" pero aún NO tienen pedido real adjunto
     const pedidosSeleccionar = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
-        // Debe estar sin asignar método de pago y sin pedido real
-        return estadoPago === 'Sin Asignar' && !tienePedidoReal && p.estado !== 'Completado' && !p.esPedidoEspecial;
+        // Debe estar sin pedido real adjunto Y (sin asignar método de pago O tener Pendiente de pago/Pago A cuenta sin pedido real)
+        return !tienePedidoReal && 
+               (estadoPago === 'Sin Asignar' || estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') &&
+               p.estado !== 'Completado' && 
+               !p.esPedidoEspecial;
     });
     
     const container = document.getElementById('seleccionar-pago-list');
@@ -3567,6 +3572,9 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        
+        // Factura: no disponible aún en esta pestaña
+        facturaContent = '<span class="doc-placeholder">Sin factura adjunta</span>';
     } else if (tabContext === 'pendientes-pago') {
         // Pestaña 2: Pendientes de Pago - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>`;
@@ -3595,11 +3603,11 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento adjunto</span>';
         
-        // Factura: mostrar si existe, pero no permitir adjuntar aquí (solo en facturas-pendientes)
+        // Factura: botón + para adjuntar o ver si ya existe
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : '<span class="doc-placeholder">Sin factura adjunta</span>';
+            : `<span class="doc-placeholder">Sin factura adjunta</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'facturas-pendientes') {
         // Pestaña 5: Facturas Pendientes
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -3758,14 +3766,12 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     <span>Documento de pago</span>
                     <div class="doc-actions">${documentoPagoContent || '<span class="doc-placeholder">Sin documento adjunto</span>'}</div>
                 </div>
-                ${(tabContext === 'pagados' || tabContext === 'pago-cuenta' || tabContext === 'facturas-pendientes' || tabContext === 'historico') ? `
                 <div class="contab-info-row">
                     <span>Factura</span>
                     <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura adjunta</span>'}</div>
                 </div>
-                ` : ''}
                 ${tabContext === 'seleccionar-pago' ? `<input type="file" id="${pedidoRealInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)">` : ''}
-                ${tabContext === 'facturas-pendientes' ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
+                ${(tabContext === 'facturas-pendientes' || tabContext === 'pagados' || tabContext === 'pago-cuenta') ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
             </div>
         </div>
         <div>
@@ -3842,7 +3848,6 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
             return;
         }
         
-        const estadoAnterior = pedido.estadoPago || 'Sin Asignar';
         pedido.estadoPago = nuevoEstado;
         
         // Si se marca como "Pago A cuenta", inicializar estado logístico
@@ -3852,8 +3857,13 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
         
         await db.update('pedidos', pedido);
         
-        // Recargar todas las pestañas relevantes para que el pedido se mueva correctamente
-        recargarPestañasTiendaRelevantes();
+        // NO recargar pestañas automáticamente aquí
+        // El pedido solo se moverá cuando se adjunte el pedido real
+        // Solo recargar la pestaña actual para actualizar el select
+        const activeTab = document.querySelector('#view-gestion-tienda .tab-btn.active')?.dataset.tab;
+        if (activeTab === 'seleccionar-pago') {
+            loadPedidosSeleccionarPago();
+        }
         
     } catch (error) {
         console.error('Error al actualizar estado de pago:', error);
@@ -3919,10 +3929,19 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
                 pedido.pedidoSistemaPDF = base64;
                 await db.update('pedidos', pedido);
                 
-                await showAlert('Pedido real adjuntado correctamente', 'Éxito');
+                const estadoPago = pedido.estadoPago || 'Sin Asignar';
                 
-                // Recargar pestañas relevantes: el pedido puede moverse de "Seleccionar Pago" a "Pendientes de Pago"
-                recargarPestañasTiendaRelevantes();
+                // Solo mover el pedido si tiene estado "Pendiente de pago" o "Pago A cuenta"
+                // Y ahora tiene el pedido real adjunto (disparador doble)
+                if (estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') {
+                    await showAlert('Pedido real adjuntado correctamente. El pedido se ha movido a la pestaña correspondiente.', 'Éxito');
+                    // Recargar todas las pestañas relevantes para que el pedido se mueva
+                    recargarPestañasTiendaRelevantes();
+                } else {
+                    await showAlert('Pedido real adjuntado correctamente. Seleccione el método de pago para continuar.', 'Éxito');
+                    // Solo recargar la pestaña actual
+                    loadPedidosSeleccionarPago();
+                }
             } catch (error) {
                 console.error('Error al guardar pedido real:', error);
                 await showAlert('Error al guardar pedido real: ' + error.message, 'Error');
