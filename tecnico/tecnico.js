@@ -847,7 +847,7 @@ window.collapseProductoCard = function(productoId) {
 
 async function performSearchAdmin(query) {
     searchResultsAdmin = await db.searchProductos(query);
-    loadTiendas();
+    loadTiendasAdminView();
 }
 
 // ========== CARRITO ==========

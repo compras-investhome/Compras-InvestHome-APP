@@ -408,16 +408,26 @@ class Database {
         return querySnapshot.docs.length;
     }
 
+    // Función para normalizar texto eliminando tildes
+    normalizeText(text) {
+        if (!text) return '';
+        return text
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    }
+
     async searchProductos(queryText) {
         const allProductos = await this.getAll('productos');
-        const lowerQuery = queryText.toLowerCase();
-        return allProductos.filter(producto => 
-            producto.nombre?.toLowerCase().includes(lowerQuery) ||
-            producto.descripcion?.toLowerCase().includes(lowerQuery) ||
-            producto.designacion?.toLowerCase().includes(lowerQuery) ||
-            producto.ean?.toLowerCase().includes(lowerQuery) ||
-            producto.referencia?.toLowerCase().includes(lowerQuery)
-        );
+        const normalizedQuery = this.normalizeText(queryText);
+        
+        return allProductos.filter(producto => {
+            const designacion = this.normalizeText(producto.designacion);
+            const descripcion = this.normalizeText(producto.descripcion);
+            
+            return designacion.includes(normalizedQuery) ||
+                   descripcion.includes(normalizedQuery);
+        });
     }
 
     async getPedidosByUser(userId, obraId) {
