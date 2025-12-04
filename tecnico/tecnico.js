@@ -3387,6 +3387,8 @@ function setupTecnicoEventListeners() {
     
     // Menú hamburguesa para móvil
     const hamburgerBtn = document.getElementById('btn-hamburger-menu');
+    const hamburgerBtnPedidos = document.getElementById('btn-hamburger-menu-pedidos');
+    const hamburgerBtnHistorico = document.getElementById('btn-hamburger-menu-historico');
     const sidebar = document.getElementById('admin-sidebar');
     const overlay = document.getElementById('sidebar-overlay');
     
@@ -3410,16 +3412,28 @@ function setupTecnicoEventListeners() {
         document.body.style.overflow = '';
     }
     
-    if (hamburgerBtn) {
-        hamburgerBtn.addEventListener('click', (e) => {
+    function toggleMobileMenu(e) {
+        if (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (sidebar && sidebar.classList.contains('mobile-open')) {
-                closeMobileMenu();
-            } else {
-                openMobileMenu();
-            }
-        });
+        }
+        if (sidebar && sidebar.classList.contains('mobile-open')) {
+            closeMobileMenu();
+        } else {
+            openMobileMenu();
+        }
+    }
+    
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', toggleMobileMenu);
+    }
+    
+    if (hamburgerBtnPedidos) {
+        hamburgerBtnPedidos.addEventListener('click', toggleMobileMenu);
+    }
+    
+    if (hamburgerBtnHistorico) {
+        hamburgerBtnHistorico.addEventListener('click', toggleMobileMenu);
     }
     
     // Cerrar menú al hacer clic en el overlay
