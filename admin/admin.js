@@ -562,12 +562,13 @@ let productosPaginacion = {
 
 async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
     const categoria = await db.get('categorias', categoriaId);
-    const container = document.getElementById('tiendas-list-admin');
+    if (!categoria) return;
     
+    const container = document.getElementById('tiendas-list-admin');
     container.innerHTML = '';
     
     if (subCategoriaId) {
-        // Cargar productos de una subcategoría específica
+        // Vista de subcategoría: mostrar solo productos de esa subcategoría
         container.className = 'productos-list';
         
         // Agregar botón volver
@@ -585,34 +586,21 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         productosPaginacion.offset = 0;
         await cargarProductosPaginados(container, subCategoriaId, true);
     } else {
-        // Mostrar subcategorías primero, luego productos sin subcategoría
-        container.className = 'categorias-grid';
+        // Vista de categoría: mostrar subcategorías + productos sin subcategoría
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.padding = '1rem';
         
-        // Cargar subcategorías
+        // 1. Cargar y mostrar subcategorías (si existen)
         const subcategorias = await db.getSubCategoriasByCategoria(categoriaId);
         
         if (subcategorias.length > 0) {
-            // Crear sección de subcategorías
-            const subcategoriasSection = document.createElement('div');
-            subcategoriasSection.style.width = '100%';
-            subcategoriasSection.style.marginBottom = '2rem';
-            
-            const subcategoriasTitle = document.createElement('h3');
-            subcategoriasTitle.textContent = 'Subcategorías';
-            subcategoriasTitle.style.marginBottom = '1rem';
-            subcategoriasTitle.style.color = 'var(--text-primary)';
-            subcategoriasSection.appendChild(subcategoriasTitle);
-            
             const subcategoriasGrid = document.createElement('div');
             subcategoriasGrid.className = 'categorias-grid';
-            subcategoriasGrid.style.display = 'grid';
-            subcategoriasGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
-            subcategoriasGrid.style.gap = '1rem';
             
             subcategorias.forEach(subcategoria => {
                 const card = document.createElement('div');
                 card.className = 'categoria-card';
-                card.style.cursor = 'pointer';
                 card.innerHTML = `<h3>${subcategoria.nombre}</h3>`;
                 card.addEventListener('click', () => {
                     loadProductosAdmin(categoriaId, subcategoria.id);
@@ -620,26 +608,22 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
                 subcategoriasGrid.appendChild(card);
             });
             
-            subcategoriasSection.appendChild(subcategoriasGrid);
-            container.appendChild(subcategoriasSection);
+            container.appendChild(subcategoriasGrid);
         }
         
-        // Cargar productos sin subcategoría (con paginación)
-        const productosSection = document.createElement('div');
-        productosSection.style.width = '100%';
-        
+        // 2. Cargar y mostrar productos sin subcategoría (debajo de las subcategorías)
         if (subcategorias.length > 0) {
-            const productosTitle = document.createElement('h3');
-            productosTitle.textContent = 'Productos';
-            productosTitle.style.marginBottom = '1rem';
-            productosTitle.style.color = 'var(--text-primary)';
-            productosSection.appendChild(productosTitle);
+            // Separador visual
+            const separador = document.createElement('div');
+            separador.style.height = '2px';
+            separador.style.backgroundColor = 'var(--border-color)';
+            separador.style.margin = '2rem 0 1rem 0';
+            container.appendChild(separador);
         }
         
         const productosList = document.createElement('div');
         productosList.className = 'productos-list';
-        productosSection.appendChild(productosList);
-        container.appendChild(productosSection);
+        container.appendChild(productosList);
         
         productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = null;
@@ -5038,14 +5022,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Función para manejar la selección del archivo de artículos
 function handleFileSelectArticulos(file) {
-    const validTypes = ['application/json', 'text/csv', 'text/plain', 
-                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                       'application/vnd.ms-excel'];
-    const validExtensions = ['.json', '.csv', '.xlsx', '.xls'];
+    const validTypes = ['application/json', 'text/csv', 'text/plain'];
+    const validExtensions = ['.json', '.csv'];
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-        showAlert('Por favor, seleccione un archivo JSON, CSV o Excel', 'Error');
+        showAlert('Por favor, seleccione un archivo JSON o CSV', 'Error');
         return;
     }
     
@@ -5076,71 +5058,15 @@ async function procesarYSubirArticulos(file, tiendaId) {
     statusText.textContent = 'Leyendo archivo...';
     
     try {
+        // Leer el archivo
+        const text = await file.text();
         let articulos = [];
+        
+        // Determinar si es JSON o CSV
         const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
         
-        // Procesar según el tipo de archivo
-        if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-            // Procesar Excel usando SheetJS
-            statusText.textContent = 'Leyendo archivo Excel...';
-            progressBar.style.width = '10%';
-            
-            const arrayBuffer = await file.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-            
-            if (jsonData.length < 2) {
-                throw new Error('El archivo Excel debe tener al menos una fila de encabezado y una fila de datos');
-            }
-            
-            // Buscar índices de columnas (case-insensitive)
-            const headers = jsonData[0].map(h => String(h).trim().toLowerCase());
-            const categoriaIndex = headers.findIndex(h => h.includes('categoría') || h.includes('categoria'));
-            const subCategoriaIndex = headers.findIndex(h => (h.includes('sub') && h.includes('categoría')) || (h.includes('sub') && h.includes('categoria')));
-            const designacionIndex = headers.findIndex(h => h.includes('designación') || h.includes('designacion'));
-            const referenciaIndex = headers.findIndex(h => h.includes('referencia'));
-            const eanIndex = headers.findIndex(h => h.includes('ean'));
-            const descripcionIndex = headers.findIndex(h => h.includes('descripción') || h.includes('descripcion'));
-            const precioIndex = headers.findIndex(h => h.includes('precio'));
-            const fotoIndex = headers.findIndex(h => h.includes('url foto') || h.includes('url') || h.includes('foto'));
-            
-            if (categoriaIndex === -1 || designacionIndex === -1 || precioIndex === -1) {
-                throw new Error('El Excel debe tener columnas: Categoría, Designación y Precio');
-            }
-            
-            // Procesar filas
-            for (let i = 1; i < jsonData.length; i++) {
-                const row = jsonData[i];
-                if (!row || row.length === 0) continue;
-                
-                const categoria = row[categoriaIndex] ? String(row[categoriaIndex]).trim() : '';
-                const subCategoria = subCategoriaIndex !== -1 && row[subCategoriaIndex] ? String(row[subCategoriaIndex]).trim() : '';
-                const designacion = row[designacionIndex] ? String(row[designacionIndex]).trim() : '';
-                const referencia = referenciaIndex !== -1 && row[referenciaIndex] ? String(row[referenciaIndex]).trim() : '';
-                const ean = eanIndex !== -1 && row[eanIndex] ? String(row[eanIndex]).trim() : '';
-                const descripcion = descripcionIndex !== -1 && row[descripcionIndex] ? String(row[descripcionIndex]).trim() : '';
-                const precioStr = row[precioIndex] ? String(row[precioIndex]).trim().replace(',', '.') : '0';
-                const precio = parseFloat(precioStr) || 0;
-                const foto = fotoIndex !== -1 && row[fotoIndex] ? String(row[fotoIndex]).trim() : '';
-                
-                if (!categoria || !designacion || precio <= 0) continue;
-                
-                articulos.push({
-                    categoria,
-                    subCategoria,
-                    designacion,
-                    referencia,
-                    ean,
-                    descripcion,
-                    precio,
-                    foto
-                });
-            }
-        } else if (fileExtension === '.json') {
-            // Procesar JSON (mantener compatibilidad)
-            const text = await file.text();
+        if (fileExtension === '.json') {
+            // Procesar JSON
             try {
                 const data = JSON.parse(text);
                 articulos = Array.isArray(data) ? data : [data];
@@ -5148,13 +5074,13 @@ async function procesarYSubirArticulos(file, tiendaId) {
                 throw new Error('El archivo JSON no es válido: ' + error.message);
             }
         } else if (fileExtension === '.csv') {
-            // Procesar CSV (mantener compatibilidad)
-            const text = await file.text();
+            // Procesar CSV
             const lines = text.split('\n').filter(line => line.trim());
             if (lines.length < 2) {
                 throw new Error('El archivo CSV debe tener al menos una fila de encabezado y una fila de datos');
             }
             
+            // Parsear encabezados
             const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
             const nombreIndex = headers.findIndex(h => h.includes('nombre') || h.includes('name'));
             const descripcionIndex = headers.findIndex(h => h.includes('descripcion') || h.includes('description') || h.includes('desc'));
@@ -5165,6 +5091,7 @@ async function procesarYSubirArticulos(file, tiendaId) {
                 throw new Error('El CSV debe tener columnas "nombre" y "precio"');
             }
             
+            // Procesar filas
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(',').map(v => v.trim());
                 if (values.length < headers.length) continue;
@@ -5181,8 +5108,6 @@ async function procesarYSubirArticulos(file, tiendaId) {
                     categoria: categoriaIndex !== -1 ? values[categoriaIndex] : ''
                 });
             }
-        } else {
-            throw new Error('Formato de archivo no soportado. Use Excel (.xlsx, .xls), JSON o CSV');
         }
         
         if (articulos.length === 0) {
@@ -5190,223 +5115,69 @@ async function procesarYSubirArticulos(file, tiendaId) {
         }
         
         statusText.textContent = `Procesando ${articulos.length} artículos...`;
-        progressBar.style.width = '15%';
-        
-        // Obtener todas las categorías y subcategorías existentes
-        const categorias = await db.getAll('categorias');
-        const subcategorias = await db.getAll('subcategorias');
-        const categoriasMap = new Map(); // categoriaNombre -> categoriaId
-        const subcategoriasMap = new Map(); // categoriaId_subcategoriaNombre -> subcategoriaId
-        
-        categorias.forEach(c => {
-            if (c.tiendaId === tiendaId) {
-                categoriasMap.set(c.nombre.toLowerCase(), c.id);
-            }
-        });
-        
-        subcategorias.forEach(sc => {
-            const key = `${sc.categoriaId}_${sc.nombre.toLowerCase()}`;
-            subcategoriasMap.set(key, sc.id);
-        });
-        
-        // Obtener todos los productos existentes de la tienda
-        statusText.textContent = `Verificando productos existentes...`;
-        progressBar.style.width = '20%';
-        const productosExistentes = await db.getAll('productos');
-        const productosTienda = productosExistentes.filter(p => p.tiendaId === tiendaId);
-        
-        // Eliminar duplicados en productos existentes de la tienda (misma referencia o EAN)
-        statusText.textContent = `Eliminando duplicados en productos existentes...`;
-        const productosPorReferencia = new Map(); // referencia -> producto (mantener el primero)
-        const productosPorEAN = new Map(); // ean -> producto (mantener el primero)
-        const productosDuplicadosEliminar = [];
-        
-        productosTienda.forEach(p => {
-            let esDuplicado = false;
-            
-            // Verificar duplicados por referencia
-            if (p.referencia) {
-                const refKey = p.referencia.trim().toLowerCase();
-                if (productosPorReferencia.has(refKey)) {
-                    // Ya existe un producto con esta referencia, marcar como duplicado
-                    productosDuplicadosEliminar.push(p);
-                    esDuplicado = true;
-                } else {
-                    productosPorReferencia.set(refKey, p);
-                }
-            }
-            
-            // Verificar duplicados por EAN (solo si no es duplicado por referencia)
-            if (!esDuplicado && p.ean) {
-                const eanKey = p.ean.trim().toLowerCase();
-                if (productosPorEAN.has(eanKey)) {
-                    // Ya existe un producto con este EAN, marcar como duplicado
-                    productosDuplicadosEliminar.push(p);
-                } else {
-                    productosPorEAN.set(eanKey, p);
-                }
-            }
-        });
-        
-        // Eliminar productos duplicados existentes
-        for (const productoDuplicado of productosDuplicadosEliminar) {
-            await db.delete('productos', productoDuplicado.id);
-        }
-        
-        // Eliminar duplicados en productos nuevos (misma referencia o EAN)
-        statusText.textContent = `Eliminando duplicados en productos nuevos...`;
-        const articulosUnicos = [];
-        const referenciasProcesadas = new Set();
-        const eansProcesados = new Set();
-        
-        for (const articulo of articulos) {
-            let esDuplicado = false;
-            
-            // Verificar duplicados por referencia
-            if (articulo.referencia) {
-                const refKey = articulo.referencia.trim().toLowerCase();
-                if (referenciasProcesadas.has(refKey)) {
-                    esDuplicado = true;
-                } else {
-                    referenciasProcesadas.add(refKey);
-                }
-            }
-            
-            // Verificar duplicados por EAN (solo si no es duplicado por referencia)
-            if (!esDuplicado && articulo.ean) {
-                const eanKey = articulo.ean.trim().toLowerCase();
-                if (eansProcesados.has(eanKey)) {
-                    esDuplicado = true;
-                } else {
-                    eansProcesados.add(eanKey);
-                }
-            }
-            
-            if (!esDuplicado) {
-                articulosUnicos.push(articulo);
-            }
-        }
-        
-        const duplicadosEliminados = articulos.length - articulosUnicos.length;
-        articulos = articulosUnicos; // Usar solo los artículos únicos
-        
-        // Crear mapas de referencia y EAN de productos nuevos para verificar coincidencias
-        const referenciasNuevas = new Set();
-        const eansNuevos = new Set();
-        articulos.forEach(a => {
-            if (a.referencia) referenciasNuevas.add(a.referencia.trim().toLowerCase());
-            if (a.ean) eansNuevos.add(a.ean.trim().toLowerCase());
-        });
-        
-        // Eliminar productos que NO tienen coincidencia en referencia o EAN
-        statusText.textContent = `Eliminando productos obsoletos...`;
-        progressBar.style.width = '25%';
-        let productosEliminados = productosDuplicadosEliminar.length; // Incluir duplicados ya eliminados
-        let productosActualizados = 0;
-        
-        // Filtrar productos que ya fueron eliminados como duplicados
-        const productosDuplicadosIds = new Set(productosDuplicadosEliminar.map(p => p.id));
-        const productosTiendaSinDuplicados = productosTienda.filter(p => !productosDuplicadosIds.has(p.id));
-        
-        for (const productoExistente of productosTiendaSinDuplicados) {
-            const tieneReferencia = productoExistente.referencia && referenciasNuevas.has(productoExistente.referencia.trim().toLowerCase());
-            const tieneEAN = productoExistente.ean && eansNuevos.has(productoExistente.ean.trim().toLowerCase());
-            
-            if (!tieneReferencia && !tieneEAN) {
-                // No hay coincidencia, eliminar producto
-                await db.delete('productos', productoExistente.id);
-                productosEliminados++;
-            }
-        }
-        
         progressBar.style.width = '30%';
-        statusText.textContent = `Procesando y actualizando productos...`;
         
-        // Procesar artículos nuevos
+        // Obtener o crear categoría "General" para la tienda
+        const categorias = await db.getAll('categorias');
+        let categoriaGeneral = categorias.find(c => c.tiendaId === tiendaId && c.nombre === 'General');
+        
+        if (!categoriaGeneral) {
+            categoriaGeneral = await db.add('categorias', {
+                tiendaId: tiendaId,
+                nombre: 'General'
+            });
+        }
+        
+        const categoriaGeneralId = categoriaGeneral.id || categoriaGeneral;
+        
+        progressBar.style.width = '50%';
+        statusText.textContent = `Subiendo artículos a la base de datos...`;
+        
+        // Subir artículos
         let exitosos = 0;
         let errores = 0;
-        const productosProcesados = new Set(); // Para evitar duplicados
         
         for (let i = 0; i < articulos.length; i++) {
             const articulo = articulos[i];
             
             try {
-                // Obtener o crear categoría
-                let categoriaId = categoriasMap.get(articulo.categoria.toLowerCase());
-                if (!categoriaId && articulo.categoria) {
-                    const nuevaCategoria = await db.add('categorias', {
-                        tiendaId: tiendaId,
-                        nombre: articulo.categoria
-                    });
-                    categoriaId = nuevaCategoria.id || nuevaCategoria;
-                    categoriasMap.set(articulo.categoria.toLowerCase(), categoriaId);
-                }
-                
-                // Obtener o crear subcategoría (si existe)
-                let subCategoriaId = null;
-                if (articulo.subCategoria && categoriaId) {
-                    const key = `${categoriaId}_${articulo.subCategoria.toLowerCase()}`;
-                    subCategoriaId = subcategoriasMap.get(key);
+                // Determinar la categoría
+                let categoriaId = categoriaGeneralId;
+                if (articulo.categoria) {
+                    let categoria = categorias.find(c => 
+                        c.tiendaId === tiendaId && 
+                        c.nombre.toLowerCase() === articulo.categoria.toLowerCase()
+                    );
                     
-                    if (!subCategoriaId) {
-                        const nuevaSubCategoria = await db.add('subcategorias', {
-                            categoriaId: categoriaId,
-                            nombre: articulo.subCategoria
+                    if (!categoria) {
+                        categoria = await db.add('categorias', {
+                            tiendaId: tiendaId,
+                            nombre: articulo.categoria
                         });
-                        subCategoriaId = nuevaSubCategoria.id || nuevaSubCategoria;
-                        subcategoriasMap.set(key, subCategoriaId);
                     }
+                    
+                    categoriaId = categoria.id || categoria;
                 }
                 
-                // Preparar datos del producto
-                const productoData = {
+                // Crear el producto
+                await db.add('productos', {
                     tiendaId: tiendaId,
                     categoriaId: categoriaId,
-                    subCategoriaId: subCategoriaId,
-                    nombre: articulo.designacion || articulo.nombre || 'Sin nombre',
-                    designacion: articulo.designacion || null,
+                    nombre: articulo.nombre || 'Sin nombre',
                     descripcion: articulo.descripcion || '',
-                    precio: parseFloat(articulo.precio) || 0,
-                    foto: articulo.foto || null
-                };
+                    precio: parseFloat(articulo.precio) || 0
+                });
                 
-                // Agregar campos opcionales si existen
-                if (articulo.referencia) productoData.referencia = articulo.referencia;
-                if (articulo.ean) productoData.ean = articulo.ean;
-                
-                // Verificar si existe un producto con la misma referencia o EAN
-                let productoExistente = null;
-                if (articulo.referencia) {
-                    productoExistente = productosPorReferencia.get(articulo.referencia.trim().toLowerCase());
-                }
-                if (!productoExistente && articulo.ean) {
-                    productoExistente = productosPorEAN.get(articulo.ean.trim().toLowerCase());
-                }
-                
-                if (productoExistente) {
-                    // Actualizar producto existente (mantener referencia y EAN originales)
-                    const id = productoExistente.id;
-                    productoData.id = id;
-                    // Mantener referencia y EAN originales si existían
-                    if (productoExistente.referencia) productoData.referencia = productoExistente.referencia;
-                    if (productoExistente.ean) productoData.ean = productoExistente.ean;
-                    
-                    await db.update('productos', productoData);
-                    productosActualizados++;
-                } else {
-                    // Crear nuevo producto
-                    await db.add('productos', productoData);
-                    exitosos++;
-                }
+                exitosos++;
             } catch (error) {
-                console.error('Error al procesar artículo:', articulo, error);
+                console.error('Error al subir artículo:', articulo, error);
                 errores++;
             }
             
             // Actualizar progreso
-            const progress = 30 + ((i + 1) / articulos.length) * 70;
+            const progress = 50 + ((i + 1) / articulos.length) * 50;
             progressBar.style.width = progress + '%';
-            statusText.textContent = `Procesando artículos... ${i + 1}/${articulos.length}`;
+            statusText.textContent = `Subiendo artículos... ${i + 1}/${articulos.length}`;
         }
         
         progressBar.style.width = '100%';
@@ -5417,34 +5188,18 @@ async function procesarYSubirArticulos(file, tiendaId) {
         resultadoDiv.style.backgroundColor = errores === 0 ? '#d1fae5' : '#fef3c7';
         resultadoDiv.style.border = `2px solid ${errores === 0 ? '#10b981' : '#f59e0b'}`;
         
-        let mensaje = '';
         if (errores === 0) {
-            mensaje = `✓ Proceso completado exitosamente:\n`;
-            mensaje += `- ${exitosos} productos nuevos agregados\n`;
-            mensaje += `- ${productosActualizados} productos actualizados\n`;
-            mensaje += `- ${productosEliminados} productos obsoletos/duplicados eliminados`;
-            if (duplicadosEliminados > 0) {
-                mensaje += `\n- ${duplicadosEliminados} duplicados eliminados del archivo`;
-            }
+            mensajeDiv.textContent = `✓ Se subieron exitosamente ${exitosos} artículos.`;
             mensajeDiv.style.color = '#065f46';
         } else {
-            mensaje = `Proceso completado con algunos errores:\n`;
-            mensaje += `- ${exitosos} productos nuevos agregados\n`;
-            mensaje += `- ${productosActualizados} productos actualizados\n`;
-            mensaje += `- ${productosEliminados} productos obsoletos/duplicados eliminados`;
-            if (duplicadosEliminados > 0) {
-                mensaje += `\n- ${duplicadosEliminados} duplicados eliminados del archivo`;
-            }
-            mensaje += `\n- ${errores} artículos tuvieron errores`;
+            mensajeDiv.textContent = `Se subieron ${exitosos} artículos. ${errores} artículos tuvieron errores.`;
             mensajeDiv.style.color = '#92400e';
         }
-        mensajeDiv.textContent = mensaje;
-        mensajeDiv.style.whiteSpace = 'pre-line';
         
         // Recargar la vista si estamos en la sección de productos
         setTimeout(() => {
-            if (currentView === 'admin-tienda' && currentTienda) {
-                loadCategoriasAdmin(currentTienda.id);
+            if (currentView === 'admin-productos') {
+                loadCategoriasAdmin();
             }
         }, 1000);
         
