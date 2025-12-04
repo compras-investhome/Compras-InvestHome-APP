@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicializar Base de Datos - Compras InvestHome</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        p { color: #666; margin-bottom: 20px; }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            font-weight: 600;
+        }
+        button:hover { background: #1d4ed8; }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 2px solid #10b981;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 2px solid #ef4444;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 2px solid #3b82f6;
+        }
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .log-entry { margin-bottom: 5px; }
+        .log-success { color: #10b981; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Inicializar Base de Datos</h1>
+        <p>Este script creará las tiendas, categorías y productos de ejemplo en Firebase Firestore.</p>
+        
+        <button id="btn-init" onclick="initDatabase()">Inicializar Base de Datos</button>
+        <button id="btn-check" onclick="checkStatus()">Verificar Estado</button>
+        
+        <div id="status" class="status"></div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            getDocs 
+        } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCiJJs1yGliDeXjNQjFEb4ZbaQEk6WqLjg",
+            authDomain: "compras-investhome.firebaseapp.com",
+            projectId: "compras-investhome",
+            storageBucket: "compras-investhome.firebasestorage.app",
+            messagingSenderId: "904947165686",
+            appId: "1:904947165686:web:aa503961c7768e05227fd7"
+        };
+
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Funciones globales
+        window.firebaseDb = db;
+        window.firebaseAddDoc = addDoc;
+        window.firebaseGetDocs = getDocs;
+        window.firebaseCollection = collection;
+
+        console.log('✅ Firebase inicializado correctamente');
+        addLog('✅ Firebase inicializado correctamente', 'success');
+        showStatus('Firebase conectado. Listo para inicializar.', 'info');
+
+        // Función para añadir logs
+        function addLog(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${time}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        // Función para mostrar estado
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        // Función para verificar estado
+        window.checkStatus = async function() {
+            addLog('Verificando estado de la base de datos...', 'info');
+            try {
+                const tiendasSnapshot = await getDocs(collection(db, 'tiendas'));
+                const categoriasSnapshot = await getDocs(collection(db, 'categorias'));
+                const productosSnapshot = await getDocs(collection(db, 'productos'));
+
+                const tiendas = tiendasSnapshot.size;
+                const categorias = categoriasSnapshot.size;
+                const productos = productosSnapshot.size;
+
+                addLog(`Tiendas: ${tiendas}`, 'info');
+                addLog(`Categorías: ${categorias}`, 'info');
+                addLog(`Productos: ${productos}`, 'info');
+
+                if (tiendas === 0) {
+                    showStatus('Base de datos vacía. Haz clic en "Inicializar Base de Datos"', 'info');
+                } else {
+                    showStatus(`Base de datos tiene ${tiendas} tiendas, ${categorias} categorías y ${productos} productos`, 'success');
+                }
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                showStatus('Error al verificar: ' + error.message, 'error');
+                console.error('Error completo:', error);
+            }
+        };
+
+        // Función para inicializar base de datos
+        window.initDatabase = async function() {
+            addLog('=== INICIANDO INICIALIZACIÓN ===', 'info');
+            const btn = document.getElementById('btn-init');
+            btn.disabled = true;
+            showStatus('Inicializando base de datos...', 'info');
+
+            try {
+                // Verificar si ya hay datos
+                const tiendasSnapshot = await getDocs(collection(db, 'tiendas'));
+                if (tiendasSnapshot.size > 0) {
+                    if (!confirm('Ya existen tiendas en la base de datos. ¿Deseas añadir más datos de ejemplo?')) {
+                        btn.disabled = false;
+                        return;
+                    }
+                }
+
+                // Crear tiendas
+                addLog('Creando tiendas...', 'info');
+                const tiendas = [
+                    { nombre: 'Leroy Merlin', icono: '🏪' },
+                    { nombre: 'Wurth', icono: '🔧' },
+                    { nombre: 'Puya', icono: '🛠️' },
+                    { nombre: 'Carlos Alcaraz', icono: '🏗️' },
+                    { nombre: 'Pinturas Mata', icono: '🎨' },
+                    { nombre: 'ERFRI', icono: '❄️' }
+                ];
+
+                const tiendaIds = {};
+                for (const tienda of tiendas) {
+                    const docRef = await addDoc(collection(db, 'tiendas'), tienda);
+                    tiendaIds[tienda.nombre] = docRef.id;
+                    addLog(`✓ Tienda creada: ${tienda.nombre} (ID: ${docRef.id})`, 'success');
+                }
+
+                // Crear categorías para Leroy Merlin
+                addLog('Creando categorías para Leroy Merlin...', 'info');
+                const categoriasLeroy = [
+                    { tiendaId: tiendaIds['Leroy Merlin'], nombre: 'Ferretería' },
+                    { tiendaId: tiendaIds['Leroy Merlin'], nombre: 'Fontanería-Electricidad' },
+                    { tiendaId: tiendaIds['Leroy Merlin'], nombre: 'Pinturas' },
+                    { tiendaId: tiendaIds['Leroy Merlin'], nombre: 'Herramientas' },
+                    { tiendaId: tiendaIds['Leroy Merlin'], nombre: 'Jardín' },
+                    { tiendaId: tiendaIds['Leroy Merlin'], nombre: 'Iluminación' }
+                ];
+
+                const categoriaIds = {};
+                for (const categoria of categoriasLeroy) {
+                    const docRef = await addDoc(collection(db, 'categorias'), categoria);
+                    categoriaIds[`${categoria.tiendaId}-${categoria.nombre}`] = docRef.id;
+                    addLog(`✓ Categoría creada: ${categoria.nombre}`, 'success');
+                }
+
+                // Crear productos de ejemplo
+                addLog('Creando productos de ejemplo...', 'info');
+                const productosEjemplo = [
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Ferretería`],
+                        nombre: 'Tornillo M6x20',
+                        descripcion: 'Tornillo de acero inoxidable M6x20mm',
+                        precio: 0.15
+                    },
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Ferretería`],
+                        nombre: 'Tuerca M6',
+                        descripcion: 'Tuerca hexagonal M6 acero inoxidable',
+                        precio: 0.10
+                    },
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Fontanería-Electricidad`],
+                        nombre: 'Tubo PVC 20mm',
+                        descripcion: 'Tubo de PVC para fontanería diámetro 20mm',
+                        precio: 2.50
+                    },
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Pinturas`],
+                        nombre: 'Pintura Blanca Mate',
+                        descripcion: 'Pintura plástica blanca mate 5L',
+                        precio: 25.99
+                    },
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Herramientas`],
+                        nombre: 'Taladro Percutor',
+                        descripcion: 'Taladro percutor 750W con maletín',
+                        precio: 89.99
+                    },
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Jardín`],
+                        nombre: 'Manguera 20m',
+                        descripcion: 'Manguera de jardín 20 metros',
+                        precio: 15.99
+                    },
+                    {
+                        tiendaId: tiendaIds['Leroy Merlin'],
+                        categoriaId: categoriaIds[`${tiendaIds['Leroy Merlin']}-Iluminación`],
+                        nombre: 'Bombilla LED 9W',
+                        descripcion: 'Bombilla LED E27 9W equivalente 60W',
+                        precio: 4.99
+                    }
+                ];
+
+                for (const producto of productosEjemplo) {
+                    await addDoc(collection(db, 'productos'), producto);
+                    addLog(`✓ Producto creado: ${producto.nombre}`, 'success');
+                }
+
+                // Crear categorías para otras tiendas
+                addLog('Creando categorías para otras tiendas...', 'info');
+                const otrasTiendas = ['Wurth', 'Puya', 'Carlos Alcaraz', 'Pinturas Mata', 'ERFRI'];
+                for (const nombreTienda of otrasTiendas) {
+                    const categoriasGenericas = [
+                        { tiendaId: tiendaIds[nombreTienda], nombre: 'Productos Generales' },
+                        { tiendaId: tiendaIds[nombreTienda], nombre: 'Materiales' }
+                    ];
+                    for (const cat of categoriasGenericas) {
+                        await addDoc(collection(db, 'categorias'), cat);
+                        addLog(`✓ Categoría creada: ${cat.nombre} para ${nombreTienda}`, 'success');
+                    }
+                }
+
+                showStatus('¡Base de datos inicializada correctamente!', 'success');
+                addLog('✅ INICIALIZACIÓN COMPLETADA', 'success');
+                
+                // Verificar estado final
+                setTimeout(checkStatus, 1000);
+
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                showStatus('Error: ' + error.message, 'error');
+                console.error('Error completo:', error);
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        // Verificar estado al cargar
+        checkStatus();
+    </script>
+</body>
+</html>

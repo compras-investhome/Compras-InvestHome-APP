@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras InvestHome - Técnico</title>
+    <link rel="stylesheet" href="../shared/shared.css">
+    <link rel="stylesheet" href="tecnico.css">
+</head>
+<body>
+    <div id="view-tecnico" class="view admin-view">
+        <!-- Menú lateral izquierdo -->
+        <aside class="admin-sidebar" id="admin-sidebar">
+            <div class="admin-sidebar-header">
+                <h2 class="admin-sidebar-title">Técnico</h2>
+                <button type="button" id="btn-toggle-sidebar" class="icon-btn admin-toggle-btn" aria-label="Expandir/Colapsar menú">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <nav class="admin-sidebar-nav">
+                <button type="button" class="admin-nav-item active" data-view="tecnico-tienda" title="Tienda">
+                    <span class="admin-nav-icon">🏪</span>
+                    <span class="admin-nav-text">Tienda</span>
+                </button>
+                <button type="button" class="admin-nav-item" data-view="tecnico-pedidos-curso" title="Pedidos en Curso">
+                    <span class="admin-nav-icon">📦</span>
+                    <span class="admin-nav-text">Pedidos en Curso</span>
+                </button>
+                <button type="button" class="admin-nav-item" data-view="tecnico-historico" title="Histórico">
+                    <span class="admin-nav-icon">📋</span>
+                    <span class="admin-nav-text">Histórico</span>
+                </button>
+            </nav>
+            <div class="admin-sidebar-footer">
+                <button type="button" id="btn-logout-tecnico" class="admin-nav-item admin-logout-btn" aria-label="Cerrar Sesión">
+                    <span class="admin-nav-icon">🚪</span>
+                    <span class="admin-nav-text">Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Contenido principal -->
+        <div class="admin-content-wrapper">
+            <!-- Vista de Tienda -->
+            <div id="view-tecnico-tienda" class="admin-content-view active">
+                <header class="app-header">
+                    <div style="width: 24px;"></div>
+                    <h2>Tienda</h2>
+                    <div class="header-actions">
+                        <button id="btn-nuevo-pedido-especial-admin" class="icon-btn btn-add-special-pedido" aria-label="Nuevo Pedido Especial">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                        <button id="btn-search-admin" class="icon-btn" aria-label="Buscar">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="search-container" id="search-container-admin" style="display: none;">
+                    <input type="text" id="search-input-admin" placeholder="Buscar por designación, EAN o referencia..." class="search-input">
+                    <button id="btn-close-search-admin" class="icon-btn" aria-label="Cerrar búsqueda">✕</button>
+                </div>
+
+                <main class="main-content">
+                    <div id="tiendas-list-admin" class="tiendas-grid">
+                        <!-- Las tiendas se cargarán dinámicamente -->
+                    </div>
+                </main>
+
+                <div id="cart-button-admin" class="cart-button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="9" cy="21" r="1"></circle>
+                        <circle cx="20" cy="21" r="1"></circle>
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                    </svg>
+                    <span id="cart-count-admin" class="cart-count">0</span>
+                </div>
+            </div>
+
+            <!-- Vista Categorías de Tienda -->
+            <div id="view-categorias" class="admin-content-view">
+                <header class="app-header">
+                    <button class="icon-btn btn-back" aria-label="Volver">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <h2 id="categorias-tienda-nombre"></h2>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <main class="main-content">
+                    <div id="categorias-list" class="categorias-grid">
+                        <!-- Las categorías se cargarán dinámicamente -->
+                    </div>
+                </main>
+            </div>
+
+            <!-- Vista Productos -->
+            <div id="view-productos" class="admin-content-view">
+                <header class="app-header">
+                    <button class="icon-btn btn-back" aria-label="Volver">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <h2 id="productos-categoria-nombre"></h2>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <main class="main-content">
+                    <div id="productos-list" class="productos-list">
+                        <!-- Los productos se cargarán dinámicamente -->
+                    </div>
+                </main>
+            </div>
+
+    <!-- Modal: Carrito -->
+    <div id="modal-carrito-admin" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Carrito de Compras</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                <div id="carrito-items-admin" class="carrito-items">
+                    <!-- Los items del carrito se cargarán dinámicamente -->
+                </div>
+                <div id="carrito-empty-admin" class="empty-state" style="display: none; text-align: center; padding: 2rem;">
+                    <p style="color: var(--text-secondary);">El carrito está vacío</p>
+                </div>
+            </div>
+            <div class="modal-footer carrito-footer">
+                <div class="carrito-total-container">
+                    <div class="carrito-total-label">Total del pedido</div>
+                    <div class="carrito-total-value" id="carrito-total-admin">0.00 €</div>
+                </div>
+                <button id="btn-finalizar-pedido-admin" class="btn btn-primary btn-block btn-finalizar-pedido" disabled>Enviar Pedido</button>
+            </div>
+        </div>
+    </div>
+
+            <!-- Vista Pedidos en Curso -->
+            <div id="view-tecnico-pedidos-curso" class="admin-content-view">
+                <header class="app-header">
+                    <div style="width: 24px;"></div>
+                    <h2>Pedidos en Curso</h2>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <main class="main-content">
+                    <!-- Vista de obras -->
+                    <div id="pedidos-curso-obras-view" class="cerrados-view">
+                        <div id="pedidos-curso-obras-list" class="obras-list">
+                            <!-- Las obras se cargarán dinámicamente -->
+                        </div>
+                        <div id="pedidos-curso-obras-empty" class="empty-state" style="display: none;">
+                            <p>No hay obras con pedidos en curso</p>
+                        </div>
+                    </div>
+                    <!-- Vista de pedidos de una obra -->
+                    <div id="pedidos-curso-pedidos-view" class="cerrados-view" style="display: none;">
+                        <div class="cerrados-pedidos-header">
+                            <button id="pedidos-curso-volver-obras" class="btn-volver-obras">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                Volver a obras
+                            </button>
+                            <h3 id="pedidos-curso-obra-nombre"></h3>
+                        </div>
+                        <div id="pedidos-curso-pedidos-list" class="pedidos-gestion-list">
+                            <!-- Los pedidos se cargarán dinámicamente -->
+                        </div>
+                        <div id="pedidos-curso-pedidos-empty" class="empty-state" style="display: none;">
+                            <p>No hay pedidos en curso para esta obra</p>
+                        </div>
+                        <div id="pedidos-curso-cargar-mas-wrapper" style="display: none; text-align: center; margin-top: 1.5rem;">
+                            <button id="pedidos-curso-cargar-mas-btn" class="btn-cargar-mas">
+                                Cargar más pedidos
+                            </button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+
+            <!-- Vista Histórico -->
+            <div id="view-tecnico-historico" class="admin-content-view">
+                <header class="app-header">
+                    <div style="width: 24px;"></div>
+                    <h2>Histórico</h2>
+                    <div style="width: 24px;"></div>
+                </header>
+
+                <main class="main-content">
+                    <!-- Vista de obras -->
+                    <div id="historico-obras-view" class="cerrados-view">
+                        <div id="historico-obras-list" class="obras-list">
+                            <!-- Las obras se cargarán dinámicamente -->
+                        </div>
+                        <div id="historico-obras-empty" class="empty-state" style="display: none;">
+                            <p>No hay obras con pedidos históricos</p>
+                        </div>
+                    </div>
+                    <!-- Vista de pedidos de una obra -->
+                    <div id="historico-pedidos-view" class="cerrados-view" style="display: none;">
+                        <div class="cerrados-pedidos-header">
+                            <button id="historico-volver-obras" class="btn-volver-obras">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                Volver a obras
+                            </button>
+                            <h3 id="historico-obra-nombre"></h3>
+                        </div>
+                        <div id="historico-pedidos-list" class="pedidos-gestion-list">
+                            <!-- Los pedidos se cargarán dinámicamente -->
+                        </div>
+                        <div id="historico-pedidos-empty" class="empty-state" style="display: none;">
+                            <p>No hay pedidos históricos para esta obra</p>
+                        </div>
+                        <div id="historico-cargar-mas-wrapper" style="display: none; text-align: center; margin-top: 1.5rem;">
+                            <button id="historico-cargar-mas-btn" class="btn-cargar-mas">
+                                Cargar más pedidos
+                            </button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear Pedido Especial -->
+    <div id="modal-pedido-especial" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Nuevo Pedido Especial</h3>
+                <button class="icon-btn btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="pedido-especial-proveedor-nombre">Título del pedido <span style="color: red;">*</span> <span id="pedido-especial-titulo-count" style="color: var(--text-secondary); font-size: 0.85rem; font-weight: normal;">(0/60)</span></label>
+                    <input type="text" id="pedido-especial-proveedor-nombre" class="form-input" placeholder="Título del pedido especial" maxlength="60" required>
+                </div>
+                <div class="form-group">
+                    <label for="pedido-especial-obra">Obra <span style="color: red;">*</span></label>
+                    <select id="pedido-especial-obra" class="form-select" required>
+                        <option value="">-- Selecciona una obra --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Artículos</label>
+                    <div id="pedido-especial-articulos" class="modal-pedido-especial-items">
+                        <!-- Los artículos se añadirán dinámicamente -->
+                    </div>
+                    <button type="button" id="btn-add-articulo-especial" class="btn btn-secondary" style="margin-top: 0.5rem;">
+                        + Añadir Artículo
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label>Adjuntar Documento de Pago</label>
+                    <div id="pedido-especial-documento-dropzone" class="dropzone" style="border: 2px dashed var(--border-color); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Arrastra un documento aquí o haz clic para seleccionar</p>
+                        <p style="color: var(--text-secondary); font-size: 0.875rem;">PDF, PNG, JPG (máx. 10MB)</p>
+                        <input type="file" id="pedido-especial-documento-file" accept="application/pdf,image/png,image/jpeg,image/jpg" style="display: none;">
+                        <div id="pedido-especial-documento-preview" style="margin-top: 1rem; display: none;">
+                            <div class="pedido-especial-documento-preview">
+                                <span id="pedido-especial-documento-nombre"></span>
+                                <button type="button" id="btn-remove-documento-especial" class="btn btn-secondary btn-sm">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="pedido-especial-notas">Notas del pedido</label>
+                    <textarea id="pedido-especial-notas" class="form-input" rows="3" placeholder="Notas adicionales sobre el pedido (opcional)"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-pedido-especial" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-pedido-especial" class="btn btn-primary">Guardar Pedido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Añadir Artículo al Pedido Especial -->
+    <div id="modal-add-articulo-especial" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Añadir Artículo</h3>
+                <button class="icon-btn btn-close-modal-articulo">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="articulo-especial-nombre">Nombre del Artículo <span style="color: red;">*</span></label>
+                    <input type="text" id="articulo-especial-nombre" class="form-input" placeholder="Nombre del artículo" required>
+                </div>
+                <div class="form-group">
+                    <div style="display: flex; gap: 1rem; align-items: flex-start;">
+                        <div style="flex: 0 0 120px;">
+                            <label>Foto</label>
+                            <div id="articulo-especial-foto-dropzone" class="articulo-foto-dropzone-square" style="width: 120px; height: 120px; border: 2px dashed var(--border-color); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background-color: var(--bg-color); transition: all 0.2s; position: relative;">
+                                <input type="file" id="articulo-especial-foto-file" accept="image/png,image/jpeg,image/jpg" style="display: none;">
+                                <div id="articulo-especial-foto-placeholder" style="text-align: center;">
+                                    <span style="font-size: 2rem;">📷</span>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Foto</p>
+                                </div>
+                                <img id="articulo-especial-foto-preview" style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">
+                                <button type="button" id="articulo-especial-foto-remove" style="display: none; position: absolute; top: -8px; right: -8px; background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 0.875rem; z-index: 10;">✕</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label for="articulo-especial-cantidad">Cantidad</label>
+                                <input type="number" id="articulo-especial-cantidad" class="form-input" placeholder="Cantidad" step="1" min="1" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="articulo-especial-precio">Precio (€) <span style="color: var(--text-secondary); font-size: 0.875rem;">(opcional)</span></label>
+                                <input type="number" id="articulo-especial-precio" class="form-input" placeholder="Precio" step="0.01" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="articulo-especial-descripcion">Descripción <span style="color: var(--text-secondary); font-size: 0.875rem;">(opcional)</span></label>
+                                <textarea id="articulo-especial-descripcion" class="form-input" rows="2" placeholder="Descripción del artículo (opcional)"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancelar-articulo-especial" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-guardar-articulo-especial" class="btn btn-primary">Añadir Artículo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popups personalizados -->
+    <div id="custom-alert" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-alert-title">Información</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-alert-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-alert-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-confirm" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-confirm-title">Confirmar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-confirm-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-confirm-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-confirm-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-prompt" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-prompt-title">Ingresar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-prompt-message"></p>
+                <input type="text" id="custom-prompt-input" class="form-input" style="margin-top: 1rem;">
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-prompt-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-prompt-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Config debe cargarse primero -->
+    <!-- IMPORTANTE: firebase-config.js está en .gitignore y contiene las credenciales reales -->
+    <!-- Si no existe, copia firebase-config.example.js como firebase-config.js y configura tus credenciales -->
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="tecnico.js"></script>
+</body>
+</html>

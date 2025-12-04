@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras InvestHome - Contabilidad</title>
+    <link rel="stylesheet" href="../shared/shared.css">
+    <link rel="stylesheet" href="contabilidad.css">
+</head>
+<body>
+    <div id="view-contabilidad" class="view active">
+        <header class="app-header">
+            <button id="btn-menu-contabilidad" class="icon-btn" aria-label="Menú">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <h2>Contabilidad</h2>
+            <div style="width: 24px;"></div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="pedidos-contabilidad">
+                Pendientes de Pago
+                <span class="tab-badge" id="tab-count-pendientes">0</span>
+            </button>
+            <button class="tab-btn" data-tab="cuentas-contabilidad">
+                Cuentas
+                <span class="tab-badge" id="tab-count-cuentas">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pedidos-especiales-contabilidad">
+                Pedidos Especiales
+                <span class="tab-badge" id="tab-count-especiales">0</span>
+            </button>
+            <button class="tab-btn" data-tab="facturas-pendientes-contabilidad">
+                Facturas Pendientes
+                <span class="tab-badge" id="tab-count-facturas">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pedidos-pagados-contabilidad">
+                Histórico
+                <span class="tab-badge" id="tab-count-historico">0</span>
+            </button>
+        </div>
+
+        <main class="main-content">
+            <div id="pedidos-contabilidad" class="tab-content active">
+                <div id="pedidos-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos se cargarán dinámicamente -->
+                </div>
+                <div id="pedidos-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos pendientes</p>
+                </div>
+            </div>
+            <div id="cuentas-contabilidad" class="tab-content">
+                <div id="cuentas-contabilidad-list" class="tiendas-list">
+                    <!-- Las cuentas se cargarán dinámicamente -->
+                </div>
+                <div id="cuentas-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay tiendas con cuenta</p>
+                </div>
+            </div>
+            <div id="pedidos-especiales-contabilidad" class="tab-content">
+                <div id="pedidos-especiales-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos especiales se cargarán dinámicamente -->
+                </div>
+                <div id="pedidos-especiales-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos especiales registrados</p>
+                </div>
+            </div>
+            <div id="facturas-pendientes-contabilidad" class="tab-content">
+                <div id="facturas-pendientes-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Las facturas pendientes se cargarán dinámicamente -->
+                </div>
+                <div id="facturas-pendientes-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay facturas pendientes registradas</p>
+                </div>
+            </div>
+            <div id="pedidos-pagados-contabilidad" class="tab-content">
+                <div id="pedidos-pagados-contabilidad-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos pagados se cargarán dinámicamente -->
+                </div>
+                <div id="pedidos-pagados-contabilidad-empty" class="empty-state" style="display: none;">
+                    <p>No hay registros históricos</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Sidebar para menú -->
+    <div id="sidebar-contabilidad" class="sidebar">
+        <div class="sidebar-overlay"></div>
+        <div class="sidebar-content">
+            <div class="sidebar-header">
+                <h3>Menú</h3>
+                <button id="btn-close-sidebar-contabilidad" class="icon-btn">✕</button>
+            </div>
+            <div class="sidebar-body">
+                <div class="sidebar-user-info">
+                    <p><strong>Usuario:</strong> <span id="sidebar-usuario-contabilidad"></span></p>
+                    <p><strong>Tipo:</strong> <span id="sidebar-tipo-contabilidad"></span></p>
+                </div>
+                <button id="btn-logout-contabilidad" class="sidebar-btn btn-danger">Cerrar Sesión</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popups personalizados -->
+    <div id="custom-alert" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-alert-title">Información</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-alert-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-alert-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-confirm" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-confirm-title">Confirmar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-confirm-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-confirm-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-confirm-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-prompt" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-prompt-title">Ingresar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-prompt-message"></p>
+                <input type="text" id="custom-prompt-input" class="form-input" style="margin-top: 1rem;">
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-prompt-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-prompt-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Config debe cargarse primero -->
+    <!-- IMPORTANTE: firebase-config.js está en .gitignore y contiene las credenciales reales -->
+    <!-- Si no existe, copia firebase-config.example.js como firebase-config.js y configura tus credenciales -->
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="contabilidad.js"></script>
+</body>
+</html>
+

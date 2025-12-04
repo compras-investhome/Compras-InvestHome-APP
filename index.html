@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras InvestHome</title>
+    <link rel="stylesheet" href="shared/shared.css">
+    <link rel="stylesheet" href="login/login.css">
+</head>
+<body>
+    <!-- Vista de Login - Punto de Entrada -->
+    <div id="view-login" class="view active">
+        <div class="login-container">
+            <h1>Compras InvestHome</h1>
+            <div class="form-group">
+                <label for="select-tipo-usuario">Tipo de Usuario</label>
+                <select id="select-tipo-usuario" class="form-select">
+                    <option value="">Seleccione tipo de usuario</option>
+                    <option value="Administrador">Administrador</option>
+                    <option value="Contabilidad">Contabilidad</option>
+                    <option value="Técnico">Técnico</option>
+                    <option value="Encargado">Encargado</option>
+                    <option value="Tienda">Tienda</option>
+                </select>
+            </div>
+            
+            <!-- Campo dinámico para usuario (Técnico/Encargado) -->
+            <div id="form-group-usuario" class="form-group" style="display: none;">
+                <label for="select-usuario">Usuario</label>
+                <select id="select-usuario" class="form-select">
+                    <option value="">Seleccione un usuario</option>
+                </select>
+            </div>
+
+            <!-- Campo dinámico para obra (Técnico/Encargado) -->
+            <div id="form-group-obra" class="form-group" style="display: none;">
+                <label for="select-obra">Obra</label>
+                <select id="select-obra" class="form-select">
+                    <option value="">Seleccione una obra</option>
+                </select>
+            </div>
+
+            <!-- Campo dinámico para tienda (Tienda) -->
+            <div id="form-group-tienda" class="form-group" style="display: none;">
+                <label for="select-tienda">Tienda</label>
+                <select id="select-tienda" class="form-select">
+                    <option value="">Seleccione una tienda</option>
+                </select>
+            </div>
+
+            <!-- Campo de contraseña -->
+            <div id="form-group-password" class="form-group" style="display: none;">
+                <label for="input-password">Contraseña (4 dígitos)</label>
+                <input type="password" id="input-password" class="form-input" maxlength="4" pattern="[0-9]{4}" placeholder="0000">
+            </div>
+
+            <button id="btn-login" class="btn btn-primary btn-block">Iniciar Sesión</button>
+            <div id="login-error" class="error-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Firebase Config debe cargarse primero -->
+    <script src="firebase-config.js"></script>
+    <!-- Login Module - Después del login, redirige a los módulos correspondientes -->
+    <script type="module" src="login/login.js"></script>
+</body>
+</html>

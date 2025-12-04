@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras InvestHome - Tienda</title>
+    <link rel="stylesheet" href="../shared/shared.css">
+    <link rel="stylesheet" href="tienda.css">
+</head>
+<body>
+    <!-- Vista de Gestión de Tienda -->
+    <div id="view-gestion-tienda" class="view active tienda-view">
+        <!-- Menú lateral izquierdo -->
+        <aside class="admin-sidebar" id="tienda-sidebar">
+            <div class="admin-sidebar-header">
+                <h2 class="admin-sidebar-title">Tienda</h2>
+                <button id="btn-toggle-sidebar-tienda" class="icon-btn admin-toggle-btn" aria-label="Expandir/Colapsar menú">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <nav class="admin-sidebar-nav">
+                <button class="admin-nav-item active" data-view="tienda-gestion" title="Gestión">
+                    <span class="admin-nav-icon">📋</span>
+                    <span class="admin-nav-text">Gestión</span>
+                </button>
+            </nav>
+            <div class="admin-sidebar-footer">
+                <button id="btn-logout-tienda" class="admin-nav-item admin-logout-btn" aria-label="Cerrar Sesión">
+                    <span class="admin-nav-icon">🚪</span>
+                    <span class="admin-nav-text">Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Contenido principal -->
+        <div class="admin-content-wrapper">
+            <div id="tienda-gestion-view" class="admin-content-view active">
+                <header class="app-header">
+                    <div style="width: 24px;"></div>
+                    <h2 id="gestion-tienda-nombre"></h2>
+                    <div id="gestion-tienda-cuenta-badge" style="margin-left: auto; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.875rem; font-weight: 600;"></div>
+                </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="seleccionar-pago">
+                Seleccionar Pago
+                <span class="tab-badge" id="tab-count-seleccionar-pago">0</span>
+            </button>
+            <button class="tab-btn" data-tab="modificacion-pedido">
+                Modificación de Pedido
+                <span class="tab-badge" id="tab-count-modificacion-pedido">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pendientes-pago">
+                Pendientes de Pago
+                <span class="tab-badge" id="tab-count-pendientes-pago">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pagados">
+                Pagados
+                <span class="tab-badge" id="tab-count-pagados">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pago-cuenta">
+                Pagado A Cuenta
+                <span class="tab-badge" id="tab-count-pago-cuenta">0</span>
+            </button>
+            <button class="tab-btn" data-tab="facturas-pendientes">
+                Facturas Pendientes
+                <span class="tab-badge" id="tab-count-facturas-pendientes">0</span>
+            </button>
+        </div>
+
+        <main class="main-content">
+            <!-- Pestaña 1: Seleccionar Pago -->
+            <div id="seleccionar-pago" class="tab-content active">
+                <div id="seleccionar-pago-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos se cargarán dinámicamente -->
+                </div>
+                <div id="seleccionar-pago-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos pendientes de selección de pago</p>
+                </div>
+            </div>
+
+            <!-- Pestaña 2: Modificación de Pedido -->
+            <div id="modificacion-pedido" class="tab-content">
+                <div id="modificacion-pedido-list" class="pedidos-gestion-list">
+                    <!-- Las solicitudes de modificación se cargarán dinámicamente -->
+                </div>
+                <div id="modificacion-pedido-empty" class="empty-state" style="display: none;">
+                    <p>No hay solicitudes de modificación pendientes</p>
+                </div>
+            </div>
+
+            <!-- Pestaña 3: Pendientes de Pago -->
+            <div id="pendientes-pago" class="tab-content">
+                <div id="pendientes-pago-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos se cargarán dinámicamente -->
+                </div>
+                <div id="pendientes-pago-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos pendientes de pago</p>
+                </div>
+            </div>
+
+            <!-- Pestaña 4: Pagados (con sub-pestañas) -->
+            <div id="pagados" class="tab-content">
+                <div class="sub-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color); justify-content: center;">
+                    <button class="sub-tab-btn active" data-sub-tab="pagados-nuevo">Nuevo</button>
+                    <button class="sub-tab-btn" data-sub-tab="pagados-preparando">Preparando</button>
+                    <button class="sub-tab-btn" data-sub-tab="pagados-en-ruta">En Ruta</button>
+                    <button class="sub-tab-btn" data-sub-tab="pagados-entregado">Entregado</button>
+                </div>
+                <div id="pagados-nuevo" class="sub-tab-content active">
+                    <div id="pagados-nuevo-list" class="pedidos-gestion-list"></div>
+                    <div id="pagados-nuevo-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos pagados en estado Nuevo</p>
+                    </div>
+                </div>
+                <div id="pagados-preparando" class="sub-tab-content">
+                    <div id="pagados-preparando-list" class="pedidos-gestion-list"></div>
+                    <div id="pagados-preparando-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos pagados en estado Preparando</p>
+                    </div>
+                </div>
+                <div id="pagados-en-ruta" class="sub-tab-content">
+                    <div id="pagados-en-ruta-list" class="pedidos-gestion-list"></div>
+                    <div id="pagados-en-ruta-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos pagados en estado En Ruta</p>
+                    </div>
+                </div>
+                <div id="pagados-entregado" class="sub-tab-content">
+                    <div id="pagados-entregado-list" class="pedidos-gestion-list"></div>
+                    <div id="pagados-entregado-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos pagados en estado Entregado</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña 5: Pago A Cuenta (con sub-pestañas) -->
+            <div id="pago-cuenta" class="tab-content">
+                <div class="sub-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color); justify-content: center;">
+                    <button class="sub-tab-btn active" data-sub-tab="pago-cuenta-nuevo">Nuevo</button>
+                    <button class="sub-tab-btn" data-sub-tab="pago-cuenta-preparando">Preparando</button>
+                    <button class="sub-tab-btn" data-sub-tab="pago-cuenta-en-ruta">En Ruta</button>
+                    <button class="sub-tab-btn" data-sub-tab="pago-cuenta-entregado">Entregado</button>
+                </div>
+                <div id="pago-cuenta-nuevo" class="sub-tab-content active">
+                    <div id="pago-cuenta-nuevo-list" class="pedidos-gestion-list"></div>
+                    <div id="pago-cuenta-nuevo-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos a cuenta en estado Nuevo</p>
+                    </div>
+                </div>
+                <div id="pago-cuenta-preparando" class="sub-tab-content">
+                    <div id="pago-cuenta-preparando-list" class="pedidos-gestion-list"></div>
+                    <div id="pago-cuenta-preparando-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos a cuenta en estado Preparando</p>
+                    </div>
+                </div>
+                <div id="pago-cuenta-en-ruta" class="sub-tab-content">
+                    <div id="pago-cuenta-en-ruta-list" class="pedidos-gestion-list"></div>
+                    <div id="pago-cuenta-en-ruta-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos a cuenta en estado En Ruta</p>
+                    </div>
+                </div>
+                <div id="pago-cuenta-entregado" class="sub-tab-content">
+                    <div id="pago-cuenta-entregado-list" class="pedidos-gestion-list"></div>
+                    <div id="pago-cuenta-entregado-empty" class="empty-state" style="display: none;">
+                        <p>No hay pedidos a cuenta en estado Entregado</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña 6: Facturas Pendientes -->
+            <div id="facturas-pendientes" class="tab-content">
+                <div id="facturas-pendientes-list" class="pedidos-gestion-list">
+                    <!-- Los pedidos se cargarán dinámicamente -->
+                </div>
+                <div id="facturas-pendientes-empty" class="empty-state" style="display: none;">
+                    <p>No hay pedidos pendientes de factura</p>
+                </div>
+            </div>
+
+        </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popups personalizados -->
+    <div id="custom-alert" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-alert-title">Información</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-alert-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-alert-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-confirm" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-confirm-title">Confirmar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-confirm-message"></p>
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-confirm-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-confirm-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-prompt" class="custom-popup">
+        <div class="custom-popup-overlay"></div>
+        <div class="custom-popup-content">
+            <div class="custom-popup-header">
+                <h3 id="custom-prompt-title">Ingresar</h3>
+            </div>
+            <div class="custom-popup-body">
+                <p id="custom-prompt-message"></p>
+                <input type="text" id="custom-prompt-input" class="form-input" style="margin-top: 1rem;">
+            </div>
+            <div class="custom-popup-footer">
+                <button id="custom-prompt-cancel" class="btn btn-secondary">Cancelar</button>
+                <button id="custom-prompt-ok" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Config debe cargarse primero -->
+    <!-- IMPORTANTE: firebase-config.js está en .gitignore y contiene las credenciales reales -->
+    <!-- Si no existe, copia firebase-config.example.js como firebase-config.js y configura tus credenciales -->
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="tienda.js"></script>
+</body>
+</html>
+
