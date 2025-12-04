@@ -1837,33 +1837,54 @@ function setupTiendaEventListeners() {
 
 // Inicialización
 async function initTienda() {
-    // Cargar sesión
-    const sesion = await db.getSesionCompleta();
-    if (sesion && sesion.userId) {
+    try {
+        // Cargar sesión
+        const sesion = await db.getSesionCompleta();
+        
+        if (!sesion || !sesion.userId) {
+            window.location.href = '../index.html';
+            return;
+        }
+        
         // Cargar el usuario
         const usuario = await db.get('usuarios', sesion.userId);
-        if (usuario) {
-            currentUser = usuario;
-            currentUserType = usuario.tipo;
-            
-            // Si hay tiendaId en la sesión, cargar la tienda
-            if (sesion.tiendaId) {
-                const tienda = await db.get('tiendas', sesion.tiendaId);
-                if (tienda) {
-                    currentTienda = tienda;
-                }
-            } else if (usuario.tiendaId) {
-                // Si el usuario tiene tiendaId, cargar la tienda
-                const tienda = await db.get('tiendas', usuario.tiendaId);
-                if (tienda) {
-                    currentTienda = tienda;
-                }
+        
+        if (!usuario) {
+            window.location.href = '../index.html';
+            return;
+        }
+        
+        // Validar que el usuario sea de tipo Tienda
+        if (usuario.tipo !== 'Tienda') {
+            window.location.href = '../index.html';
+            return;
+        }
+        
+        // Usuario válido, continuar
+        currentUser = usuario;
+        currentUserType = 'Tienda';
+        
+        // Si hay tiendaId en la sesión, cargar la tienda
+        if (sesion.tiendaId) {
+            const tienda = await db.get('tiendas', sesion.tiendaId);
+            if (tienda) {
+                currentTienda = tienda;
+            }
+        } else if (usuario.tiendaId) {
+            // Si el usuario tiene tiendaId, cargar la tienda
+            const tienda = await db.get('tiendas', usuario.tiendaId);
+            if (tienda) {
+                currentTienda = tienda;
             }
         }
-    }
-
-    // Si no hay sesión válida o no es tipo Tienda, redirigir al login
-    if (!currentUser || currentUserType !== 'Tienda') {
+        
+        // Si no hay tienda cargada, redirigir al login
+        if (!currentTienda) {
+            window.location.href = '../index.html';
+            return;
+        }
+    } catch (error) {
+        console.error('Error al inicializar tienda:', error);
         window.location.href = '../index.html';
         return;
     }
