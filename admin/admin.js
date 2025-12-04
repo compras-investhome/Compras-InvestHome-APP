@@ -552,15 +552,112 @@ async function loadCategoriasAdmin(tiendaId) {
     }
 }
 
-async function loadProductosAdmin(categoriaId) {
-    const productos = await db.getProductosByCategoria(categoriaId);
+// Variables para paginación
+let productosPaginacion = {
+    offset: 0,
+    hasMore: false,
+    categoriaId: null,
+    subCategoriaId: null
+};
+
+async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
     const categoria = await db.get('categorias', categoriaId);
     const container = document.getElementById('tiendas-list-admin');
     
     container.innerHTML = '';
-    container.className = 'productos-list';
     
-    for (const producto of productos) {
+    if (subCategoriaId) {
+        // Cargar productos de una subcategoría específica
+        container.className = 'productos-list';
+        
+        // Agregar botón volver
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn btn-secondary';
+        btnVolver.textContent = '← Volver a categoría';
+        btnVolver.style.marginBottom = '1rem';
+        btnVolver.addEventListener('click', () => {
+            loadProductosAdmin(categoriaId);
+        });
+        container.appendChild(btnVolver);
+        
+        productosPaginacion.categoriaId = null;
+        productosPaginacion.subCategoriaId = subCategoriaId;
+        productosPaginacion.offset = 0;
+        await cargarProductosPaginados(container, subCategoriaId, true);
+    } else {
+        // Mostrar subcategorías primero, luego productos sin subcategoría
+        container.className = 'categorias-grid';
+        
+        // Cargar subcategorías
+        const subcategorias = await db.getSubCategoriasByCategoria(categoriaId);
+        
+        if (subcategorias.length > 0) {
+            // Crear sección de subcategorías
+            const subcategoriasSection = document.createElement('div');
+            subcategoriasSection.style.width = '100%';
+            subcategoriasSection.style.marginBottom = '2rem';
+            
+            const subcategoriasTitle = document.createElement('h3');
+            subcategoriasTitle.textContent = 'Subcategorías';
+            subcategoriasTitle.style.marginBottom = '1rem';
+            subcategoriasTitle.style.color = 'var(--text-primary)';
+            subcategoriasSection.appendChild(subcategoriasTitle);
+            
+            const subcategoriasGrid = document.createElement('div');
+            subcategoriasGrid.className = 'categorias-grid';
+            subcategoriasGrid.style.display = 'grid';
+            subcategoriasGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
+            subcategoriasGrid.style.gap = '1rem';
+            
+            subcategorias.forEach(subcategoria => {
+                const card = document.createElement('div');
+                card.className = 'categoria-card';
+                card.style.cursor = 'pointer';
+                card.innerHTML = `<h3>${subcategoria.nombre}</h3>`;
+                card.addEventListener('click', () => {
+                    loadProductosAdmin(categoriaId, subcategoria.id);
+                });
+                subcategoriasGrid.appendChild(card);
+            });
+            
+            subcategoriasSection.appendChild(subcategoriasGrid);
+            container.appendChild(subcategoriasSection);
+        }
+        
+        // Cargar productos sin subcategoría (con paginación)
+        const productosSection = document.createElement('div');
+        productosSection.style.width = '100%';
+        
+        if (subcategorias.length > 0) {
+            const productosTitle = document.createElement('h3');
+            productosTitle.textContent = 'Productos';
+            productosTitle.style.marginBottom = '1rem';
+            productosTitle.style.color = 'var(--text-primary)';
+            productosSection.appendChild(productosTitle);
+        }
+        
+        const productosList = document.createElement('div');
+        productosList.className = 'productos-list';
+        productosSection.appendChild(productosList);
+        container.appendChild(productosSection);
+        
+        productosPaginacion.categoriaId = categoriaId;
+        productosPaginacion.subCategoriaId = null;
+        productosPaginacion.offset = 0;
+        await cargarProductosPaginados(productosList, categoriaId, false);
+    }
+}
+
+async function cargarProductosPaginados(container, id, esSubCategoria) {
+    let resultado;
+    
+    if (esSubCategoria) {
+        resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
+    } else {
+        resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset);
+    }
+    
+    for (const producto of resultado.productos) {
         const card = await createProductoCardAdmin(producto);
         container.appendChild(card);
         
@@ -573,6 +670,31 @@ async function loadProductosAdmin(categoriaId) {
                 await addToCartAdmin(productoId, 1);
             });
         }
+    }
+    
+    productosPaginacion.hasMore = resultado.hasMore;
+    productosPaginacion.offset += resultado.productos.length;
+    
+    // Agregar botón "Cargar más" si hay más productos
+    const existingBtn = container.querySelector('.btn-cargar-mas-productos');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
+    
+    if (resultado.hasMore) {
+        const btnCargarMas = document.createElement('button');
+        btnCargarMas.className = 'btn btn-primary btn-cargar-mas-productos';
+        btnCargarMas.textContent = 'Cargar más Artículos';
+        btnCargarMas.style.marginTop = '1rem';
+        btnCargarMas.style.width = '100%';
+        btnCargarMas.addEventListener('click', async () => {
+            btnCargarMas.disabled = true;
+            btnCargarMas.textContent = 'Cargando...';
+            await cargarProductosPaginados(container, id, esSubCategoria);
+            btnCargarMas.disabled = false;
+            btnCargarMas.textContent = 'Cargar más Artículos';
+        });
+        container.appendChild(btnCargarMas);
     }
 }
 
@@ -4916,12 +5038,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Función para manejar la selección del archivo de artículos
 function handleFileSelectArticulos(file) {
-    const validTypes = ['application/json', 'text/csv', 'text/plain'];
-    const validExtensions = ['.json', '.csv'];
+    const validTypes = ['application/json', 'text/csv', 'text/plain', 
+                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                       'application/vnd.ms-excel'];
+    const validExtensions = ['.json', '.csv', '.xlsx', '.xls'];
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-        showAlert('Por favor, seleccione un archivo JSON o CSV', 'Error');
+        showAlert('Por favor, seleccione un archivo JSON, CSV o Excel', 'Error');
         return;
     }
     
@@ -4952,15 +5076,71 @@ async function procesarYSubirArticulos(file, tiendaId) {
     statusText.textContent = 'Leyendo archivo...';
     
     try {
-        // Leer el archivo
-        const text = await file.text();
         let articulos = [];
-        
-        // Determinar si es JSON o CSV
         const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
         
-        if (fileExtension === '.json') {
-            // Procesar JSON
+        // Procesar según el tipo de archivo
+        if (fileExtension === '.xlsx' || fileExtension === '.xls') {
+            // Procesar Excel usando SheetJS
+            statusText.textContent = 'Leyendo archivo Excel...';
+            progressBar.style.width = '10%';
+            
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+            
+            if (jsonData.length < 2) {
+                throw new Error('El archivo Excel debe tener al menos una fila de encabezado y una fila de datos');
+            }
+            
+            // Buscar índices de columnas (case-insensitive)
+            const headers = jsonData[0].map(h => String(h).trim().toLowerCase());
+            const categoriaIndex = headers.findIndex(h => h.includes('categoría') || h.includes('categoria'));
+            const subCategoriaIndex = headers.findIndex(h => (h.includes('sub') && h.includes('categoría')) || (h.includes('sub') && h.includes('categoria')));
+            const designacionIndex = headers.findIndex(h => h.includes('designación') || h.includes('designacion'));
+            const referenciaIndex = headers.findIndex(h => h.includes('referencia'));
+            const eanIndex = headers.findIndex(h => h.includes('ean'));
+            const descripcionIndex = headers.findIndex(h => h.includes('descripción') || h.includes('descripcion'));
+            const precioIndex = headers.findIndex(h => h.includes('precio'));
+            const fotoIndex = headers.findIndex(h => h.includes('url foto') || h.includes('url') || h.includes('foto'));
+            
+            if (categoriaIndex === -1 || designacionIndex === -1 || precioIndex === -1) {
+                throw new Error('El Excel debe tener columnas: Categoría, Designación y Precio');
+            }
+            
+            // Procesar filas
+            for (let i = 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+                
+                const categoria = row[categoriaIndex] ? String(row[categoriaIndex]).trim() : '';
+                const subCategoria = subCategoriaIndex !== -1 && row[subCategoriaIndex] ? String(row[subCategoriaIndex]).trim() : '';
+                const designacion = row[designacionIndex] ? String(row[designacionIndex]).trim() : '';
+                const referencia = referenciaIndex !== -1 && row[referenciaIndex] ? String(row[referenciaIndex]).trim() : '';
+                const ean = eanIndex !== -1 && row[eanIndex] ? String(row[eanIndex]).trim() : '';
+                const descripcion = descripcionIndex !== -1 && row[descripcionIndex] ? String(row[descripcionIndex]).trim() : '';
+                const precioStr = row[precioIndex] ? String(row[precioIndex]).trim().replace(',', '.') : '0';
+                const precio = parseFloat(precioStr) || 0;
+                const foto = fotoIndex !== -1 && row[fotoIndex] ? String(row[fotoIndex]).trim() : '';
+                
+                if (!categoria || !designacion || precio <= 0) continue;
+                
+                articulos.push({
+                    categoria,
+                    subCategoria,
+                    designacion,
+                    referencia,
+                    ean,
+                    descripcion,
+                    precio,
+                    foto
+                });
+            }
+        } else if (fileExtension === '.json') {
+            // Procesar JSON (mantener compatibilidad)
+            const text = await file.text();
             try {
                 const data = JSON.parse(text);
                 articulos = Array.isArray(data) ? data : [data];
@@ -4968,13 +5148,13 @@ async function procesarYSubirArticulos(file, tiendaId) {
                 throw new Error('El archivo JSON no es válido: ' + error.message);
             }
         } else if (fileExtension === '.csv') {
-            // Procesar CSV
+            // Procesar CSV (mantener compatibilidad)
+            const text = await file.text();
             const lines = text.split('\n').filter(line => line.trim());
             if (lines.length < 2) {
                 throw new Error('El archivo CSV debe tener al menos una fila de encabezado y una fila de datos');
             }
             
-            // Parsear encabezados
             const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
             const nombreIndex = headers.findIndex(h => h.includes('nombre') || h.includes('name'));
             const descripcionIndex = headers.findIndex(h => h.includes('descripcion') || h.includes('description') || h.includes('desc'));
@@ -4985,7 +5165,6 @@ async function procesarYSubirArticulos(file, tiendaId) {
                 throw new Error('El CSV debe tener columnas "nombre" y "precio"');
             }
             
-            // Procesar filas
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(',').map(v => v.trim());
                 if (values.length < headers.length) continue;
@@ -5002,6 +5181,8 @@ async function procesarYSubirArticulos(file, tiendaId) {
                     categoria: categoriaIndex !== -1 ? values[categoriaIndex] : ''
                 });
             }
+        } else {
+            throw new Error('Formato de archivo no soportado. Use Excel (.xlsx, .xls), JSON o CSV');
         }
         
         if (articulos.length === 0) {
@@ -5009,22 +5190,26 @@ async function procesarYSubirArticulos(file, tiendaId) {
         }
         
         statusText.textContent = `Procesando ${articulos.length} artículos...`;
-        progressBar.style.width = '30%';
+        progressBar.style.width = '20%';
         
-        // Obtener o crear categoría "General" para la tienda
+        // Obtener todas las categorías y subcategorías existentes
         const categorias = await db.getAll('categorias');
-        let categoriaGeneral = categorias.find(c => c.tiendaId === tiendaId && c.nombre === 'General');
+        const subcategorias = await db.getAll('subcategorias');
+        const categoriasMap = new Map(); // categoriaNombre -> categoriaId
+        const subcategoriasMap = new Map(); // categoriaId_subcategoriaNombre -> subcategoriaId
         
-        if (!categoriaGeneral) {
-            categoriaGeneral = await db.add('categorias', {
-                tiendaId: tiendaId,
-                nombre: 'General'
-            });
-        }
+        categorias.forEach(c => {
+            if (c.tiendaId === tiendaId) {
+                categoriasMap.set(c.nombre.toLowerCase(), c.id);
+            }
+        });
         
-        const categoriaGeneralId = categoriaGeneral.id || categoriaGeneral;
+        subcategorias.forEach(sc => {
+            const key = `${sc.categoriaId}_${sc.nombre.toLowerCase()}`;
+            subcategoriasMap.set(key, sc.id);
+        });
         
-        progressBar.style.width = '50%';
+        progressBar.style.width = '30%';
         statusText.textContent = `Subiendo artículos a la base de datos...`;
         
         // Subir artículos
@@ -5035,32 +5220,50 @@ async function procesarYSubirArticulos(file, tiendaId) {
             const articulo = articulos[i];
             
             try {
-                // Determinar la categoría
-                let categoriaId = categoriaGeneralId;
-                if (articulo.categoria) {
-                    let categoria = categorias.find(c => 
-                        c.tiendaId === tiendaId && 
-                        c.nombre.toLowerCase() === articulo.categoria.toLowerCase()
-                    );
+                // Obtener o crear categoría
+                let categoriaId = categoriasMap.get(articulo.categoria.toLowerCase());
+                if (!categoriaId && articulo.categoria) {
+                    const nuevaCategoria = await db.add('categorias', {
+                        tiendaId: tiendaId,
+                        nombre: articulo.categoria
+                    });
+                    categoriaId = nuevaCategoria.id || nuevaCategoria;
+                    categoriasMap.set(articulo.categoria.toLowerCase(), categoriaId);
+                }
+                
+                // Obtener o crear subcategoría (si existe)
+                let subCategoriaId = null;
+                if (articulo.subCategoria && categoriaId) {
+                    const key = `${categoriaId}_${articulo.subCategoria.toLowerCase()}`;
+                    subCategoriaId = subcategoriasMap.get(key);
                     
-                    if (!categoria) {
-                        categoria = await db.add('categorias', {
-                            tiendaId: tiendaId,
-                            nombre: articulo.categoria
+                    if (!subCategoriaId) {
+                        const nuevaSubCategoria = await db.add('subcategorias', {
+                            categoriaId: categoriaId,
+                            nombre: articulo.subCategoria
                         });
+                        subCategoriaId = nuevaSubCategoria.id || nuevaSubCategoria;
+                        subcategoriasMap.set(key, subCategoriaId);
                     }
-                    
-                    categoriaId = categoria.id || categoria;
                 }
                 
                 // Crear el producto
-                await db.add('productos', {
+                const productoData = {
                     tiendaId: tiendaId,
                     categoriaId: categoriaId,
-                    nombre: articulo.nombre || 'Sin nombre',
+                    subCategoriaId: subCategoriaId,
+                    nombre: articulo.designacion || articulo.nombre || 'Sin nombre',
+                    designacion: articulo.designacion || null,
                     descripcion: articulo.descripcion || '',
-                    precio: parseFloat(articulo.precio) || 0
-                });
+                    precio: parseFloat(articulo.precio) || 0,
+                    foto: articulo.foto || null
+                };
+                
+                // Agregar campos opcionales si existen
+                if (articulo.referencia) productoData.referencia = articulo.referencia;
+                if (articulo.ean) productoData.ean = articulo.ean;
+                
+                await db.add('productos', productoData);
                 
                 exitosos++;
             } catch (error) {
@@ -5069,7 +5272,7 @@ async function procesarYSubirArticulos(file, tiendaId) {
             }
             
             // Actualizar progreso
-            const progress = 50 + ((i + 1) / articulos.length) * 50;
+            const progress = 30 + ((i + 1) / articulos.length) * 70;
             progressBar.style.width = progress + '%';
             statusText.textContent = `Subiendo artículos... ${i + 1}/${articulos.length}`;
         }
@@ -5092,8 +5295,8 @@ async function procesarYSubirArticulos(file, tiendaId) {
         
         // Recargar la vista si estamos en la sección de productos
         setTimeout(() => {
-            if (currentView === 'admin-productos') {
-                loadCategoriasAdmin();
+            if (currentView === 'admin-tienda' && currentTienda) {
+                loadCategoriasAdmin(currentTienda.id);
             }
         }, 1000);
         

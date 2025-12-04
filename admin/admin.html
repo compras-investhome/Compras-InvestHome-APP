@@ -583,15 +583,15 @@
                 <div class="form-group">
                     <label>Formato del archivo</label>
                     <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
-                        Puedes subir un archivo JSON o CSV con los artículos. El formato JSON debe ser un array de objetos con las propiedades: nombre, descripcion (opcional), precio, categoria (opcional).
+                        Puedes subir un archivo JSON, CSV o Excel con los artículos. El formato Excel debe tener las columnas: Categoría, Sub Categoría (opcional), Designación, Referencia, EAN, Descripción, Precio, URL Foto.
                     </p>
                 </div>
                 <div class="form-group">
                     <label>Archivo de Artículos</label>
                     <div id="modal-subir-articulos-dropzone" class="dropzone" style="border: 2px dashed var(--border-color); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s;">
                         <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Arrastra el archivo aquí o haz clic para seleccionar</p>
-                        <p style="color: var(--text-secondary); font-size: 0.875rem;">JSON o CSV (máx. 10MB)</p>
-                        <input type="file" id="modal-subir-articulos-file" accept=".json,.csv,application/json,text/csv" style="display: none;">
+                        <p style="color: var(--text-secondary); font-size: 0.875rem;">JSON, CSV o Excel (.xlsx, .xls) (máx. 10MB)</p>
+                        <input type="file" id="modal-subir-articulos-file" accept=".json,.csv,.xlsx,.xls,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display: none;">
                         <div id="modal-subir-articulos-preview" style="margin-top: 1rem; display: none;">
                             <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--card-bg); border-radius: 4px;">
                                 <span id="modal-subir-articulos-nombre"></span>

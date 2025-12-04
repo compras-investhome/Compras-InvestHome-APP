@@ -14,7 +14,9 @@ import {
     where, 
     orderBy,
     setDoc,
-    serverTimestamp
+    serverTimestamp,
+    startAfter,
+    limit
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 class Database {
@@ -279,6 +281,68 @@ class Database {
     async getProductosByCategoria(categoriaId) {
         const q = query(
             collection(this.db, 'productos'),
+            where('categoriaId', '==', categoriaId)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    }
+
+    async getProductosByCategoriaPaginated(categoriaId, productosLimit = 5, offset = 0) {
+        // Obtener todos los productos de la categoría y filtrar en memoria
+        // (Firestore no permite múltiples where con null)
+        const q = query(
+            collection(this.db, 'productos'),
+            where('categoriaId', '==', categoriaId),
+            orderBy('nombre')
+        );
+        const querySnapshot = await getDocs(q);
+        
+        // Filtrar productos sin subcategoría
+        const productosSinSubCategoria = querySnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(p => !p.subCategoriaId);
+        
+        // Aplicar paginación
+        const productos = productosSinSubCategoria.slice(offset, offset + productosLimit);
+        const hasMore = offset + productosLimit < productosSinSubCategoria.length;
+        
+        return {
+            productos,
+            hasMore,
+            total: productosSinSubCategoria.length
+        };
+    }
+
+    async getProductosBySubCategoriaPaginated(subCategoriaId, productosLimit = 5, offset = 0) {
+        const q = query(
+            collection(this.db, 'productos'),
+            where('subCategoriaId', '==', subCategoriaId),
+            orderBy('nombre')
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const todosProductos = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        
+        // Aplicar paginación
+        const productos = todosProductos.slice(offset, offset + productosLimit);
+        const hasMore = offset + productosLimit < todosProductos.length;
+        
+        return {
+            productos,
+            hasMore,
+            total: todosProductos.length
+        };
+    }
+
+    async getSubCategoriasByCategoria(categoriaId) {
+        const q = query(
+            collection(this.db, 'subcategorias'),
             where('categoriaId', '==', categoriaId)
         );
         const querySnapshot = await getDocs(q);
