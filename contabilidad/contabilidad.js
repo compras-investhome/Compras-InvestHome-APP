@@ -5,11 +5,11 @@ import { db } from '../database.js';
 let currentUser = null;
 let currentUserType = null;
 const contabilidadTabBadgeMap = {
-    pendientes: 'tab-count-pendientes',
-    cuentas: 'tab-count-cuentas',
-    especiales: 'tab-count-especiales',
-    facturas: 'tab-count-facturas',
-    historico: 'tab-count-historico'
+    pendientes: 'tab-count-pendientes-pago-contabilidad',
+    cuentas: 'tab-count-cuentas-contabilidad',
+    especiales: 'tab-count-pedidos-especiales-contabilidad',
+    facturas: 'tab-count-facturas-pendientes-contabilidad',
+    historico: 'tab-count-historico-contabilidad'
 };
 
 const PAGO_ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
@@ -280,12 +280,12 @@ function updateContabilidadTabBadge(tabKey, count) {
 }
 
 function reloadActiveContabilidadTab() {
-    const active = document.querySelector('#view-contabilidad .tab-btn.active');
+    const active = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
     if (!active) return;
     const tab = active.dataset.tab;
-    if (tab === 'pedidos-contabilidad') {
+    if (tab === 'pendientes-pago-contabilidad') {
         loadPedidosContabilidad();
-    } else if (tab === 'pedidos-pagados-contabilidad') {
+    } else if (tab === 'historico-contabilidad') {
         loadPedidosPagadosContabilidad();
     } else if (tab === 'cuentas-contabilidad') {
         loadCuentasContabilidad();
@@ -308,11 +308,11 @@ function switchTabContabilidad(tab) {
         content.classList.remove('active');
     });
     
-    if (tab === 'pedidos-contabilidad') {
-        document.getElementById('pedidos-contabilidad').classList.add('active');
+    if (tab === 'pendientes-pago-contabilidad') {
+        document.getElementById('pendientes-pago-contabilidad').classList.add('active');
         loadPedidosContabilidad();
-    } else if (tab === 'pedidos-pagados-contabilidad') {
-        document.getElementById('pedidos-pagados-contabilidad').classList.add('active');
+    } else if (tab === 'historico-contabilidad') {
+        document.getElementById('historico-contabilidad').classList.add('active');
         loadPedidosPagadosContabilidad();
     } else if (tab === 'cuentas-contabilidad') {
         document.getElementById('cuentas-contabilidad').classList.add('active');
@@ -345,8 +345,8 @@ async function loadPedidosContabilidad() {
     });
     
     const obras = await getObrasCatalog(pedidosPendientes);
-    const container = document.getElementById('pedidos-contabilidad-list');
-    const emptyState = document.getElementById('pedidos-contabilidad-empty');
+    const container = document.getElementById('pendientes-pago-contabilidad-list');
+    const emptyState = document.getElementById('pendientes-pago-contabilidad-empty');
     container.innerHTML = '';
     
     if (obras.length === 0) {
@@ -392,8 +392,8 @@ async function loadPedidosPagadosContabilidad() {
             return p.transferenciaPDF && p.albaran;
         }
     });
-    const container = document.getElementById('pedidos-pagados-contabilidad-list');
-    const emptyState = document.getElementById('pedidos-pagados-contabilidad-empty');
+    const container = document.getElementById('historico-contabilidad-list');
+    const emptyState = document.getElementById('historico-contabilidad-empty');
     container.innerHTML = '';
     
     const obras = await getObrasCatalog(pedidosPagados);
@@ -1314,67 +1314,154 @@ window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
 };
 
 // Event listeners
+// Función para mostrar vista de contabilidad
+function showContabilidadView(viewName) {
+    // Ocultar todas las vistas
+    document.querySelectorAll('.admin-content-view').forEach(view => {
+        view.classList.remove('active');
+    });
+    
+    // Mostrar la vista seleccionada
+    const targetView = document.getElementById(`${viewName}-view`);
+    if (targetView) {
+        targetView.classList.add('active');
+    }
+}
+
+// Event listeners - Usar delegación de eventos para máxima robustez
+let contabilidadEventListenersSetup = false;
+
 function setupContabilidadEventListeners() {
-    // Menú hamburguesa
-    document.getElementById('btn-menu-contabilidad')?.addEventListener('click', () => {
-        document.getElementById('sidebar-contabilidad').classList.add('active');
+    // Evitar agregar listeners múltiples veces
+    if (contabilidadEventListenersSetup) {
+        return;
+    }
+    contabilidadEventListenersSetup = true;
+
+    // Toggle sidebar contabilidad - delegación en el documento
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#btn-toggle-sidebar-contabilidad')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const sidebar = document.getElementById('contabilidad-sidebar');
+            if (sidebar) {
+                sidebar.classList.toggle('collapsed');
+            }
+        }
     });
 
-    document.getElementById('btn-close-sidebar-contabilidad')?.addEventListener('click', () => {
-        document.getElementById('sidebar-contabilidad').classList.remove('active');
+    // Logout - delegación en el documento
+    document.addEventListener('click', async (e) => {
+        if (e.target.closest('#btn-logout-contabilidad')) {
+            e.preventDefault();
+            e.stopPropagation();
+            await db.clearSesion();
+            currentUser = null;
+            currentUserType = null;
+            window.location.href = '../index.html';
+        }
     });
 
-    document.querySelector('#sidebar-contabilidad .sidebar-overlay')?.addEventListener('click', () => {
-        document.getElementById('sidebar-contabilidad').classList.remove('active');
-    });
-
-    // Logout
-    document.getElementById('btn-logout-contabilidad')?.addEventListener('click', async () => {
-        await db.clearSesion();
-        currentUser = null;
-        currentUserType = null;
-        window.location.href = '../index.html';
-    });
-
-    // Tabs
-    document.querySelectorAll('#view-contabilidad .tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tab = e.currentTarget.dataset.tab;
-            switchTabContabilidad(tab);
+    // Contabilidad sidebar navigation - delegación en el sidebar
+    const sidebar = document.getElementById('contabilidad-sidebar');
+    if (sidebar) {
+        sidebar.addEventListener('click', (e) => {
+            const navItem = e.target.closest('.admin-nav-item');
+            if (!navItem || navItem.id === 'btn-logout-contabilidad') return;
+            
+            const viewName = navItem.dataset.view;
+            if (viewName) {
+                e.preventDefault();
+                e.stopPropagation();
+                showContabilidadView(viewName);
+                
+                // Actualizar estado activo
+                document.querySelectorAll('#contabilidad-sidebar .admin-nav-item').forEach(btn => {
+                    if (btn.id !== 'btn-logout-contabilidad') {
+                        btn.classList.remove('active');
+                    }
+                });
+                navItem.classList.add('active');
+            }
         });
+    }
+
+    // Tabs principales - delegación de eventos en el documento (más robusto)
+    document.addEventListener('click', (e) => {
+        const tabBtn = e.target.closest('#contabilidad-gestion-view .tab-btn');
+        if (tabBtn && tabBtn.dataset.tab) {
+            e.preventDefault();
+            e.stopPropagation();
+            const tab = tabBtn.dataset.tab;
+            if (typeof switchTabContabilidad === 'function') {
+                switchTabContabilidad(tab);
+            }
+        }
     });
 }
 
 // Inicialización
 async function initContabilidad() {
-    // Cargar sesión
-    const sesion = await db.loadSesion();
-    if (sesion && sesion.userId) {
-        currentUser = await db.get('usuarios', sesion.userId);
-        if (currentUser) {
-            currentUserType = currentUser.tipo;
+    try {
+        // Cargar sesión
+        const sesion = await db.getSesionCompleta();
+        
+        if (!sesion || !sesion.userId) {
+            window.location.href = '../index.html';
+            return;
         }
-    }
+        
+        // Cargar el usuario
+        const usuario = await db.get('usuarios', sesion.userId);
+        
+        if (!usuario) {
+            window.location.href = '../index.html';
+            return;
+        }
+        
+        // Validar que el usuario sea de tipo Contabilidad
+        if (usuario.tipo !== 'Contabilidad') {
+            window.location.href = '../index.html';
+            return;
+        }
+        
+        // Usuario válido, continuar
+        currentUser = usuario;
+        currentUserType = 'Contabilidad';
 
-    // Si no hay sesión válida, redirigir al login
-    if (!currentUser || currentUserType !== 'Contabilidad') {
+        // Mostrar vista inicial de Gestión primero
+        showContabilidadView('contabilidad-gestion');
+
+        // Esperar a que el DOM esté completamente renderizado
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                // Configurar event listeners
+                setupContabilidadEventListeners();
+
+                // Cargar vista inicial
+                if (typeof switchTabContabilidad === 'function') {
+                    switchTabContabilidad('pendientes-pago-contabilidad');
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error al inicializar contabilidad:', error);
         window.location.href = '../index.html';
-        return;
     }
-
-    // Actualizar sidebar
-    document.getElementById('sidebar-usuario-contabilidad').textContent = currentUser.username || 'Usuario';
-    document.getElementById('sidebar-tipo-contabilidad').textContent = currentUserType || 'Contabilidad';
-
-    // Configurar event listeners
-    setupContabilidadEventListeners();
-
-    // Cargar vista inicial
-    switchTabContabilidad('pedidos-contabilidad');
 }
 
 // Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    initContabilidad();
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // Inicializar base de datos primero
+        await db.init();
+        await db.initDefaultData();
+        
+        // Inicializar contabilidad
+        await initContabilidad();
+    } catch (error) {
+        console.error('Error al inicializar base de datos:', error);
+        window.location.href = '../index.html';
+    }
 });
 

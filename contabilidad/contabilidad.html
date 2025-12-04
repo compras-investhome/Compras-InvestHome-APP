@@ -8,100 +8,115 @@
     <link rel="stylesheet" href="contabilidad.css">
 </head>
 <body>
-    <div id="view-contabilidad" class="view active">
-        <header class="app-header">
-            <button id="btn-menu-contabilidad" class="icon-btn" aria-label="Menú">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </button>
-            <h2>Contabilidad</h2>
-            <div style="width: 24px;"></div>
-        </header>
+    <!-- Vista de Gestión de Contabilidad -->
+    <div id="view-gestion-contabilidad" class="view active contabilidad-view">
+        <!-- Menú lateral izquierdo -->
+        <aside class="admin-sidebar" id="contabilidad-sidebar">
+            <div class="admin-sidebar-header">
+                <h2 class="admin-sidebar-title">Contabilidad</h2>
+                <button id="btn-toggle-sidebar-contabilidad" class="icon-btn admin-toggle-btn" aria-label="Expandir/Colapsar menú">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <nav class="admin-sidebar-nav">
+                <button class="admin-nav-item active" data-view="contabilidad-gestion" title="Gestión">
+                    <span class="admin-nav-icon">📋</span>
+                    <span class="admin-nav-text">Gestión</span>
+                </button>
+            </nav>
+            <div class="admin-sidebar-footer">
+                <button id="btn-logout-contabilidad" class="admin-nav-item admin-logout-btn" aria-label="Cerrar Sesión">
+                    <span class="admin-nav-icon">🚪</span>
+                    <span class="admin-nav-text">Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
 
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="pedidos-contabilidad">
-                Pendientes de Pago
-                <span class="tab-badge" id="tab-count-pendientes">0</span>
-            </button>
-            <button class="tab-btn" data-tab="cuentas-contabilidad">
-                Cuentas
-                <span class="tab-badge" id="tab-count-cuentas">0</span>
-            </button>
-            <button class="tab-btn" data-tab="pedidos-especiales-contabilidad">
-                Pedidos Especiales
-                <span class="tab-badge" id="tab-count-especiales">0</span>
-            </button>
-            <button class="tab-btn" data-tab="facturas-pendientes-contabilidad">
-                Facturas Pendientes
-                <span class="tab-badge" id="tab-count-facturas">0</span>
-            </button>
-            <button class="tab-btn" data-tab="pedidos-pagados-contabilidad">
-                Histórico
-                <span class="tab-badge" id="tab-count-historico">0</span>
-            </button>
-        </div>
+        <!-- Contenido principal -->
+        <div class="admin-content-wrapper">
+            <div id="contabilidad-gestion-view" class="admin-content-view active">
+                <header class="app-header">
+                    <div style="width: 24px;"></div>
+                    <h2>Contabilidad</h2>
+                    <div style="width: 24px;"></div>
+                </header>
 
-        <main class="main-content">
-            <div id="pedidos-contabilidad" class="tab-content active">
-                <div id="pedidos-contabilidad-list" class="pedidos-gestion-list">
-                    <!-- Los pedidos se cargarán dinámicamente -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="pendientes-pago-contabilidad">
+                        Pendientes de Pago
+                        <span class="tab-badge" id="tab-count-pendientes-pago-contabilidad">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="cuentas-contabilidad">
+                        Cuentas
+                        <span class="tab-badge" id="tab-count-cuentas-contabilidad">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="pedidos-especiales-contabilidad">
+                        Pedidos Especiales
+                        <span class="tab-badge" id="tab-count-pedidos-especiales-contabilidad">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="facturas-pendientes-contabilidad">
+                        Facturas Pendientes
+                        <span class="tab-badge" id="tab-count-facturas-pendientes-contabilidad">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="historico-contabilidad">
+                        Histórico
+                        <span class="tab-badge" id="tab-count-historico-contabilidad">0</span>
+                    </button>
                 </div>
-                <div id="pedidos-contabilidad-empty" class="empty-state" style="display: none;">
-                    <p>No hay pedidos pendientes</p>
-                </div>
-            </div>
-            <div id="cuentas-contabilidad" class="tab-content">
-                <div id="cuentas-contabilidad-list" class="tiendas-list">
-                    <!-- Las cuentas se cargarán dinámicamente -->
-                </div>
-                <div id="cuentas-contabilidad-empty" class="empty-state" style="display: none;">
-                    <p>No hay tiendas con cuenta</p>
-                </div>
-            </div>
-            <div id="pedidos-especiales-contabilidad" class="tab-content">
-                <div id="pedidos-especiales-contabilidad-list" class="pedidos-gestion-list">
-                    <!-- Los pedidos especiales se cargarán dinámicamente -->
-                </div>
-                <div id="pedidos-especiales-contabilidad-empty" class="empty-state" style="display: none;">
-                    <p>No hay pedidos especiales registrados</p>
-                </div>
-            </div>
-            <div id="facturas-pendientes-contabilidad" class="tab-content">
-                <div id="facturas-pendientes-contabilidad-list" class="pedidos-gestion-list">
-                    <!-- Las facturas pendientes se cargarán dinámicamente -->
-                </div>
-                <div id="facturas-pendientes-contabilidad-empty" class="empty-state" style="display: none;">
-                    <p>No hay facturas pendientes registradas</p>
-                </div>
-            </div>
-            <div id="pedidos-pagados-contabilidad" class="tab-content">
-                <div id="pedidos-pagados-contabilidad-list" class="pedidos-gestion-list">
-                    <!-- Los pedidos pagados se cargarán dinámicamente -->
-                </div>
-                <div id="pedidos-pagados-contabilidad-empty" class="empty-state" style="display: none;">
-                    <p>No hay registros históricos</p>
-                </div>
-            </div>
-        </main>
-    </div>
 
-    <!-- Sidebar para menú -->
-    <div id="sidebar-contabilidad" class="sidebar">
-        <div class="sidebar-overlay"></div>
-        <div class="sidebar-content">
-            <div class="sidebar-header">
-                <h3>Menú</h3>
-                <button id="btn-close-sidebar-contabilidad" class="icon-btn">✕</button>
-            </div>
-            <div class="sidebar-body">
-                <div class="sidebar-user-info">
-                    <p><strong>Usuario:</strong> <span id="sidebar-usuario-contabilidad"></span></p>
-                    <p><strong>Tipo:</strong> <span id="sidebar-tipo-contabilidad"></span></p>
-                </div>
-                <button id="btn-logout-contabilidad" class="sidebar-btn btn-danger">Cerrar Sesión</button>
+                <main class="main-content">
+                    <!-- Pestaña 1: Pendientes de Pago -->
+                    <div id="pendientes-pago-contabilidad" class="tab-content active">
+                        <div id="pendientes-pago-contabilidad-list" class="pedidos-gestion-list">
+                            <!-- Los pedidos se cargarán dinámicamente -->
+                        </div>
+                        <div id="pendientes-pago-contabilidad-empty" class="empty-state" style="display: none;">
+                            <p>No hay pedidos pendientes de pago</p>
+                        </div>
+                    </div>
+
+                    <!-- Pestaña 2: Cuentas -->
+                    <div id="cuentas-contabilidad" class="tab-content">
+                        <div id="cuentas-contabilidad-list" class="tiendas-list">
+                            <!-- Las cuentas se cargarán dinámicamente -->
+                        </div>
+                        <div id="cuentas-contabilidad-empty" class="empty-state" style="display: none;">
+                            <p>No hay tiendas con cuenta</p>
+                        </div>
+                    </div>
+
+                    <!-- Pestaña 3: Pedidos Especiales -->
+                    <div id="pedidos-especiales-contabilidad" class="tab-content">
+                        <div id="pedidos-especiales-contabilidad-list" class="pedidos-gestion-list">
+                            <!-- Los pedidos especiales se cargarán dinámicamente -->
+                        </div>
+                        <div id="pedidos-especiales-contabilidad-empty" class="empty-state" style="display: none;">
+                            <p>No hay pedidos especiales registrados</p>
+                        </div>
+                    </div>
+
+                    <!-- Pestaña 4: Facturas Pendientes -->
+                    <div id="facturas-pendientes-contabilidad" class="tab-content">
+                        <div id="facturas-pendientes-contabilidad-list" class="pedidos-gestion-list">
+                            <!-- Las facturas pendientes se cargarán dinámicamente -->
+                        </div>
+                        <div id="facturas-pendientes-contabilidad-empty" class="empty-state" style="display: none;">
+                            <p>No hay facturas pendientes registradas</p>
+                        </div>
+                    </div>
+
+                    <!-- Pestaña 5: Histórico -->
+                    <div id="historico-contabilidad" class="tab-content">
+                        <div id="historico-contabilidad-list" class="pedidos-gestion-list">
+                            <!-- Los pedidos históricos se cargarán dinámicamente -->
+                        </div>
+                        <div id="historico-contabilidad-empty" class="empty-state" style="display: none;">
+                            <p>No hay registros históricos</p>
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
     </div>
@@ -162,4 +177,3 @@
     <script type="module" src="contabilidad.js"></script>
 </body>
 </html>
-
