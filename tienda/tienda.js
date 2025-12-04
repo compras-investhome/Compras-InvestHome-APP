@@ -275,15 +275,6 @@ function updateTabBadge(tabName, count) {
 
 // Funciones de navegación (definidas más abajo para evitar duplicación)
 
-// Función auxiliar para actualizar badges
-function updateTabBadge(tabName, count) {
-    const badge = document.getElementById(`tab-count-${tabName}`);
-    if (badge) {
-        badge.textContent = count;
-        badge.style.display = count > 0 ? 'inline-flex' : 'none';
-    }
-}
-
 // ========== FUNCIONES DE CARGA DE PEDIDOS PARA TIENDA ==========
 
 // Pestaña 1: Seleccionar Pago
@@ -542,15 +533,6 @@ async function loadPedidosFacturasPendientesTienda() {
 }
 
 // Pestaña 6: Histórico
-
-// Función auxiliar para actualizar badges
-function updateTabBadge(tabName, count) {
-    const badge = document.getElementById(`tab-count-${tabName}`);
-    if (badge) {
-        badge.textContent = count;
-        badge.style.display = count > 0 ? 'inline-flex' : 'none';
-    }
-}
 
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
