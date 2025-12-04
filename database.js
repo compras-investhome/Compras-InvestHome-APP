@@ -352,6 +352,20 @@ class Database {
         }));
     }
 
+    async deleteAllProductosByTienda(tiendaId) {
+        const q = query(
+            collection(this.db, 'productos'),
+            where('tiendaId', '==', tiendaId)
+        );
+        const querySnapshot = await getDocs(q);
+        
+        // Eliminar todos los productos
+        const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        return querySnapshot.docs.length;
+    }
+
     async searchProductos(queryText) {
         const allProductos = await this.getAll('productos');
         const lowerQuery = queryText.toLowerCase();

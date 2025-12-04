@@ -5190,7 +5190,7 @@ async function procesarYSubirArticulos(file, tiendaId) {
         }
         
         statusText.textContent = `Procesando ${articulos.length} artículos...`;
-        progressBar.style.width = '20%';
+        progressBar.style.width = '15%';
         
         // Obtener todas las categorías y subcategorías existentes
         const categorias = await db.getAll('categorias');
@@ -5209,12 +5209,123 @@ async function procesarYSubirArticulos(file, tiendaId) {
             subcategoriasMap.set(key, sc.id);
         });
         
-        progressBar.style.width = '30%';
-        statusText.textContent = `Subiendo artículos a la base de datos...`;
+        // Obtener todos los productos existentes de la tienda
+        statusText.textContent = `Verificando productos existentes...`;
+        progressBar.style.width = '20%';
+        const productosExistentes = await db.getAll('productos');
+        const productosTienda = productosExistentes.filter(p => p.tiendaId === tiendaId);
         
-        // Subir artículos
+        // Eliminar duplicados en productos existentes de la tienda (misma referencia o EAN)
+        statusText.textContent = `Eliminando duplicados en productos existentes...`;
+        const productosPorReferencia = new Map(); // referencia -> producto (mantener el primero)
+        const productosPorEAN = new Map(); // ean -> producto (mantener el primero)
+        const productosDuplicadosEliminar = [];
+        
+        productosTienda.forEach(p => {
+            let esDuplicado = false;
+            
+            // Verificar duplicados por referencia
+            if (p.referencia) {
+                const refKey = p.referencia.trim().toLowerCase();
+                if (productosPorReferencia.has(refKey)) {
+                    // Ya existe un producto con esta referencia, marcar como duplicado
+                    productosDuplicadosEliminar.push(p);
+                    esDuplicado = true;
+                } else {
+                    productosPorReferencia.set(refKey, p);
+                }
+            }
+            
+            // Verificar duplicados por EAN (solo si no es duplicado por referencia)
+            if (!esDuplicado && p.ean) {
+                const eanKey = p.ean.trim().toLowerCase();
+                if (productosPorEAN.has(eanKey)) {
+                    // Ya existe un producto con este EAN, marcar como duplicado
+                    productosDuplicadosEliminar.push(p);
+                } else {
+                    productosPorEAN.set(eanKey, p);
+                }
+            }
+        });
+        
+        // Eliminar productos duplicados existentes
+        for (const productoDuplicado of productosDuplicadosEliminar) {
+            await db.delete('productos', productoDuplicado.id);
+        }
+        
+        // Eliminar duplicados en productos nuevos (misma referencia o EAN)
+        statusText.textContent = `Eliminando duplicados en productos nuevos...`;
+        const articulosUnicos = [];
+        const referenciasProcesadas = new Set();
+        const eansProcesados = new Set();
+        
+        for (const articulo of articulos) {
+            let esDuplicado = false;
+            
+            // Verificar duplicados por referencia
+            if (articulo.referencia) {
+                const refKey = articulo.referencia.trim().toLowerCase();
+                if (referenciasProcesadas.has(refKey)) {
+                    esDuplicado = true;
+                } else {
+                    referenciasProcesadas.add(refKey);
+                }
+            }
+            
+            // Verificar duplicados por EAN (solo si no es duplicado por referencia)
+            if (!esDuplicado && articulo.ean) {
+                const eanKey = articulo.ean.trim().toLowerCase();
+                if (eansProcesados.has(eanKey)) {
+                    esDuplicado = true;
+                } else {
+                    eansProcesados.add(eanKey);
+                }
+            }
+            
+            if (!esDuplicado) {
+                articulosUnicos.push(articulo);
+            }
+        }
+        
+        const duplicadosEliminados = articulos.length - articulosUnicos.length;
+        articulos = articulosUnicos; // Usar solo los artículos únicos
+        
+        // Crear mapas de referencia y EAN de productos nuevos para verificar coincidencias
+        const referenciasNuevas = new Set();
+        const eansNuevos = new Set();
+        articulos.forEach(a => {
+            if (a.referencia) referenciasNuevas.add(a.referencia.trim().toLowerCase());
+            if (a.ean) eansNuevos.add(a.ean.trim().toLowerCase());
+        });
+        
+        // Eliminar productos que NO tienen coincidencia en referencia o EAN
+        statusText.textContent = `Eliminando productos obsoletos...`;
+        progressBar.style.width = '25%';
+        let productosEliminados = productosDuplicadosEliminar.length; // Incluir duplicados ya eliminados
+        let productosActualizados = 0;
+        
+        // Filtrar productos que ya fueron eliminados como duplicados
+        const productosDuplicadosIds = new Set(productosDuplicadosEliminar.map(p => p.id));
+        const productosTiendaSinDuplicados = productosTienda.filter(p => !productosDuplicadosIds.has(p.id));
+        
+        for (const productoExistente of productosTiendaSinDuplicados) {
+            const tieneReferencia = productoExistente.referencia && referenciasNuevas.has(productoExistente.referencia.trim().toLowerCase());
+            const tieneEAN = productoExistente.ean && eansNuevos.has(productoExistente.ean.trim().toLowerCase());
+            
+            if (!tieneReferencia && !tieneEAN) {
+                // No hay coincidencia, eliminar producto
+                await db.delete('productos', productoExistente.id);
+                productosEliminados++;
+            }
+        }
+        
+        progressBar.style.width = '30%';
+        statusText.textContent = `Procesando y actualizando productos...`;
+        
+        // Procesar artículos nuevos
         let exitosos = 0;
         let errores = 0;
+        const productosProcesados = new Set(); // Para evitar duplicados
         
         for (let i = 0; i < articulos.length; i++) {
             const articulo = articulos[i];
@@ -5247,7 +5358,7 @@ async function procesarYSubirArticulos(file, tiendaId) {
                     }
                 }
                 
-                // Crear el producto
+                // Preparar datos del producto
                 const productoData = {
                     tiendaId: tiendaId,
                     categoriaId: categoriaId,
@@ -5263,18 +5374,39 @@ async function procesarYSubirArticulos(file, tiendaId) {
                 if (articulo.referencia) productoData.referencia = articulo.referencia;
                 if (articulo.ean) productoData.ean = articulo.ean;
                 
-                await db.add('productos', productoData);
+                // Verificar si existe un producto con la misma referencia o EAN
+                let productoExistente = null;
+                if (articulo.referencia) {
+                    productoExistente = productosPorReferencia.get(articulo.referencia.trim().toLowerCase());
+                }
+                if (!productoExistente && articulo.ean) {
+                    productoExistente = productosPorEAN.get(articulo.ean.trim().toLowerCase());
+                }
                 
-                exitosos++;
+                if (productoExistente) {
+                    // Actualizar producto existente (mantener referencia y EAN originales)
+                    const id = productoExistente.id;
+                    productoData.id = id;
+                    // Mantener referencia y EAN originales si existían
+                    if (productoExistente.referencia) productoData.referencia = productoExistente.referencia;
+                    if (productoExistente.ean) productoData.ean = productoExistente.ean;
+                    
+                    await db.update('productos', productoData);
+                    productosActualizados++;
+                } else {
+                    // Crear nuevo producto
+                    await db.add('productos', productoData);
+                    exitosos++;
+                }
             } catch (error) {
-                console.error('Error al subir artículo:', articulo, error);
+                console.error('Error al procesar artículo:', articulo, error);
                 errores++;
             }
             
             // Actualizar progreso
             const progress = 30 + ((i + 1) / articulos.length) * 70;
             progressBar.style.width = progress + '%';
-            statusText.textContent = `Subiendo artículos... ${i + 1}/${articulos.length}`;
+            statusText.textContent = `Procesando artículos... ${i + 1}/${articulos.length}`;
         }
         
         progressBar.style.width = '100%';
@@ -5285,13 +5417,29 @@ async function procesarYSubirArticulos(file, tiendaId) {
         resultadoDiv.style.backgroundColor = errores === 0 ? '#d1fae5' : '#fef3c7';
         resultadoDiv.style.border = `2px solid ${errores === 0 ? '#10b981' : '#f59e0b'}`;
         
+        let mensaje = '';
         if (errores === 0) {
-            mensajeDiv.textContent = `✓ Se subieron exitosamente ${exitosos} artículos.`;
+            mensaje = `✓ Proceso completado exitosamente:\n`;
+            mensaje += `- ${exitosos} productos nuevos agregados\n`;
+            mensaje += `- ${productosActualizados} productos actualizados\n`;
+            mensaje += `- ${productosEliminados} productos obsoletos/duplicados eliminados`;
+            if (duplicadosEliminados > 0) {
+                mensaje += `\n- ${duplicadosEliminados} duplicados eliminados del archivo`;
+            }
             mensajeDiv.style.color = '#065f46';
         } else {
-            mensajeDiv.textContent = `Se subieron ${exitosos} artículos. ${errores} artículos tuvieron errores.`;
+            mensaje = `Proceso completado con algunos errores:\n`;
+            mensaje += `- ${exitosos} productos nuevos agregados\n`;
+            mensaje += `- ${productosActualizados} productos actualizados\n`;
+            mensaje += `- ${productosEliminados} productos obsoletos/duplicados eliminados`;
+            if (duplicadosEliminados > 0) {
+                mensaje += `\n- ${duplicadosEliminados} duplicados eliminados del archivo`;
+            }
+            mensaje += `\n- ${errores} artículos tuvieron errores`;
             mensajeDiv.style.color = '#92400e';
         }
+        mensajeDiv.textContent = mensaje;
+        mensajeDiv.style.whiteSpace = 'pre-line';
         
         // Recargar la vista si estamos en la sección de productos
         setTimeout(() => {
