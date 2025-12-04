@@ -345,14 +345,41 @@ async function loadTiendasAdminView() {
         container.innerHTML = '';
         container.className = 'productos-list';
         
-        // Eliminar duplicados por ID antes de mostrar
+        // Eliminar duplicados por ID, referencia+tiendaId, o EAN+tiendaId antes de mostrar
         const productosUnicos = [];
         const idsVistos = new Set();
+        const referenciasVistas = new Set();
+        const eansVistos = new Set();
+        
         for (const producto of searchResultsAdmin) {
-            if (producto.id && !idsVistos.has(producto.id)) {
-                idsVistos.add(producto.id);
-                productosUnicos.push(producto);
+            // Verificar por ID
+            if (!producto.id || idsVistos.has(producto.id)) {
+                continue;
             }
+            
+            // Crear clave única para referencia+tiendaId
+            const claveReferencia = producto.referencia && producto.tiendaId 
+                ? `${producto.tiendaId}-${producto.referencia}` 
+                : null;
+            
+            // Crear clave única para EAN+tiendaId
+            const claveEAN = producto.ean && producto.tiendaId 
+                ? `${producto.tiendaId}-${producto.ean}` 
+                : null;
+            
+            // Verificar si ya existe un producto con la misma referencia o EAN en la misma tienda
+            if (claveReferencia && referenciasVistas.has(claveReferencia)) {
+                continue;
+            }
+            if (claveEAN && eansVistos.has(claveEAN)) {
+                continue;
+            }
+            
+            // Agregar a los sets de control
+            idsVistos.add(producto.id);
+            if (claveReferencia) referenciasVistas.add(claveReferencia);
+            if (claveEAN) eansVistos.add(claveEAN);
+            productosUnicos.push(producto);
         }
         
         for (const producto of productosUnicos) {

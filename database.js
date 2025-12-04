@@ -429,15 +429,41 @@ class Database {
                    descripcion.includes(normalizedQuery);
         });
         
-        // Eliminar duplicados basándose en el ID del producto
+        // Eliminar duplicados basándose en ID, referencia+tiendaId, o EAN+tiendaId
         const productosUnicos = [];
         const idsVistos = new Set();
+        const referenciasVistas = new Set();
+        const eansVistos = new Set();
         
         for (const producto of resultados) {
-            if (!idsVistos.has(producto.id)) {
-                idsVistos.add(producto.id);
-                productosUnicos.push(producto);
+            // Primero verificar por ID
+            if (idsVistos.has(producto.id)) {
+                continue;
             }
+            
+            // Crear clave única para referencia+tiendaId
+            const claveReferencia = producto.referencia && producto.tiendaId 
+                ? `${producto.tiendaId}-${producto.referencia}` 
+                : null;
+            
+            // Crear clave única para EAN+tiendaId
+            const claveEAN = producto.ean && producto.tiendaId 
+                ? `${producto.tiendaId}-${producto.ean}` 
+                : null;
+            
+            // Verificar si ya existe un producto con la misma referencia o EAN en la misma tienda
+            if (claveReferencia && referenciasVistas.has(claveReferencia)) {
+                continue;
+            }
+            if (claveEAN && eansVistos.has(claveEAN)) {
+                continue;
+            }
+            
+            // Agregar a los sets de control
+            idsVistos.add(producto.id);
+            if (claveReferencia) referenciasVistas.add(claveReferencia);
+            if (claveEAN) eansVistos.add(claveEAN);
+            productosUnicos.push(producto);
         }
         
         return productosUnicos;
