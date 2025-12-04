@@ -405,6 +405,10 @@ async function loadTiendasAdminView() {
     } else {
         container.innerHTML = '';
         container.className = 'tiendas-grid';
+        // Limpiar estilos inline que puedan quedar de otras vistas
+        container.style.display = '';
+        container.style.flexDirection = '';
+        container.style.padding = '';
         for (const tienda of tiendas) {
             const card = await createTiendaCardAdmin(tienda);
             container.appendChild(card);
@@ -539,6 +543,22 @@ async function loadCategoriasAdmin(tiendaId) {
     if (tiendasList) {
         tiendasList.innerHTML = '';
         tiendasList.className = 'categorias-grid';
+        // Limpiar estilos inline
+        tiendasList.style.display = '';
+        tiendasList.style.flexDirection = '';
+        tiendasList.style.padding = '';
+        
+        // Agregar botón volver
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn btn-secondary';
+        btnVolver.textContent = '← Volver a tiendas';
+        btnVolver.style.marginBottom = '1rem';
+        btnVolver.style.width = '100%';
+        btnVolver.addEventListener('click', () => {
+            loadTiendasAdminView();
+        });
+        tiendasList.appendChild(btnVolver);
+        
         categorias.forEach(categoria => {
             const card = document.createElement('div');
             card.className = 'categoria-card';
@@ -570,26 +590,45 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
     if (subCategoriaId) {
         // Vista de subcategoría: mostrar solo productos de esa subcategoría
         container.className = 'productos-list';
+        // Limpiar estilos inline
+        container.style.display = '';
+        container.style.flexDirection = '';
+        container.style.padding = '';
         
         // Agregar botón volver
         const btnVolver = document.createElement('button');
         btnVolver.className = 'btn btn-secondary';
         btnVolver.textContent = '← Volver a categoría';
         btnVolver.style.marginBottom = '1rem';
+        btnVolver.style.width = '100%';
         btnVolver.addEventListener('click', () => {
             loadProductosAdmin(categoriaId);
         });
         container.appendChild(btnVolver);
         
-        productosPaginacion.categoriaId = null;
+        productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = subCategoriaId;
         productosPaginacion.offset = 0;
         await cargarProductosPaginados(container, subCategoriaId, true);
     } else {
         // Vista de categoría: mostrar subcategorías + productos sin subcategoría
+        container.className = '';
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
         container.style.padding = '1rem';
+        
+        // Agregar botón volver
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn btn-secondary';
+        btnVolver.textContent = '← Volver a categorías';
+        btnVolver.style.marginBottom = '1rem';
+        btnVolver.style.width = '100%';
+        btnVolver.addEventListener('click', () => {
+            if (categoria.tiendaId) {
+                loadCategoriasAdmin(categoria.tiendaId);
+            }
+        });
+        container.appendChild(btnVolver);
         
         // 1. Cargar y mostrar subcategorías (si existen)
         const subcategorias = await db.getSubCategoriasByCategoria(categoriaId);
@@ -609,10 +648,7 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
             });
             
             container.appendChild(subcategoriasGrid);
-        }
-        
-        // 2. Cargar y mostrar productos sin subcategoría (debajo de las subcategorías)
-        if (subcategorias.length > 0) {
+            
             // Separador visual
             const separador = document.createElement('div');
             separador.style.height = '2px';
@@ -621,6 +657,7 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
             container.appendChild(separador);
         }
         
+        // 2. Cargar y mostrar productos sin subcategoría (o todos si no hay subcategorías)
         const productosList = document.createElement('div');
         productosList.className = 'productos-list';
         container.appendChild(productosList);
@@ -628,6 +665,8 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = null;
         productosPaginacion.offset = 0;
+        
+        // Cargar productos (siempre, incluso si no hay subcategorías)
         await cargarProductosPaginados(productosList, categoriaId, false);
     }
 }
@@ -639,6 +678,27 @@ async function cargarProductosPaginados(container, id, esSubCategoria) {
         resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
     } else {
         resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset);
+    }
+    
+    // Si es la primera carga y no hay productos, mostrar mensaje
+    if (productosPaginacion.offset === 0 && resultado.productos.length === 0) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'empty-state';
+        emptyMessage.style.textAlign = 'center';
+        emptyMessage.style.padding = '2rem';
+        emptyMessage.style.color = 'var(--text-secondary)';
+        emptyMessage.textContent = esSubCategoria 
+            ? 'No hay productos en esta subcategoría' 
+            : 'No hay productos sin subcategoría en esta categoría';
+        container.appendChild(emptyMessage);
+        productosPaginacion.hasMore = false;
+        return;
+    }
+    
+    // Eliminar mensaje de vacío si existe
+    const existingEmpty = container.querySelector('.empty-state');
+    if (existingEmpty) {
+        existingEmpty.remove();
     }
     
     for (const producto of resultado.productos) {
