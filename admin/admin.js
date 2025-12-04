@@ -542,13 +542,13 @@ async function loadCategoriasAdmin(tiendaId) {
     
     if (tiendasList) {
         tiendasList.innerHTML = '';
-        tiendasList.className = 'categorias-grid';
-        // Limpiar estilos inline
-        tiendasList.style.display = '';
-        tiendasList.style.flexDirection = '';
-        tiendasList.style.padding = '';
+        tiendasList.className = '';
+        // Configurar contenedor con flex column como en loadProductosAdmin
+        tiendasList.style.display = 'flex';
+        tiendasList.style.flexDirection = 'column';
+        tiendasList.style.padding = '1rem';
         
-        // Agregar botón volver
+        // Agregar botón volver (mismo estilo que "Volver a categorías")
         const btnVolver = document.createElement('button');
         btnVolver.className = 'btn btn-secondary';
         btnVolver.textContent = '← Volver a tiendas';
@@ -559,6 +559,11 @@ async function loadCategoriasAdmin(tiendaId) {
         });
         tiendasList.appendChild(btnVolver);
         
+        // Crear grid para las categorías
+        const categoriasGrid = document.createElement('div');
+        categoriasGrid.className = 'categorias-grid';
+        tiendasList.appendChild(categoriasGrid);
+        
         categorias.forEach(categoria => {
             const card = document.createElement('div');
             card.className = 'categoria-card';
@@ -567,7 +572,7 @@ async function loadCategoriasAdmin(tiendaId) {
                 currentCategoria = categoria;
                 loadProductosAdmin(categoria.id);
             });
-            tiendasList.appendChild(card);
+            categoriasGrid.appendChild(card);
         });
     }
 }
@@ -590,22 +595,33 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
     
     if (subCategoriaId) {
         // Vista de subcategoría: mostrar solo productos de esa subcategoría
-        container.className = 'productos-list';
-        // Limpiar estilos inline
-        container.style.display = '';
-        container.style.flexDirection = '';
-        container.style.padding = '';
+        container.className = '';
+        // Configurar contenedor con flex column (mismo estilo que otros botones de volver)
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.padding = '1rem';
         
-        // Agregar botón volver
+        // Agregar botón volver (mismo estilo que otros botones de volver)
         const btnVolver = document.createElement('button');
         btnVolver.className = 'btn btn-secondary';
-        btnVolver.textContent = '← Volver a categoría';
+        btnVolver.textContent = '← Volver a subcategoría';
         btnVolver.style.marginBottom = '1rem';
         btnVolver.style.width = '100%';
         btnVolver.addEventListener('click', () => {
             loadProductosAdmin(categoriaId);
         });
         container.appendChild(btnVolver);
+        
+        // Crear contenedor para la lista de productos
+        const productosList = document.createElement('div');
+        productosList.className = 'productos-list';
+        container.appendChild(productosList);
+        
+        // Actualizar referencia del contenedor para la paginación
+        productosPaginacion.categoriaId = categoriaId;
+        productosPaginacion.subCategoriaId = subCategoriaId;
+        productosPaginacion.offset = 0;
+        await cargarProductosPaginados(productosList, subCategoriaId, true);
         
         productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = subCategoriaId;
