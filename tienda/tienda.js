@@ -1865,21 +1865,32 @@ async function initTienda() {
         currentUserType = 'Tienda';
         
         // Si hay tiendaId en la sesión, cargar la tienda
-        if (sesion.tiendaId) {
-            const tienda = await db.get('tiendas', sesion.tiendaId);
-            if (tienda) {
-                currentTienda = tienda;
+        let tiendaId = sesion.tiendaId || usuario.tiendaId;
+        
+        if (tiendaId) {
+            try {
+                const tienda = await db.get('tiendas', tiendaId);
+                if (tienda) {
+                    currentTienda = tienda;
+                } else {
+                    console.error('Tienda no encontrada con ID:', tiendaId);
+                    window.location.href = '../index.html';
+                    return;
+                }
+            } catch (error) {
+                console.error('Error al cargar tienda:', error);
+                window.location.href = '../index.html';
+                return;
             }
-        } else if (usuario.tiendaId) {
-            // Si el usuario tiene tiendaId, cargar la tienda
-            const tienda = await db.get('tiendas', usuario.tiendaId);
-            if (tienda) {
-                currentTienda = tienda;
-            }
+        } else {
+            console.error('No se encontró tiendaId en sesión ni en usuario');
+            window.location.href = '../index.html';
+            return;
         }
         
-        // Si no hay tienda cargada, redirigir al login
+        // Validación final
         if (!currentTienda) {
+            console.error('currentTienda no se pudo cargar');
             window.location.href = '../index.html';
             return;
         }
@@ -1933,7 +1944,17 @@ async function initTienda() {
 }
 
 // Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    initTienda();
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // Inicializar base de datos primero
+        await db.init();
+        await db.initDefaultData();
+        
+        // Inicializar tienda
+        await initTienda();
+    } catch (error) {
+        console.error('Error al inicializar base de datos:', error);
+        window.location.href = '../index.html';
+    }
 });
 
