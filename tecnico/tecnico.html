@@ -9,6 +9,9 @@
 </head>
 <body>
     <div id="view-tecnico" class="view admin-view">
+        <!-- Overlay para móvil cuando el menú está abierto -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
+        
         <!-- Menú lateral izquierdo -->
         <aside class="admin-sidebar" id="admin-sidebar">
             <div class="admin-sidebar-header">
@@ -46,7 +49,13 @@
             <!-- Vista de Tienda -->
             <div id="view-tecnico-tienda" class="admin-content-view active">
                 <header class="app-header">
-                    <div style="width: 24px;"></div>
+                    <button id="btn-hamburger-menu" class="icon-btn btn-hamburger" aria-label="Abrir menú">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
                     <h2>Tienda</h2>
                     <div class="header-actions">
                         <button id="btn-nuevo-pedido-especial-admin" class="icon-btn btn-add-special-pedido" aria-label="Nuevo Pedido Especial">

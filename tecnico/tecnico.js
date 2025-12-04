@@ -3369,7 +3369,7 @@ function setupTecnicoEventListeners() {
             });
         });
     
-        // Toggle del sidebar
+        // Toggle del sidebar (desktop)
     const toggleBtn = document.getElementById('btn-toggle-sidebar');
     if (toggleBtn) {
         toggleBtn.addEventListener('click', (e) => {
@@ -3377,10 +3377,87 @@ function setupTecnicoEventListeners() {
             e.stopPropagation();
             const sidebar = document.getElementById('admin-sidebar');
             if (sidebar) {
-                sidebar.classList.toggle('collapsed');
+                // Solo colapsar/expandir en desktop
+                if (window.innerWidth > 768) {
+                    sidebar.classList.toggle('collapsed');
+                }
             }
         });
     }
+    
+    // Menú hamburguesa para móvil
+    const hamburgerBtn = document.getElementById('btn-hamburger-menu');
+    const sidebar = document.getElementById('admin-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    function openMobileMenu() {
+        if (sidebar) {
+            sidebar.classList.add('mobile-open');
+        }
+        if (overlay) {
+            overlay.classList.add('active');
+        }
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closeMobileMenu() {
+        if (sidebar) {
+            sidebar.classList.remove('mobile-open');
+        }
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
+        document.body.style.overflow = '';
+    }
+    
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (sidebar && sidebar.classList.contains('mobile-open')) {
+                closeMobileMenu();
+            } else {
+                openMobileMenu();
+            }
+        });
+    }
+    
+    // Cerrar menú al hacer clic en el overlay
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            closeMobileMenu();
+        });
+    }
+    
+    // Cerrar menú al hacer clic en un item del menú en móvil
+    if (navItems.length > 0) {
+        navItems.forEach(btn => {
+            const originalHandler = btn.onclick;
+            btn.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768) {
+                    closeMobileMenu();
+                }
+            });
+        });
+    }
+    
+    // Cerrar menú al hacer clic en logout en móvil
+    const logoutBtn = document.getElementById('btn-logout-tecnico');
+    if (logoutBtn) {
+        const originalLogoutHandler = logoutBtn.onclick;
+        logoutBtn.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                closeMobileMenu();
+            }
+        });
+    }
+    
+    // Cerrar menú al redimensionar la ventana si pasa de móvil a desktop
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            closeMobileMenu();
+        }
+    });
 
     // Logout
     document.getElementById('btn-logout-tecnico')?.addEventListener('click', async () => {
