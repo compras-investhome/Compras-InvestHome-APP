@@ -1218,6 +1218,9 @@ window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
 
 // Función auxiliar para recargar todas las pestañas relevantes cuando cambia un estado
 function recargarPestañasTiendaRelevantes() {
+    // Actualizar todos los badges primero
+    actualizarTodosLosBadges();
+    
     // Recargar todas las pestañas principales que pueden verse afectadas
     loadPedidosSeleccionarPago();
     loadPedidosPendientesPago();
@@ -1961,12 +1964,76 @@ async function initTienda() {
             // Configurar event listeners
             setupTiendaEventListeners();
 
+            // Cargar todos los badges al inicializar
+            actualizarTodosLosBadges();
+
             // Cargar vista inicial
             if (typeof switchTabTienda === 'function') {
                 switchTabTienda('seleccionar-pago');
             }
         });
     });
+}
+
+// Función para actualizar todos los badges de las pestañas
+async function actualizarTodosLosBadges() {
+    if (!currentTienda) return;
+    
+    const tiendaId = currentTienda.id;
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    const solicitudesModificacion = await db.getSolicitudesModificacionByTienda(tiendaId);
+    
+    // 1. Seleccionar Pago
+    const pedidosSeleccionar = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
+        return !tienePedidoReal && 
+               (estadoPago === 'Sin Asignar' || estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') &&
+               p.estado !== 'Completado' && 
+               !p.esPedidoEspecial;
+    });
+    updateTabBadge('seleccionar-pago', pedidosSeleccionar.length);
+    
+    // 2. Modificación de Pedido
+    const solicitudesPendientes = solicitudesModificacion.filter(s => s.estado === 'Pendiente');
+    updateTabBadge('modificacion-pedido', solicitudesPendientes.length);
+    
+    // 3. Pendientes de Pago
+    const pedidosPendientes = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
+        return estadoPago === 'Pendiente de pago' && tienePedidoReal && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('pendientes-pago', pedidosPendientes.length);
+    
+    // 4. Pagados (suma de todos los estados logísticos)
+    const todosPagados = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tieneTransferencia = Boolean(p.transferenciaPDF);
+        return (estadoPago === 'Pagado' || tieneTransferencia) && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('pagados', todosPagados.length);
+    
+    // 5. Pagado A Cuenta (suma de todos los estados logísticos)
+    const todosCuenta = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        return estadoPago === 'Pago A cuenta' && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('pago-cuenta', todosCuenta.length);
+    
+    // 6. Facturas Pendientes
+    const pedidosFacturas = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const tieneTransferencia = Boolean(p.transferenciaPDF);
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tieneFactura = Boolean(p.albaran);
+        
+        const esPagado = estadoPago === 'Pagado' || tieneTransferencia;
+        const esEntregado = estadoLog === 'Entregado';
+        
+        return esPagado && esEntregado && !tieneFactura && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('facturas-pendientes', pedidosFacturas.length);
 }
 
 // Inicializar cuando el DOM esté listo
