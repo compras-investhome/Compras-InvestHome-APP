@@ -978,9 +978,9 @@ function updateProductoCardAdmin(productoId) {
         if (actionsBasic) {
             actionsBasic.innerHTML = `
                 <div class="quantity-control">
-                    <button class="quantity-btn quantity-btn-minus" onclick="decrementProducto('${productoId}')">-</button>
+                    <button class="quantity-btn quantity-btn-minus" onclick="decrementProductoAdmin('${productoId}')">-</button>
                     <span class="quantity-value">${cantidadEnCarrito}</span>
-                    <button class="quantity-btn quantity-btn-plus" onclick="incrementProducto('${productoId}')">+</button>
+                    <button class="quantity-btn quantity-btn-plus" onclick="incrementProductoAdmin('${productoId}')">+</button>
                 </div>
             `;
         }
