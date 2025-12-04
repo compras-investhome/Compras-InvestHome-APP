@@ -1838,32 +1838,31 @@ function setupTiendaEventListeners() {
 // Inicialización
 async function initTienda() {
     // Cargar sesión
-    const sesion = await db.loadSesion();
+    const sesion = await db.getSesionCompleta();
     if (sesion && sesion.userId) {
-        // Si el userId empieza con "tienda_", es una sesión de tienda
-        if (sesion.userId.startsWith('tienda_')) {
-            const tiendaId = sesion.userId.replace('tienda_', '');
-            const tienda = await db.get('tiendas', tiendaId);
-            if (tienda) {
-                currentUser = {
-                    id: sesion.userId,
-                    username: tienda.nombre,
-                    tipo: 'Tienda'
-                };
-                currentUserType = 'Tienda';
-                currentTienda = tienda;
-            }
-        } else {
-            // Es un usuario normal
-            const usuario = await db.get('usuarios', sesion.userId);
-            if (usuario) {
-                currentUser = usuario;
-                currentUserType = usuario.tipo;
+        // Cargar el usuario
+        const usuario = await db.get('usuarios', sesion.userId);
+        if (usuario) {
+            currentUser = usuario;
+            currentUserType = usuario.tipo;
+            
+            // Si hay tiendaId en la sesión, cargar la tienda
+            if (sesion.tiendaId) {
+                const tienda = await db.get('tiendas', sesion.tiendaId);
+                if (tienda) {
+                    currentTienda = tienda;
+                }
+            } else if (usuario.tiendaId) {
+                // Si el usuario tiene tiendaId, cargar la tienda
+                const tienda = await db.get('tiendas', usuario.tiendaId);
+                if (tienda) {
+                    currentTienda = tienda;
+                }
             }
         }
     }
 
-    // Si no hay sesión válida, redirigir al login
+    // Si no hay sesión válida o no es tipo Tienda, redirigir al login
     if (!currentUser || currentUserType !== 'Tienda') {
         window.location.href = '../index.html';
         return;
