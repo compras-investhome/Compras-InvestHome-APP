@@ -291,18 +291,37 @@ class Database {
     }
 
     async getProductosByCategoriaPaginated(categoriaId, productosLimit = 5, offset = 0, soloSinSubCategoria = true) {
-        // Obtener todos los productos de la categoría
-        const q = query(
-            collection(this.db, 'productos'),
-            where('categoriaId', '==', categoriaId),
-            orderBy('nombre')
-        );
-        const querySnapshot = await getDocs(q);
+        let querySnapshot;
+        
+        try {
+            // Intentar con orderBy primero
+            const q = query(
+                collection(this.db, 'productos'),
+                where('categoriaId', '==', categoriaId),
+                orderBy('nombre')
+            );
+            querySnapshot = await getDocs(q);
+        } catch (error) {
+            // Si falla (por ejemplo, si no hay índice), intentar sin orderBy
+            console.warn('Error al obtener productos con orderBy, intentando sin orderBy:', error);
+            const q = query(
+                collection(this.db, 'productos'),
+                where('categoriaId', '==', categoriaId)
+            );
+            querySnapshot = await getDocs(q);
+        }
         
         // Si soloSinSubCategoria es true, filtrar productos sin subcategoría
         // Si es false, mostrar todos los productos de la categoría
         let productosFiltrados = querySnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Ordenar en memoria si no se pudo hacer con orderBy
+        productosFiltrados.sort((a, b) => {
+            const nombreA = (a.nombre || '').toLowerCase();
+            const nombreB = (b.nombre || '').toLowerCase();
+            return nombreA.localeCompare(nombreB);
+        });
         
         if (soloSinSubCategoria) {
             productosFiltrados = productosFiltrados.filter(p => !p.subCategoriaId);
@@ -320,17 +339,37 @@ class Database {
     }
 
     async getProductosBySubCategoriaPaginated(subCategoriaId, productosLimit = 5, offset = 0) {
-        const q = query(
-            collection(this.db, 'productos'),
-            where('subCategoriaId', '==', subCategoriaId),
-            orderBy('nombre')
-        );
-        const querySnapshot = await getDocs(q);
+        let querySnapshot;
+        
+        try {
+            // Intentar con orderBy primero
+            const q = query(
+                collection(this.db, 'productos'),
+                where('subCategoriaId', '==', subCategoriaId),
+                orderBy('nombre')
+            );
+            querySnapshot = await getDocs(q);
+        } catch (error) {
+            // Si falla (por ejemplo, si no hay índice), intentar sin orderBy
+            console.warn('Error al obtener productos de subcategoría con orderBy, intentando sin orderBy:', error);
+            const q = query(
+                collection(this.db, 'productos'),
+                where('subCategoriaId', '==', subCategoriaId)
+            );
+            querySnapshot = await getDocs(q);
+        }
         
         const todosProductos = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         }));
+        
+        // Ordenar en memoria si no se pudo hacer con orderBy
+        todosProductos.sort((a, b) => {
+            const nombreA = (a.nombre || '').toLowerCase();
+            const nombreB = (b.nombre || '').toLowerCase();
+            return nombreA.localeCompare(nombreB);
+        });
         
         // Aplicar paginación
         const productos = todosProductos.slice(offset, offset + productosLimit);
@@ -456,6 +495,8 @@ class Database {
     }
 
     async getPedidosByTienda(tiendaId) {
+        let querySnapshot;
+        
         try {
             // Intentar con orderBy primero
             const q = query(
@@ -463,11 +504,7 @@ class Database {
                 where('tiendaId', '==', tiendaId),
                 orderBy('fecha', 'desc')
             );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            querySnapshot = await getDocs(q);
         } catch (error) {
             // Si falla (por ejemplo, si no hay índice para fecha), intentar sin orderBy
             console.warn('Error al obtener pedidos con orderBy, intentando sin orderBy:', error);
@@ -475,18 +512,22 @@ class Database {
                 collection(this.db, 'pedidos'),
                 where('tiendaId', '==', tiendaId)
             );
-            const querySnapshot = await getDocs(q);
-            const pedidos = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            // Ordenar manualmente por fecha
-            return pedidos.sort((a, b) => {
-                const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-                const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-                return fechaB - fechaA;
-            });
+            querySnapshot = await getDocs(q);
         }
+        
+        const pedidos = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        
+        // Ordenar manualmente por fecha (siempre, para asegurar orden correcto)
+        pedidos.sort((a, b) => {
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha?.toMillis ? new Date(a.fecha.toMillis()) : new Date(a.fecha || 0));
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha?.toMillis ? new Date(b.fecha.toMillis()) : new Date(b.fecha || 0));
+            return fechaB - fechaA; // Descendente
+        });
+        
+        return pedidos;
     }
 
     async saveSesion(persona, obra) {

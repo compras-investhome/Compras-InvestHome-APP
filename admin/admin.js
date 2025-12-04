@@ -679,15 +679,28 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
 async function cargarProductosPaginados(container, id, esSubCategoria) {
     let resultado;
     
-    if (esSubCategoria) {
-        resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
-    } else {
-        // Si hay subcategorías, solo mostrar productos sin subcategoría
-        // Si NO hay subcategorías, mostrar TODOS los productos
-        const soloSinSubCategoria = productosPaginacion.soloSinSubCategoria !== undefined 
-            ? productosPaginacion.soloSinSubCategoria 
-            : true;
-        resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset, soloSinSubCategoria);
+    try {
+        if (esSubCategoria) {
+            resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
+        } else {
+            // Si hay subcategorías, solo mostrar productos sin subcategoría
+            // Si NO hay subcategorías, mostrar TODOS los productos
+            const soloSinSubCategoria = productosPaginacion.soloSinSubCategoria !== undefined 
+                ? productosPaginacion.soloSinSubCategoria 
+                : true;
+            resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset, soloSinSubCategoria);
+        }
+    } catch (error) {
+        console.error('Error al cargar productos:', error);
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'empty-state';
+        errorMessage.style.textAlign = 'center';
+        errorMessage.style.padding = '2rem';
+        errorMessage.style.color = 'var(--error-color, #e74c3c)';
+        errorMessage.textContent = 'Error al cargar productos. Por favor, intenta de nuevo.';
+        container.appendChild(errorMessage);
+        productosPaginacion.hasMore = false;
+        return;
     }
     
     // Si es la primera carga y no hay productos, mostrar mensaje
