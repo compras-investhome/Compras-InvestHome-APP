@@ -23,7 +23,7 @@ let pedidosCursoFiltros = {
     estadoEnvio: '',
     estadoPago: ''
 };
-let previousViewBeforeCarrito = null;
+let previousAdminSubView = null;
 
 // Funciones de utilidad para popups
 function showAlert(message, title = 'Información') {
@@ -321,7 +321,7 @@ function showView(viewName) {
     
     // Cargar datos según la vista
     if (viewName === 'tecnico-tienda') {
-        loadTiendas();
+        loadTiendasAdminView();
         updateCartCountAdmin();
     } else if (viewName === 'tecnico-pedidos-curso') {
         loadPedidosEnCursoTecnico();
@@ -332,7 +332,7 @@ function showView(viewName) {
 
 // ========== CARGA DE TIENDAS ==========
 
-async function loadTiendas() {
+async function loadTiendasAdminView() {
     let tiendas = await db.getAll('tiendas');
     
     // Filtrar solo tiendas activas
@@ -346,7 +346,7 @@ async function loadTiendas() {
         container.className = 'productos-list';
         
         for (const producto of searchResultsAdmin) {
-            const card = await createProductoCard(producto);
+            const card = await createProductoCardAdmin(producto);
             container.appendChild(card);
             
             // Agregar event listener al botón "Añadir"
@@ -362,8 +362,12 @@ async function loadTiendas() {
     } else {
         container.innerHTML = '';
         container.className = 'tiendas-grid';
+        // Limpiar estilos inline que puedan quedar de otras vistas
+        container.style.display = '';
+        container.style.flexDirection = '';
+        container.style.padding = '';
         for (const tienda of tiendas) {
-            const card = await createTiendaCard(tienda);
+            const card = await createTiendaCardAdmin(tienda);
             container.appendChild(card);
         }
     }
@@ -390,7 +394,7 @@ async function calcularGastadoCuenta(tiendaId) {
     return gastado;
 }
 
-async function createTiendaCard(tienda) {
+async function createTiendaCardAdmin(tienda) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
     
@@ -479,15 +483,13 @@ async function createTiendaCard(tienda) {
     
     card.addEventListener('click', () => {
         currentTienda = tienda;
-        loadCategorias(tienda.id);
+        loadCategoriasAdmin(tienda.id);
     });
     
     return card;
 }
 
-// ========== CARGA DE CATEGORÍAS ==========
-
-async function loadCategorias(tiendaId) {
+async function loadCategoriasAdmin(tiendaId) {
     const categorias = await db.getCategoriasByTienda(tiendaId);
     const tienda = await db.get('tiendas', tiendaId);
     
@@ -497,32 +499,201 @@ async function loadCategorias(tiendaId) {
     
     if (tiendasList) {
         tiendasList.innerHTML = '';
-        tiendasList.className = 'categorias-grid';
+        tiendasList.className = '';
+        // Configurar contenedor con flex column como en loadProductosAdmin
+        tiendasList.style.display = 'flex';
+        tiendasList.style.flexDirection = 'column';
+        tiendasList.style.padding = '1rem';
+        
+        // Agregar botón volver (mismo estilo que "Volver a categorías")
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn btn-secondary';
+        btnVolver.textContent = '← Volver a tiendas';
+        btnVolver.style.marginBottom = '1rem';
+        btnVolver.style.width = '100%';
+        btnVolver.addEventListener('click', () => {
+            loadTiendasAdminView();
+        });
+        tiendasList.appendChild(btnVolver);
+        
+        // Crear grid para las categorías
+        const categoriasGrid = document.createElement('div');
+        categoriasGrid.className = 'categorias-grid';
+        tiendasList.appendChild(categoriasGrid);
+        
         categorias.forEach(categoria => {
             const card = document.createElement('div');
             card.className = 'categoria-card';
             card.innerHTML = `<h3>${categoria.nombre}</h3>`;
             card.addEventListener('click', () => {
                 currentCategoria = categoria;
-                loadProductos(categoria.id);
+                loadProductosAdmin(categoria.id);
             });
-            tiendasList.appendChild(card);
+            categoriasGrid.appendChild(card);
         });
     }
 }
 
-// ========== CARGA DE PRODUCTOS ==========
+// Variables para paginación
+let productosPaginacion = {
+    offset: 0,
+    hasMore: false,
+    categoriaId: null,
+    subCategoriaId: null,
+    soloSinSubCategoria: true
+};
 
-async function loadProductos(categoriaId) {
-    const productos = await db.getProductosByCategoria(categoriaId);
+async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
     const categoria = await db.get('categorias', categoriaId);
+    if (!categoria) return;
+    
     const container = document.getElementById('tiendas-list-admin');
-    
     container.innerHTML = '';
-    container.className = 'productos-list';
     
-    for (const producto of productos) {
-        const card = await createProductoCard(producto);
+    if (subCategoriaId) {
+        // Vista de subcategoría: mostrar solo productos de esa subcategoría
+        container.className = '';
+        // Configurar contenedor con flex column (mismo estilo que otros botones de volver)
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.padding = '1rem';
+        
+        // Agregar botón volver (mismo estilo que otros botones de volver)
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn btn-secondary';
+        btnVolver.textContent = '← Volver a subcategoría';
+        btnVolver.style.marginBottom = '1rem';
+        btnVolver.style.width = '100%';
+        btnVolver.addEventListener('click', () => {
+            loadProductosAdmin(categoriaId);
+        });
+        container.appendChild(btnVolver);
+        
+        // Crear contenedor para la lista de productos
+        const productosList = document.createElement('div');
+        productosList.className = 'productos-list';
+        container.appendChild(productosList);
+        
+        // Actualizar referencia del contenedor para la paginación
+        productosPaginacion.categoriaId = categoriaId;
+        productosPaginacion.subCategoriaId = subCategoriaId;
+        productosPaginacion.offset = 0;
+        await cargarProductosPaginados(productosList, subCategoriaId, true);
+    } else {
+        // Vista de categoría: mostrar subcategorías + productos sin subcategoría
+        container.className = '';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.padding = '1rem';
+        
+        // Agregar botón volver
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn btn-secondary';
+        btnVolver.textContent = '← Volver a categorías';
+        btnVolver.style.marginBottom = '1rem';
+        btnVolver.style.width = '100%';
+        btnVolver.addEventListener('click', () => {
+            if (categoria.tiendaId) {
+                loadCategoriasAdmin(categoria.tiendaId);
+            }
+        });
+        container.appendChild(btnVolver);
+        
+        // 1. Cargar y mostrar subcategorías (si existen)
+        const subcategorias = await db.getSubCategoriasByCategoria(categoriaId);
+        const tieneSubcategorias = subcategorias.length > 0;
+        
+        if (tieneSubcategorias) {
+            const subcategoriasGrid = document.createElement('div');
+            subcategoriasGrid.className = 'categorias-grid';
+            
+            subcategorias.forEach(subcategoria => {
+                const card = document.createElement('div');
+                card.className = 'categoria-card';
+                card.innerHTML = `<h3>${subcategoria.nombre}</h3>`;
+                card.addEventListener('click', () => {
+                    loadProductosAdmin(categoriaId, subcategoria.id);
+                });
+                subcategoriasGrid.appendChild(card);
+            });
+            
+            container.appendChild(subcategoriasGrid);
+            
+            // Separador visual
+            const separador = document.createElement('div');
+            separador.style.height = '2px';
+            separador.style.backgroundColor = 'var(--border-color)';
+            separador.style.margin = '2rem 0 1rem 0';
+            container.appendChild(separador);
+        }
+        
+        // 2. Cargar y mostrar productos
+        // Si hay subcategorías: solo productos sin subcategoría
+        // Si NO hay subcategorías: TODOS los productos de la categoría
+        const productosList = document.createElement('div');
+        productosList.className = 'productos-list';
+        container.appendChild(productosList);
+        
+        productosPaginacion.categoriaId = categoriaId;
+        productosPaginacion.subCategoriaId = null;
+        productosPaginacion.offset = 0;
+        productosPaginacion.soloSinSubCategoria = tieneSubcategorias; // Solo filtrar si hay subcategorías
+        
+        // Cargar productos (siempre, incluso si no hay subcategorías)
+        await cargarProductosPaginados(productosList, categoriaId, false);
+    }
+}
+
+async function cargarProductosPaginados(container, id, esSubCategoria) {
+    let resultado;
+    
+    try {
+        if (esSubCategoria) {
+            resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
+        } else {
+            // Si hay subcategorías, solo mostrar productos sin subcategoría
+            // Si NO hay subcategorías, mostrar TODOS los productos
+            const soloSinSubCategoria = productosPaginacion.soloSinSubCategoria !== undefined 
+                ? productosPaginacion.soloSinSubCategoria 
+                : true;
+            resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset, soloSinSubCategoria);
+        }
+    } catch (error) {
+        console.error('Error al cargar productos:', error);
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'empty-state';
+        errorMessage.style.textAlign = 'center';
+        errorMessage.style.padding = '2rem';
+        errorMessage.style.color = 'var(--error-color, #e74c3c)';
+        errorMessage.textContent = 'Error al cargar productos. Por favor, intenta de nuevo.';
+        container.appendChild(errorMessage);
+        productosPaginacion.hasMore = false;
+        return;
+    }
+    
+    // Si es la primera carga y no hay productos, mostrar mensaje
+    if (productosPaginacion.offset === 0 && resultado.productos.length === 0) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'empty-state';
+        emptyMessage.style.textAlign = 'center';
+        emptyMessage.style.padding = '2rem';
+        emptyMessage.style.color = 'var(--text-secondary)';
+        emptyMessage.textContent = esSubCategoria 
+            ? 'No hay productos en esta subcategoría' 
+            : 'No hay productos sin subcategoría en esta categoría';
+        container.appendChild(emptyMessage);
+        productosPaginacion.hasMore = false;
+        return;
+    }
+    
+    // Eliminar mensaje de vacío si existe
+    const existingEmpty = container.querySelector('.empty-state');
+    if (existingEmpty) {
+        existingEmpty.remove();
+    }
+    
+    for (const producto of resultado.productos) {
+        const card = await createProductoCardAdmin(producto);
         container.appendChild(card);
         
         // Agregar event listener al botón "Añadir"
@@ -531,13 +702,38 @@ async function loadProductos(categoriaId) {
             btnAddSmall.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const productoId = btnAddSmall.getAttribute('data-producto-id');
-                await addToCart(productoId, 1);
+                await addToCartAdmin(productoId, 1);
             });
         }
     }
+    
+    productosPaginacion.hasMore = resultado.hasMore;
+    productosPaginacion.offset += resultado.productos.length;
+    
+    // Agregar botón "Cargar más" si hay más productos
+    const existingBtn = container.querySelector('.btn-cargar-mas-productos');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
+    
+    if (resultado.hasMore) {
+        const btnCargarMas = document.createElement('button');
+        btnCargarMas.className = 'btn btn-primary btn-cargar-mas-productos';
+        btnCargarMas.textContent = 'Cargar más Artículos';
+        btnCargarMas.style.marginTop = '1rem';
+        btnCargarMas.style.width = '100%';
+        btnCargarMas.addEventListener('click', async () => {
+            btnCargarMas.disabled = true;
+            btnCargarMas.textContent = 'Cargando...';
+            await cargarProductosPaginados(container, id, esSubCategoria);
+            btnCargarMas.disabled = false;
+            btnCargarMas.textContent = 'Cargar más Artículos';
+        });
+        container.appendChild(btnCargarMas);
+    }
 }
 
-async function createProductoCard(producto) {
+async function createProductoCardAdmin(producto) {
     const card = document.createElement('div');
     card.className = 'producto-card-admin';
     card.dataset.productoId = producto.id;
@@ -582,9 +778,9 @@ async function createProductoCard(producto) {
         <div class="producto-actions-basic">
             ${cantidadEnCarrito > 0 ? `
                 <div class="quantity-control">
-                    <button class="quantity-btn quantity-btn-minus" onclick="decrementProducto('${producto.id}')">-</button>
+                    <button class="quantity-btn quantity-btn-minus" onclick="decrementProductoAdmin('${producto.id}')">-</button>
                     <span class="quantity-value">${cantidadEnCarrito}</span>
-                    <button class="quantity-btn quantity-btn-plus" onclick="incrementProducto('${producto.id}')">+</button>
+                    <button class="quantity-btn quantity-btn-plus" onclick="incrementProductoAdmin('${producto.id}')">+</button>
                 </div>
             ` : `
                 <button class="btn-add-cart-small" data-producto-id="${producto.id}">+</button>
@@ -1071,7 +1267,7 @@ async function finalizarPedidoAdmin() {
     
     // Recargar vista si es necesario
     if (previousAdminSubView === 'admin-tienda') {
-        loadTiendas();
+        loadTiendasAdminView();
     }
 }
 
@@ -3171,7 +3367,7 @@ function setupTecnicoEventListeners() {
         if (container) {
             container.className = 'tiendas-grid';
         }
-        loadTiendas();
+        loadTiendasAdminView();
     });
 
     document.getElementById('search-input-admin')?.addEventListener('input', async (e) => {
@@ -3184,7 +3380,7 @@ function setupTecnicoEventListeners() {
             if (container) {
                 container.className = 'tiendas-grid';
             }
-            loadTiendas();
+            loadTiendasAdminView();
         }
     });
 
@@ -3201,14 +3397,14 @@ function setupTecnicoEventListeners() {
                 const viewId = currentView.id;
                 if (viewId === 'view-categorias') {
                     showView('tecnico-tienda');
-                    loadTiendas();
+                    loadTiendasAdminView();
                 } else if (viewId === 'view-productos') {
                     if (currentCategoria && currentTienda) {
                         showView('categorias');
-                        loadCategorias(currentTienda.id);
+                        loadCategoriasAdmin(currentTienda.id);
                     } else {
                         showView('tecnico-tienda');
-                        loadTiendas();
+                        loadTiendasAdminView();
                     }
                 }
             }
