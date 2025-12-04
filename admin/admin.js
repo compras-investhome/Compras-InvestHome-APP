@@ -622,11 +622,6 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         productosPaginacion.subCategoriaId = subCategoriaId;
         productosPaginacion.offset = 0;
         await cargarProductosPaginados(productosList, subCategoriaId, true);
-        
-        productosPaginacion.categoriaId = categoriaId;
-        productosPaginacion.subCategoriaId = subCategoriaId;
-        productosPaginacion.offset = 0;
-        await cargarProductosPaginados(container, subCategoriaId, true);
     } else {
         // Vista de categoría: mostrar subcategorías + productos sin subcategoría
         container.className = '';
