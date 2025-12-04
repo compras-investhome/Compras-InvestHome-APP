@@ -339,8 +339,20 @@ async function loadTiendasAdminView() {
     tiendas = tiendas.filter(t => t.activa !== false);
     
     const container = document.getElementById('tiendas-list-admin');
+    const searchInput = document.getElementById('search-input-admin');
+    const isSearching = searchInput && searchInput.value.trim().length > 2;
     
-    if (searchResultsAdmin.length > 0) {
+    if (isSearching && searchResultsAdmin.length === 0) {
+        // Búsqueda activa pero sin resultados
+        container.innerHTML = '';
+        container.className = 'productos-list';
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'empty-state';
+        emptyMessage.style.textAlign = 'center';
+        emptyMessage.style.padding = '3rem 1rem';
+        emptyMessage.innerHTML = '<p>Sin Resultados</p><p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">No se encontraron productos que coincidan con tu búsqueda</p>';
+        container.appendChild(emptyMessage);
+    } else if (searchResultsAdmin.length > 0) {
         // Mostrar resultados de búsqueda como productos
         container.innerHTML = '';
         container.className = 'productos-list';
