@@ -2062,8 +2062,8 @@
         width: 100%;
         max-width: none;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 0.5rem;
         background-color: var(--bg-color);
         border-radius: 8px;
         padding: 0.5rem;
@@ -2072,7 +2072,10 @@
     
     .carrito-quantity-btn {
         min-height: 36px;
+        width: 18px;
         min-width: 18px;
+        max-width: 18px;
+        flex: 0 0 18px;
         font-size: 0.9rem;
         padding: 0.5rem 0.25rem;
     }
@@ -2083,6 +2086,9 @@
         font-weight: 600;
         flex: 1;
         text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     
     .carrito-item-subtotal {
