@@ -904,3 +904,33 @@
     }
 }
 
+/* Estilos para el header de gestión de tienda */
+#tienda-gestion-view .app-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 1rem 1.5rem;
+}
+
+#tienda-gestion-view .app-header h2 {
+    grid-column: 2;
+    text-align: center;
+    margin: 0;
+}
+
+#tienda-gestion-view .app-header > div:first-child {
+    grid-column: 1;
+    width: 24px;
+    justify-self: start;
+}
+
+.gestion-cuenta-badge {
+    grid-column: 3;
+    justify-self: end;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
