@@ -303,7 +303,7 @@ class Database {
             querySnapshot = await getDocs(q);
         } catch (error) {
             // Si falla (por ejemplo, si no hay índice), intentar sin orderBy
-            console.warn('Error al obtener productos con orderBy, intentando sin orderBy:', error);
+            // No mostrar warning ya que el sistema maneja esto correctamente
             const q = query(
                 collection(this.db, 'productos'),
                 where('categoriaId', '==', categoriaId)
@@ -351,7 +351,7 @@ class Database {
             querySnapshot = await getDocs(q);
         } catch (error) {
             // Si falla (por ejemplo, si no hay índice), intentar sin orderBy
-            console.warn('Error al obtener productos de subcategoría con orderBy, intentando sin orderBy:', error);
+            // No mostrar warning ya que el sistema maneja esto correctamente
             const q = query(
                 collection(this.db, 'productos'),
                 where('subCategoriaId', '==', subCategoriaId)
@@ -507,7 +507,7 @@ class Database {
             querySnapshot = await getDocs(q);
         } catch (error) {
             // Si falla (por ejemplo, si no hay índice para fecha), intentar sin orderBy
-            console.warn('Error al obtener pedidos con orderBy, intentando sin orderBy:', error);
+            // No mostrar warning ya que el sistema maneja esto correctamente
             const q = query(
                 collection(this.db, 'pedidos'),
                 where('tiendaId', '==', tiendaId)
