@@ -1661,8 +1661,13 @@ window.rechazarSolicitudModificacion = async function(solicitudId) {
 
 // Funciones de navegación
 function switchTabTienda(tab) {
+    if (!tab) return;
+    
     // Actualizar pestañas principales
-    document.querySelectorAll('#tienda-gestion-view .tab-btn').forEach(btn => {
+    const gestionView = document.getElementById('tienda-gestion-view');
+    if (!gestionView) return;
+    
+    gestionView.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.tab === tab) {
             btn.classList.add('active');
@@ -1670,7 +1675,7 @@ function switchTabTienda(tab) {
     });
     
     // Ocultar todos los contenidos de pestañas
-    document.querySelectorAll('#tienda-gestion-view .tab-content').forEach(content => {
+    gestionView.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
     });
     
@@ -1681,22 +1686,24 @@ function switchTabTienda(tab) {
     }
     
     // Cargar contenido según la pestaña
-    if (tab === 'seleccionar-pago') {
+    if (tab === 'seleccionar-pago' && typeof loadPedidosSeleccionarPago === 'function') {
         loadPedidosSeleccionarPago();
-    } else if (tab === 'modificacion-pedido') {
+    } else if (tab === 'modificacion-pedido' && typeof loadModificacionPedidoTienda === 'function') {
         loadModificacionPedidoTienda();
-    } else if (tab === 'pendientes-pago') {
+    } else if (tab === 'pendientes-pago' && typeof loadPedidosPendientesPago === 'function') {
         loadPedidosPendientesPago();
-    } else if (tab === 'pagados') {
+    } else if (tab === 'pagados' && typeof switchSubTabTienda === 'function') {
         switchSubTabTienda('pagados', 'pagados-nuevo');
-    } else if (tab === 'pago-cuenta') {
+    } else if (tab === 'pago-cuenta' && typeof switchSubTabTienda === 'function') {
         switchSubTabTienda('pago-cuenta', 'pago-cuenta-nuevo');
-    } else if (tab === 'facturas-pendientes') {
+    } else if (tab === 'facturas-pendientes' && typeof loadPedidosFacturasPendientesTienda === 'function') {
         loadPedidosFacturasPendientesTienda();
     }
 }
 
 function switchSubTabTienda(mainTab, subTab) {
+    if (!mainTab || !subTab) return;
+    
     // Ocultar todas las sub-pestañas del grupo
     const mainTabContent = document.getElementById(mainTab);
     if (!mainTabContent) return;
@@ -1717,21 +1724,21 @@ function switchSubTabTienda(mainTab, subTab) {
     if (subTabContent) subTabContent.classList.add('active');
     
     // Cargar contenido según la sub-pestaña
-    if (subTab === 'pagados-nuevo') {
+    if (subTab === 'pagados-nuevo' && typeof loadPedidosPagadosTienda === 'function') {
         loadPedidosPagadosTienda('Nuevo');
-    } else if (subTab === 'pagados-preparando') {
+    } else if (subTab === 'pagados-preparando' && typeof loadPedidosPagadosTienda === 'function') {
         loadPedidosPagadosTienda('Preparando');
-    } else if (subTab === 'pagados-en-ruta') {
+    } else if (subTab === 'pagados-en-ruta' && typeof loadPedidosPagadosTienda === 'function') {
         loadPedidosPagadosTienda('En Ruta');
-    } else if (subTab === 'pagados-entregado') {
+    } else if (subTab === 'pagados-entregado' && typeof loadPedidosPagadosTienda === 'function') {
         loadPedidosPagadosTienda('Entregado');
-    } else if (subTab === 'pago-cuenta-nuevo') {
+    } else if (subTab === 'pago-cuenta-nuevo' && typeof loadPedidosPagoCuentaTienda === 'function') {
         loadPedidosPagoCuentaTienda('Nuevo');
-    } else if (subTab === 'pago-cuenta-preparando') {
+    } else if (subTab === 'pago-cuenta-preparando' && typeof loadPedidosPagoCuentaTienda === 'function') {
         loadPedidosPagoCuentaTienda('Preparando');
-    } else if (subTab === 'pago-cuenta-en-ruta') {
+    } else if (subTab === 'pago-cuenta-en-ruta' && typeof loadPedidosPagoCuentaTienda === 'function') {
         loadPedidosPagoCuentaTienda('En Ruta');
-    } else if (subTab === 'pago-cuenta-entregado') {
+    } else if (subTab === 'pago-cuenta-entregado' && typeof loadPedidosPagoCuentaTienda === 'function') {
         loadPedidosPagoCuentaTienda('Entregado');
     }
 }
@@ -1750,7 +1757,7 @@ function showTiendaView(viewName) {
     }
 }
 
-// Event listeners
+// Event listeners - Usar delegación de eventos para máxima robustez
 let tiendaEventListenersSetup = false;
 
 function setupTiendaEventListeners() {
@@ -1760,23 +1767,21 @@ function setupTiendaEventListeners() {
     }
     tiendaEventListenersSetup = true;
 
-    // Toggle sidebar tienda
-    const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar-tienda');
-    if (toggleSidebarBtn) {
-        toggleSidebarBtn.addEventListener('click', (e) => {
+    // Toggle sidebar tienda - delegación en el documento
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#btn-toggle-sidebar-tienda')) {
             e.preventDefault();
             e.stopPropagation();
             const sidebar = document.getElementById('tienda-sidebar');
             if (sidebar) {
                 sidebar.classList.toggle('collapsed');
             }
-        });
-    }
+        }
+    });
 
-    // Logout (debe ir antes de la navegación para evitar conflictos)
-    const logoutBtn = document.getElementById('btn-logout-tienda');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', async (e) => {
+    // Logout - delegación en el documento
+    document.addEventListener('click', async (e) => {
+        if (e.target.closest('#btn-logout-tienda')) {
             e.preventDefault();
             e.stopPropagation();
             await db.clearSesion();
@@ -1784,20 +1789,15 @@ function setupTiendaEventListeners() {
             currentUserType = null;
             currentTienda = null;
             window.location.href = '../index.html';
-        });
-    }
+        }
+    });
 
-    // Tienda sidebar navigation (usar delegación de eventos)
+    // Tienda sidebar navigation - delegación en el sidebar
     const sidebar = document.getElementById('tienda-sidebar');
     if (sidebar) {
         sidebar.addEventListener('click', (e) => {
             const navItem = e.target.closest('.admin-nav-item');
-            if (!navItem) return;
-            
-            // Saltar el botón de logout (ya tiene su propio listener)
-            if (navItem.id === 'btn-logout-tienda') {
-                return;
-            }
+            if (!navItem || navItem.id === 'btn-logout-tienda') return;
             
             const viewName = navItem.dataset.view;
             if (viewName) {
@@ -1816,43 +1816,40 @@ function setupTiendaEventListeners() {
         });
     }
 
-    // Tabs principales - usar delegación de eventos directamente en cada botón
-    const tabButtons = document.querySelectorAll('#tienda-gestion-view .tab-btn');
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    // Tabs principales - delegación de eventos en el documento (más robusto)
+    document.addEventListener('click', (e) => {
+        const tabBtn = e.target.closest('#tienda-gestion-view .tab-btn');
+        if (tabBtn && tabBtn.dataset.tab) {
             e.preventDefault();
             e.stopPropagation();
-            const tab = e.currentTarget.dataset.tab;
-            if (tab && typeof switchTabTienda === 'function') {
+            const tab = tabBtn.dataset.tab;
+            if (typeof switchTabTienda === 'function') {
                 switchTabTienda(tab);
             }
-        });
+        }
     });
 
-    // Sub-tabs de Pagados
-    const pagadosSubTabs = document.querySelectorAll('#pagados .sub-tab-btn');
-    pagadosSubTabs.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const subTab = e.currentTarget.dataset.subTab;
-            if (subTab && typeof switchSubTabTienda === 'function') {
-                switchSubTabTienda('pagados', subTab);
-            }
-        });
-    });
-
-    // Sub-tabs de Pago A Cuenta
-    const pagoCuentaSubTabs = document.querySelectorAll('#pago-cuenta .sub-tab-btn');
-    pagoCuentaSubTabs.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const subTab = e.currentTarget.dataset.subTab;
-            if (subTab && typeof switchSubTabTienda === 'function') {
-                switchSubTabTienda('pago-cuenta', subTab);
-            }
-        });
+    // Sub-tabs - delegación de eventos en el documento (funciona para todos los sub-tabs)
+    document.addEventListener('click', (e) => {
+        const subTabBtn = e.target.closest('.sub-tab-btn');
+        if (!subTabBtn || !subTabBtn.dataset.subTab) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const subTab = subTabBtn.dataset.subTab;
+        
+        // Determinar el mainTab basado en el subTab
+        let mainTab = null;
+        if (subTab.startsWith('pagados-')) {
+            mainTab = 'pagados';
+        } else if (subTab.startsWith('pago-cuenta-')) {
+            mainTab = 'pago-cuenta';
+        }
+        
+        if (mainTab) {
+            switchSubTabTienda(mainTab, subTab);
+        }
     });
 }
 
@@ -1918,13 +1915,18 @@ async function initTienda() {
     // Mostrar vista inicial de Gestión primero
     showTiendaView('tienda-gestion');
 
-    // Usar requestAnimationFrame para asegurar que el DOM esté renderizado
+    // Esperar a que el DOM esté completamente renderizado
+    // Usar múltiples frames para asegurar que todo esté listo
     requestAnimationFrame(() => {
-        // Configurar event listeners
-        setupTiendaEventListeners();
+        requestAnimationFrame(() => {
+            // Configurar event listeners
+            setupTiendaEventListeners();
 
-        // Cargar vista inicial
-        switchTabTienda('seleccionar-pago');
+            // Cargar vista inicial
+            if (typeof switchTabTienda === 'function') {
+                switchTabTienda('seleccionar-pago');
+            }
+        });
     });
 }
 
