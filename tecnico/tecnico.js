@@ -345,7 +345,17 @@ async function loadTiendasAdminView() {
         container.innerHTML = '';
         container.className = 'productos-list';
         
+        // Eliminar duplicados por ID antes de mostrar
+        const productosUnicos = [];
+        const idsVistos = new Set();
         for (const producto of searchResultsAdmin) {
+            if (producto.id && !idsVistos.has(producto.id)) {
+                idsVistos.add(producto.id);
+                productosUnicos.push(producto);
+            }
+        }
+        
+        for (const producto of productosUnicos) {
             const card = await createProductoCardAdmin(producto);
             container.appendChild(card);
             

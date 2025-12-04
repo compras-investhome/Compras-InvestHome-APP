@@ -421,13 +421,26 @@ class Database {
         const allProductos = await this.getAll('productos');
         const normalizedQuery = this.normalizeText(queryText);
         
-        return allProductos.filter(producto => {
+        const resultados = allProductos.filter(producto => {
             const designacion = this.normalizeText(producto.designacion);
             const descripcion = this.normalizeText(producto.descripcion);
             
             return designacion.includes(normalizedQuery) ||
                    descripcion.includes(normalizedQuery);
         });
+        
+        // Eliminar duplicados basándose en el ID del producto
+        const productosUnicos = [];
+        const idsVistos = new Set();
+        
+        for (const producto of resultados) {
+            if (!idsVistos.has(producto.id)) {
+                idsVistos.add(producto.id);
+                productosUnicos.push(producto);
+            }
+        }
+        
+        return productosUnicos;
     }
 
     async getPedidosByUser(userId, obraId) {
