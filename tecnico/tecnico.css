@@ -1804,6 +1804,10 @@
     padding: 1rem;
 }
 
+.comentarios-input-wrapper > .btn {
+    align-self: flex-end;
+}
+
 .btn-secondary {
     background: var(--bg-color);
     color: var(--text-primary);
