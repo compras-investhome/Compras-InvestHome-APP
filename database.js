@@ -422,11 +422,15 @@ class Database {
         const normalizedQuery = this.normalizeText(queryText);
         
         const resultados = allProductos.filter(producto => {
-            const designacion = this.normalizeText(producto.designacion);
-            const descripcion = this.normalizeText(producto.descripcion);
+            const designacion = this.normalizeText(producto.designacion || '');
+            const descripcion = this.normalizeText(producto.descripcion || '');
+            const referencia = this.normalizeText(producto.referencia || '');
+            const ean = String(producto.ean || '').toLowerCase();
             
             return designacion.includes(normalizedQuery) ||
-                   descripcion.includes(normalizedQuery);
+                   descripcion.includes(normalizedQuery) ||
+                   referencia.includes(normalizedQuery) ||
+                   ean.includes(normalizedQuery);
         });
         
         // Eliminar duplicados basándose en ID, referencia+tiendaId, o EAN+tiendaId

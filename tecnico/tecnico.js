@@ -962,7 +962,7 @@ window.decrementProductoAdmin = function(productoId) {
             carritoAdmin.splice(index, 1);
         }
         updateCartCountAdmin();
-        updateProductoCard(productoId);
+        updateProductoCardAdmin(productoId);
     }
 };
 
@@ -1173,6 +1173,30 @@ function incrementCarritoItem(productoId) {
         });
         return;
     }
+    updateCartCountAdmin();
+    loadCarritoAdmin();
+}
+
+function incrementCarritoItemAdmin(productoId) {
+    const item = carritoAdmin.find(item => item.productoId === productoId);
+    if (item) {
+        item.cantidad++;
+    } else {
+        // Si no existe, intentar añadirlo
+        db.get('productos', productoId).then(producto => {
+            if (producto) {
+                carritoAdmin.push({
+                    productoId: productoId,
+                    producto: producto,
+                    cantidad: 1
+                });
+                updateCartCountAdmin();
+                loadCarritoAdmin();
+            }
+        });
+        return;
+    }
+
     updateCartCountAdmin();
     loadCarritoAdmin();
 }
