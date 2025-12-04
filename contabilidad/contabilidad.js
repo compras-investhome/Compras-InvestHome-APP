@@ -4,6 +4,7 @@ import { db } from '../database.js';
 // Variables globales
 let currentUser = null;
 let currentUserType = null;
+let currentTiendaCuenta = null; // Tienda seleccionada en la vista de cuentas
 const contabilidadTabBadgeMap = {
     pendientes: 'tab-count-pendientes-pago-contabilidad',
     cuentas: 'tab-count-cuentas-contabilidad',
@@ -338,18 +339,18 @@ async function loadPedidosContabilidad() {
         return true;
     });
     
+    // Ordenar de más nuevo a más viejo
     pedidosPendientes.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    const obras = await getObrasCatalog(pedidosPendientes);
     const container = document.getElementById('pendientes-pago-contabilidad-list');
     const emptyState = document.getElementById('pendientes-pago-contabilidad-empty');
     container.innerHTML = '';
     
-    if (obras.length === 0) {
+    if (pedidosPendientes.length === 0) {
         emptyState.style.display = 'block';
         updateContabilidadTabBadge('pendientes', 0);
         return;
@@ -357,30 +358,13 @@ async function loadPedidosContabilidad() {
     
     emptyState.style.display = 'none';
     
-    let totalCount = 0;
-    for (const obra of obras) {
-        const obraId = obra.id || 'sin-obra';
-        const pedidosObra = pedidosPendientes.filter(p => (p.obraId || 'sin-obra') === obraId);
-        totalCount += pedidosObra.length;
-        
-        const { section, content } = createCascadeSection({
-            prefix: 'pendientes-obra',
-            uniqueId: obraId,
-            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
-            count: pedidosObra.length,
-            emptyMessage: 'Sin pedidos pendientes para esta obra',
-            defaultOpen: pedidosObra.length > 0
-        });
-        
-        for (const pedido of pedidosObra) {
-            const card = await createPedidoContabilidadCard(pedido);
-            content.appendChild(card);
-        }
-        
-        container.appendChild(section);
+    // Mostrar pedidos directamente sin agrupar por obras
+    for (const pedido of pedidosPendientes) {
+        const card = await createPedidoContabilidadCard(pedido);
+        container.appendChild(card);
     }
     
-    updateContabilidadTabBadge('pendientes', totalCount);
+    updateContabilidadTabBadge('pendientes', pedidosPendientes.length);
 }
 
 async function loadPedidosPagadosContabilidad() {
@@ -406,37 +390,96 @@ async function loadPedidosPagadosContabilidad() {
     emptyState.style.display = 'none';
     let totalCount = 0;
     
+    // Crear grid de cards de obras
+    const grid = document.createElement('div');
+    grid.className = 'tiendas-grid';
+    
     for (const obra of obras) {
         const obraId = obra.id || 'sin-obra';
-        const pedidosObra = pedidosPagados
-            .filter(p => (p.obraId || 'sin-obra') === obraId)
-            .sort((a, b) => {
-            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
-            return fechaB - fechaA;
-        });
+        const pedidosObra = pedidosPagados.filter(p => (p.obraId || 'sin-obra') === obraId);
         totalCount += pedidosObra.length;
         
-        const { section, content } = createCascadeSection({
-            prefix: 'historico-obra',
-            uniqueId: obraId,
-            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
-            count: pedidosObra.length,
-            emptyMessage: 'Sin registros históricos para esta obra',
-            defaultOpen: false
-        });
-        
-        for (const pedido of pedidosObra) {
-            const card = isPedidoEspecial(pedido)
-                ? await createPedidoEspecialContabilidadCard(pedido)
-                : await createPedidoContabilidadCard(pedido, true);
-            content.appendChild(card);
-        }
-        
-        container.appendChild(section);
+        const card = createObraHistoricoCard(obra, pedidosObra.length, obraId);
+        grid.appendChild(card);
     }
     
+    container.appendChild(grid);
     updateContabilidadTabBadge('historico', totalCount);
+}
+
+function createObraHistoricoCard(obra, pedidosCount, obraId) {
+    const card = document.createElement('div');
+    card.className = 'obra-card';
+    
+    const nombreObra = obra.nombreComercial || obra.nombre || 'Obra sin nombre';
+    
+    card.innerHTML = `
+        <div class="obra-card-content">
+            <div class="tienda-card-icon">🏗️</div>
+            <h3 class="obra-card-nombre">${escapeHtml(nombreObra)}</h3>
+            <div class="obra-card-count">
+                <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} histórico${pedidosCount !== 1 ? 's' : ''}
+            </div>
+        </div>
+    `;
+    
+    card.addEventListener('click', () => {
+        loadPedidosObraHistorico(obraId);
+    });
+    
+    return card;
+}
+
+async function loadPedidosObraHistorico(obraId) {
+    const container = document.getElementById('historico-contabilidad-list');
+    const emptyState = document.getElementById('historico-contabilidad-empty');
+    
+    container.innerHTML = '';
+    emptyState.style.display = 'none';
+    
+    // Botón Volver
+    const btnVolver = document.createElement('button');
+    btnVolver.className = 'btn-volver-historico';
+    btnVolver.innerHTML = '← Volver a obras';
+    btnVolver.addEventListener('click', () => {
+        loadPedidosPagadosContabilidad();
+    });
+    container.appendChild(btnVolver);
+    
+    // Obtener pedidos de la obra
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosObra = todosPedidos.filter(p => {
+        const pObraId = p.obraId || 'sin-obra';
+        if (pObraId !== obraId) return false;
+        
+        if (isPedidoEspecial(p)) {
+            return p.estadoPago === 'Pagado' && p.documentoPago;
+        } else {
+            return p.transferenciaPDF && p.albaran;
+        }
+    });
+    
+    pedidosObra.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+        return fechaB - fechaA;
+    });
+    
+    if (pedidosObra.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-state';
+        emptyMsg.innerHTML = '<p>No hay pedidos históricos para esta obra</p>';
+        container.appendChild(emptyMsg);
+        return;
+    }
+    
+    // Mostrar pedidos
+    for (const pedido of pedidosObra) {
+        const card = isPedidoEspecial(pedido)
+            ? await createPedidoEspecialContabilidadCard(pedido)
+            : await createPedidoContabilidadCard(pedido, true);
+        container.appendChild(card);
+    }
 }
 
 async function loadCuentasContabilidad() {
@@ -447,6 +490,7 @@ async function loadCuentasContabilidad() {
     const emptyState = document.getElementById('cuentas-contabilidad-empty');
     
     container.innerHTML = '';
+    currentTiendaCuenta = null;
     
     if (tiendasConCuenta.length === 0) {
         emptyState.style.display = 'block';
@@ -464,62 +508,158 @@ async function loadCuentasContabilidad() {
         !p.transferenciaPDF
     );
     
-    pedidosCuentaGlobal.sort((a, b) => {
+    let totalPedidos = 0;
+    
+    // Crear grid de cards de tiendas
+    const grid = document.createElement('div');
+    grid.className = 'tiendas-grid';
+    
+    for (const tienda of tiendasConCuenta) {
+        const pedidosTienda = pedidosCuentaGlobal.filter(p => p.tiendaId === tienda.id);
+        totalPedidos += pedidosTienda.length;
+        
+        const card = await createTiendaCuentaCard(tienda, pedidosTienda.length);
+        grid.appendChild(card);
+    }
+    
+    container.appendChild(grid);
+    updateContabilidadTabBadge('cuentas', totalPedidos);
+}
+
+async function createTiendaCuentaCard(tienda, pedidosCount) {
+    const card = document.createElement('div');
+    card.className = 'tienda-card';
+    
+    // Logo (arriba)
+    let imagenHtml = '';
+    const tieneLogo = tienda.logo && 
+                      typeof tienda.logo === 'string' && 
+                      tienda.logo.trim() !== '' && 
+                      tienda.logo !== 'null' && 
+                      tienda.logo !== 'undefined' &&
+                      (tienda.logo.startsWith('data:image/') || tienda.logo.startsWith('http'));
+    
+    if (tieneLogo) {
+        imagenHtml = `
+            <img src="${tienda.logo}" alt="${escapeHtml(tienda.nombre)}" class="tienda-card-logo" onerror="this.style.display='none'; const icon = this.parentElement.querySelector('.tienda-card-icon'); if(icon) icon.style.display='flex';">
+            <div class="tienda-card-icon" style="display: none;">${tienda.icono || '🏪'}</div>
+        `;
+    } else {
+        imagenHtml = `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
+    }
+    
+    // Calcular gastado de cuenta
+    const gastado = await calcularGastadoCuenta(tienda.id);
+    let cuentaInfoHtml = '';
+    
+    if (tienda.limiteCuenta) {
+        // Tiene cuenta con límite
+        const limite = Number(tienda.limiteCuenta) || 0;
+        const porcentaje = limite > 0 ? (gastado / limite) * 100 : 0;
+        const disponible = Math.max(0, limite - gastado);
+        const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
+        
+        cuentaInfoHtml = `
+            <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Estado de Cuenta</div>
+                <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+                    <strong>${gastado.toFixed(2)}€</strong> gastado / <strong>${limite.toFixed(2)}€</strong> límite
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    Disponible: ${disponible.toFixed(2)}€
+                </div>
+                <div style="height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 0.25rem;">
+                    <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra}; transition: width 0.3s;"></div>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">
+                    ${porcentaje.toFixed(1)}% utilizado
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;">
+                    <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} pendiente${pedidosCount !== 1 ? 's' : ''}
+                </div>
+            </div>
+        `;
+    } else {
+        // Cuenta sin límite
+        cuentaInfoHtml = `
+            <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: #d1fae5; border-radius: 8px; border: 1px solid #10b981;">
+                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #065f46;">Estado de Cuenta</div>
+                <div style="font-size: 0.875rem; color: #065f46;">
+                    <strong>${gastado.toFixed(2)}€</strong> gastado
+                </div>
+                <div style="font-size: 0.75rem; color: #065f46; margin-top: 0.25rem; font-weight: 600;">
+                    Cuenta sin límite
+                </div>
+                <div style="font-size: 0.75rem; color: #065f46; margin-top: 0.5rem; text-align: center;">
+                    <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} pendiente${pedidosCount !== 1 ? 's' : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Construir el HTML de la card
+    card.innerHTML = `
+        <div class="tienda-card-content">
+            ${imagenHtml}
+            <h3 class="tienda-card-nombre">${escapeHtml(tienda.nombre)}</h3>
+            ${tienda.sector ? `<div class="tienda-card-sector">${escapeHtml(tienda.sector)}</div>` : ''}
+            ${cuentaInfoHtml}
+        </div>
+    `;
+    
+    card.addEventListener('click', () => {
+        currentTiendaCuenta = tienda;
+        loadPedidosTiendaCuenta(tienda.id);
+    });
+    
+    return card;
+}
+
+async function loadPedidosTiendaCuenta(tiendaId) {
+    const container = document.getElementById('cuentas-contabilidad-list');
+    const emptyState = document.getElementById('cuentas-contabilidad-empty');
+    
+    container.innerHTML = '';
+    emptyState.style.display = 'none';
+    
+    // Botón Volver
+    const btnVolver = document.createElement('button');
+    btnVolver.className = 'btn-volver-cuentas';
+    btnVolver.innerHTML = '← Volver a tiendas';
+    btnVolver.addEventListener('click', () => {
+        loadCuentasContabilidad();
+    });
+    container.appendChild(btnVolver);
+    
+    // Obtener pedidos de la tienda
+    const todosPedidos = await db.getAll('pedidos');
+    const pedidosTienda = todosPedidos.filter(p => 
+        p.tiendaId === tiendaId &&
+        p.estadoPago === 'Pago A cuenta' &&
+        p.estado !== 'Completado' &&
+        p.pedidoSistemaPDF &&
+        !p.transferenciaPDF
+    );
+    
+    pedidosTienda.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    const obras = await getObrasCatalog(pedidosCuentaGlobal);
-    let totalPedidos = 0;
-    
-    for (const tienda of tiendasConCuenta) {
-        const pedidosTienda = pedidosCuentaGlobal.filter(p => p.tiendaId === tienda.id);
-        totalPedidos += pedidosTienda.length;
-        const gastado = await calcularGastadoCuenta(tienda.id);
-        
-        const { section, content } = createCascadeSection({
-            prefix: 'cuentas-tienda',
-            uniqueId: tienda.id,
-            title: tienda.nombre,
-            count: pedidosTienda.length,
-            emptyMessage: 'No hay pedidos asociados a esta tienda.',
-            defaultOpen: false
-        });
-        
-        const infoBlock = createCuentaInfoBlock(tienda, gastado);
-        content.appendChild(infoBlock);
-        
-        const obrasWrapper = document.createElement('div');
-        obrasWrapper.className = 'cascade-inner';
-        
-        for (const obra of obras) {
-            const obraId = obra.id || 'sin-obra';
-            const pedidosObra = pedidosTienda.filter(p => (p.obraId || 'sin-obra') === obraId);
-            
-            const obraSection = createCascadeSection({
-                prefix: `cuentas-obra-${sanitizeCascadeId(tienda.id)}`,
-                uniqueId: `${tienda.id}-${obraId}`,
-                title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
-                count: pedidosObra.length,
-                emptyMessage: 'Sin pedidos para esta obra',
-                defaultOpen: false
-            });
-            obraSection.section.classList.add('nested-cascade');
-            
-            for (const pedido of pedidosObra) {
-                const card = await createPedidoContabilidadCard(pedido, false);
-                obraSection.content.appendChild(card);
-            }
-            
-            obrasWrapper.appendChild(obraSection.section);
-        }
-        
-        content.appendChild(obrasWrapper);
-        container.appendChild(section);
+    if (pedidosTienda.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-state';
+        emptyMsg.innerHTML = '<p>No hay pedidos pendientes de pago a cuenta para esta tienda</p>';
+        container.appendChild(emptyMsg);
+        return;
     }
     
-    updateContabilidadTabBadge('cuentas', totalPedidos);
+    // Mostrar pedidos
+    for (const pedido of pedidosTienda) {
+        const card = await createPedidoContabilidadCard(pedido, false);
+        container.appendChild(card);
+    }
 }
 
 async function loadPedidosEspecialesContabilidad() {
@@ -528,50 +668,32 @@ async function loadPedidosEspecialesContabilidad() {
         isPedidoEspecial(p) && (p.estadoPago === 'Pendiente de pago' || !p.estadoPago || p.estadoPago === 'Sin Asignar')
     );
     
+    // Ordenar de más nuevo a más viejo
     pedidosEspeciales.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    const obras = await getObrasCatalog(pedidosEspeciales);
     const container = document.getElementById('pedidos-especiales-contabilidad-list');
     const emptyState = document.getElementById('pedidos-especiales-contabilidad-empty');
-    
     container.innerHTML = '';
     
-    if (obras.length === 0) {
+    if (pedidosEspeciales.length === 0) {
         emptyState.style.display = 'block';
         updateContabilidadTabBadge('especiales', 0);
         return;
     }
     
     emptyState.style.display = 'none';
-    let totalCount = 0;
     
-    for (const obra of obras) {
-        const obraId = obra.id || 'sin-obra';
-        const pedidosObra = pedidosEspeciales.filter(p => (p.obraId || 'sin-obra') === obraId);
-        totalCount += pedidosObra.length;
-        
-        const { section, content } = createCascadeSection({
-            prefix: 'especiales-obra',
-            uniqueId: obraId,
-            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
-            count: pedidosObra.length,
-            emptyMessage: 'Sin pedidos especiales para esta obra',
-            defaultOpen: false
-        });
-        
-        for (const pedido of pedidosObra) {
-            const card = await createPedidoEspecialContabilidadCard(pedido);
-            content.appendChild(card);
-        }
-        
-        container.appendChild(section);
+    // Mostrar pedidos directamente sin agrupar por obras
+    for (const pedido of pedidosEspeciales) {
+        const card = await createPedidoEspecialContabilidadCard(pedido);
+        container.appendChild(card);
     }
     
-    updateContabilidadTabBadge('especiales', totalCount);
+    updateContabilidadTabBadge('especiales', pedidosEspeciales.length);
 }
 
 async function loadFacturasPendientesContabilidad() {
@@ -583,50 +705,32 @@ async function loadFacturasPendientesContabilidad() {
         return pagado && sinFactura;
     });
     
+    // Ordenar de más nuevo a más viejo
     facturasPendientes.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
         const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
         return fechaB - fechaA;
     });
     
-    const obras = await getObrasCatalog(facturasPendientes);
     const container = document.getElementById('facturas-pendientes-contabilidad-list');
     const emptyState = document.getElementById('facturas-pendientes-contabilidad-empty');
-    
     container.innerHTML = '';
     
-    if (obras.length === 0) {
+    if (facturasPendientes.length === 0) {
         emptyState.style.display = 'block';
         updateContabilidadTabBadge('facturas', 0);
         return;
     }
     
     emptyState.style.display = 'none';
-    let totalCount = 0;
     
-    for (const obra of obras) {
-        const obraId = obra.id || 'sin-obra';
-        const pedidosObra = facturasPendientes.filter(p => (p.obraId || 'sin-obra') === obraId);
-        totalCount += pedidosObra.length;
-        
-        const { section, content } = createCascadeSection({
-            prefix: 'facturas-obra',
-            uniqueId: obraId,
-            title: obra.nombreComercial || obra.nombre || 'Obra sin nombre',
-            count: pedidosObra.length,
-            emptyMessage: 'Sin facturas pendientes para esta obra',
-            defaultOpen: false
-        });
-        
-        for (const pedido of pedidosObra) {
-            const card = await createPedidoContabilidadCard(pedido, true);
-            content.appendChild(card);
-        }
-        
-        container.appendChild(section);
+    // Mostrar pedidos directamente sin agrupar por obras
+    for (const pedido of facturasPendientes) {
+        const card = await createPedidoContabilidadCard(pedido, true);
+        container.appendChild(card);
     }
     
-    updateContabilidadTabBadge('facturas', totalCount);
+    updateContabilidadTabBadge('facturas', facturasPendientes.length);
 }
 
 // Funciones auxiliares
