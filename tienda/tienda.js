@@ -101,6 +101,26 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
     });
 }
 
+// Calcular gastado total de cuenta (suma de todos los pedidos con estadoPago = 'Pago A cuenta')
+async function calcularGastadoTotalCuenta(tiendaId) {
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    let gastado = 0;
+    
+    for (const pedido of pedidos) {
+        // Sumar todos los pedidos con estadoPago = 'Pago A cuenta'
+        if (pedido.estadoPago === 'Pago A cuenta') {
+            const totalPedido = pedido.items.reduce((total, item) => {
+                const precioItem = item.precio || 0;
+                const cantidad = item.cantidad || 0;
+                return total + (precioItem * cantidad);
+            }, 0);
+            gastado += totalPedido;
+        }
+    }
+    
+    return gastado;
+}
+
 // Funciones de utilidad
 function sanitizeCascadeId(value) {
     const base = (value || 'sin-obra').toString();
@@ -1907,6 +1927,9 @@ async function initTienda() {
             nombreElement.textContent = `Gestión - ${currentTienda.nombre}`;
         }
         
+        // Calcular gastado de cuenta (suma de todos los pedidos con estadoPago = 'Pago A cuenta')
+        const gastado = await calcularGastadoTotalCuenta(currentTienda.id);
+        
         const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
         if (cuentaBadge) {
             if (!currentTienda.tieneCuenta) {
@@ -1914,11 +1937,14 @@ async function initTienda() {
                 cuentaBadge.style.backgroundColor = '#ef4444';
                 cuentaBadge.style.color = 'white';
             } else if (!currentTienda.limiteCuenta) {
-                cuentaBadge.textContent = 'Cuenta sin límite de gasto';
+                // Cuenta sin límite: mostrar solo el gastado
+                cuentaBadge.textContent = `${gastado.toFixed(2)}€ gastado`;
                 cuentaBadge.style.backgroundColor = '#10b981';
                 cuentaBadge.style.color = 'white';
             } else {
-                cuentaBadge.textContent = `Cuenta ${currentTienda.limiteCuenta}€`;
+                // Cuenta con límite: mostrar gastado VS límite
+                const limite = Number(currentTienda.limiteCuenta) || 0;
+                cuentaBadge.textContent = `${gastado.toFixed(2)}€ / ${limite.toFixed(2)}€`;
                 cuentaBadge.style.backgroundColor = '#f59e0b';
                 cuentaBadge.style.color = 'white';
             }

@@ -932,5 +932,7 @@
     font-size: 0.875rem;
     font-weight: 600;
     white-space: nowrap;
+    text-align: center;
+    min-width: fit-content;
 }
 
