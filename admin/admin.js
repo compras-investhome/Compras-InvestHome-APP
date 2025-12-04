@@ -577,7 +577,8 @@ let productosPaginacion = {
     offset: 0,
     hasMore: false,
     categoriaId: null,
-    subCategoriaId: null
+    subCategoriaId: null,
+    soloSinSubCategoria: true
 };
 
 async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
@@ -632,8 +633,9 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         
         // 1. Cargar y mostrar subcategorías (si existen)
         const subcategorias = await db.getSubCategoriasByCategoria(categoriaId);
+        const tieneSubcategorias = subcategorias.length > 0;
         
-        if (subcategorias.length > 0) {
+        if (tieneSubcategorias) {
             const subcategoriasGrid = document.createElement('div');
             subcategoriasGrid.className = 'categorias-grid';
             
@@ -657,7 +659,9 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
             container.appendChild(separador);
         }
         
-        // 2. Cargar y mostrar productos sin subcategoría (o todos si no hay subcategorías)
+        // 2. Cargar y mostrar productos
+        // Si hay subcategorías: solo productos sin subcategoría
+        // Si NO hay subcategorías: TODOS los productos de la categoría
         const productosList = document.createElement('div');
         productosList.className = 'productos-list';
         container.appendChild(productosList);
@@ -665,6 +669,7 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = null;
         productosPaginacion.offset = 0;
+        productosPaginacion.soloSinSubCategoria = tieneSubcategorias; // Solo filtrar si hay subcategorías
         
         // Cargar productos (siempre, incluso si no hay subcategorías)
         await cargarProductosPaginados(productosList, categoriaId, false);
@@ -677,7 +682,12 @@ async function cargarProductosPaginados(container, id, esSubCategoria) {
     if (esSubCategoria) {
         resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
     } else {
-        resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset);
+        // Si hay subcategorías, solo mostrar productos sin subcategoría
+        // Si NO hay subcategorías, mostrar TODOS los productos
+        const soloSinSubCategoria = productosPaginacion.soloSinSubCategoria !== undefined 
+            ? productosPaginacion.soloSinSubCategoria 
+            : true;
+        resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset, soloSinSubCategoria);
     }
     
     // Si es la primera carga y no hay productos, mostrar mensaje

@@ -290,9 +290,8 @@ class Database {
         }));
     }
 
-    async getProductosByCategoriaPaginated(categoriaId, productosLimit = 5, offset = 0) {
-        // Obtener todos los productos de la categoría y filtrar en memoria
-        // (Firestore no permite múltiples where con null)
+    async getProductosByCategoriaPaginated(categoriaId, productosLimit = 5, offset = 0, soloSinSubCategoria = true) {
+        // Obtener todos los productos de la categoría
         const q = query(
             collection(this.db, 'productos'),
             where('categoriaId', '==', categoriaId),
@@ -300,19 +299,23 @@ class Database {
         );
         const querySnapshot = await getDocs(q);
         
-        // Filtrar productos sin subcategoría
-        const productosSinSubCategoria = querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(p => !p.subCategoriaId);
+        // Si soloSinSubCategoria es true, filtrar productos sin subcategoría
+        // Si es false, mostrar todos los productos de la categoría
+        let productosFiltrados = querySnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        if (soloSinSubCategoria) {
+            productosFiltrados = productosFiltrados.filter(p => !p.subCategoriaId);
+        }
         
         // Aplicar paginación
-        const productos = productosSinSubCategoria.slice(offset, offset + productosLimit);
-        const hasMore = offset + productosLimit < productosSinSubCategoria.length;
+        const productos = productosFiltrados.slice(offset, offset + productosLimit);
+        const hasMore = offset + productosLimit < productosFiltrados.length;
         
         return {
             productos,
             hasMore,
-            total: productosSinSubCategoria.length
+            total: productosFiltrados.length
         };
     }
 
