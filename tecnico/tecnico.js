@@ -354,6 +354,19 @@ window.togglePedidoSection = function(sectionId, triggerEl) {
     if (!section) return;
     const isHidden = section.style.display === 'none' || getComputedStyle(section).display === 'none';
     section.style.display = isHidden ? 'block' : 'none';
+    
+    // Agregar/quitar clase para z-index en comentarios
+    if (section.classList.contains('pedido-notas-list-compact-scroll') || sectionId.includes('notas')) {
+        const comentariosCard = section.closest('.contab-card-comentarios');
+        if (comentariosCard) {
+            if (isHidden) {
+                comentariosCard.classList.add('comentarios-expandidos');
+            } else {
+                comentariosCard.classList.remove('comentarios-expandidos');
+            }
+        }
+    }
+    
     if (triggerEl) {
         const textEl = triggerEl.querySelector('.toggle-text');
         if (textEl) {
@@ -1801,17 +1814,17 @@ async function createPedidoTecnicoCard(pedido) {
     const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
     const pedidoRealContent = pedidoRealLink
         ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-        : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        : '<span class="doc-placeholder">Sin documento</span>';
     
     const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
     const facturaContent = facturaLink
         ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-        : '<span class="doc-placeholder">Sin factura adjunta</span>';
+        : '<span class="doc-placeholder">Sin factura</span>';
     
     const tienePago = Boolean(pedido.transferenciaPDF);
     const documentoPagoContent = tienePago
         ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-        : '<span class="doc-placeholder">Sin documento adjunto</span>';
+        : '<span class="doc-placeholder">Sin documento</span>';
     
     const itemsSectionId = `pedido-items-tec-${pedido.id}`;
     const notasSectionId = `pedido-notas-tec-${pedido.id}`;
