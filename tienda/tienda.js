@@ -836,7 +836,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         estadoPagoContent = `
             <select id="${selectId}" class="estado-pago-select" 
                     onchange="updateEstadoPagoTiendaSelect('${pedido.id}', this.value, '${selectId}')" 
-                    style="padding: 0.35rem 2rem 0.35rem 0.85rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: ${textColor}; border: none; cursor: pointer; appearance: none; background-color: ${pillColor}; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
+                    style="padding: 0.15rem 1.2rem 0.15rem 0.5rem !important; border-radius: 999px !important; font-size: 0.65rem !important; font-weight: 700 !important; color: ${textColor} !important; border: none !important; cursor: pointer !important; appearance: none !important; background-color: ${pillColor} !important; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>') !important; background-repeat: no-repeat !important; background-position: right 0.35rem center !important; background-size: 0.7rem !important; min-height: auto !important; height: auto !important; line-height: 1 !important;">
                 <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
                 <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
                 ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
@@ -1305,10 +1305,19 @@ window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, sele
                 arrowColor = 'white';
             }
             
-            select.style.backgroundColor = bgColor;
-            select.style.color = textColor;
+            // Actualizar colores manteniendo el tamaño reducido
+            select.style.setProperty('background-color', bgColor, 'important');
+            select.style.setProperty('color', textColor, 'important');
             const arrowSvg = `url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>')`;
-            select.style.backgroundImage = arrowSvg;
+            select.style.setProperty('background-image', arrowSvg, 'important');
+            // Forzar mantener el tamaño reducido
+            select.style.setProperty('padding', '0.15rem 1.2rem 0.15rem 0.5rem', 'important');
+            select.style.setProperty('font-size', '0.65rem', 'important');
+            select.style.setProperty('background-size', '0.7rem', 'important');
+            select.style.setProperty('background-position', 'right 0.35rem center', 'important');
+            select.style.setProperty('min-height', 'auto', 'important');
+            select.style.setProperty('height', 'auto', 'important');
+            select.style.setProperty('line-height', '1', 'important');
         }
         
         // Actualizar el estado en la base de datos

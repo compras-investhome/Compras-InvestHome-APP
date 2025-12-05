@@ -663,6 +663,14 @@
     border: 2px solid #9ca3af;
 }
 
+.estado-pago-select {
+    padding: 0.15rem 1.2rem 0.15rem 0.5rem !important;
+    font-size: 0.65rem !important;
+    min-height: auto !important;
+    height: auto !important;
+    line-height: 1 !important;
+}
+
 .doc-actions {
     display: flex;
     align-items: center;
