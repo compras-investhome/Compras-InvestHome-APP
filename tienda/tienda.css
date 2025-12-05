@@ -639,12 +639,12 @@
     letter-spacing: 0 !important;
 }
 
-/* Chip de estado más grande en pestaña pendientes-pago */
+/* Chip de estado más grande y redondeado en pestaña pendientes-pago */
 .contab-card-estado .estado-pago-pill {
     padding: 0.2rem 0.5rem !important;
     font-size: 0.7rem !important;
     line-height: 1.2 !important;
-    border-radius: 4px !important;
+    border-radius: 999px !important;
 }
 
 .estado-pago-pendiente {
