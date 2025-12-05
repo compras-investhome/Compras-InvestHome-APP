@@ -2233,25 +2233,65 @@
         padding: 0.3rem 0.8rem;
     }
     
-    /* Grid de cards - apilar verticalmente */
+    /* Grid de cards - alinear horizontalmente en móvil */
     .contab-info-grid-compact {
-        flex-direction: column;
-        gap: 0.75rem;
+        flex-direction: row;
+        gap: 0.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    
+    .contab-info-grid-compact::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .contab-info-grid-compact::-webkit-scrollbar-track {
+        background: var(--bg-color);
+        border-radius: 2px;
+    }
+    
+    .contab-info-grid-compact::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 2px;
     }
     
     .contab-info-grid-compact > .contab-info-card-compact {
-        width: 100%;
-        min-width: 100%;
-        max-width: 100%;
-        padding: 0.75rem;
+        flex: 0 0 auto;
+        min-width: 0;
+        padding: 0.5rem;
         max-height: none;
+    }
+    
+    /* Ajustar anchos de cada card para que quepan las 4 en línea */
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-datos {
+        flex: 0 0 22%;
+        min-width: 80px;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-estado {
+        flex: 0 0 20%;
+        min-width: 75px;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos {
+        flex: 0 0 35%;
+        min-width: 120px;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-comentarios {
+        flex: 0 0 23%;
+        min-width: 85px;
     }
     
     /* Títulos de las cards */
     .contab-card-title-compact {
-        font-size: 0.8rem;
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.75rem;
+        font-size: 0.65rem;
+        padding-bottom: 0.4rem;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     /* Card de datos del pedido */
@@ -2260,20 +2300,27 @@
     }
     
     .contab-info-row-compact {
-        font-size: 0.85rem;
-        margin-bottom: 0.5rem;
-        padding: 0.25rem 0;
+        font-size: 0.7rem;
+        margin-bottom: 0.4rem;
+        padding: 0.2rem 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.2rem;
     }
     
     .contab-info-row-compact span:first-child {
-        font-size: 0.8rem;
-        min-width: 100px;
+        font-size: 0.65rem;
+        min-width: auto;
+        color: var(--text-secondary);
+        font-weight: 500;
     }
     
     .contab-info-row-compact strong,
     .contab-info-row-compact a {
-        font-size: 0.85rem;
+        font-size: 0.7rem;
         text-align: left;
+        word-break: break-word;
+        line-height: 1.3;
     }
     
     /* Card de estado de pago */
@@ -2282,8 +2329,10 @@
     }
     
     .estado-pago-pill {
-        font-size: 0.7rem;
-        padding: 0.3rem 0.7rem;
+        font-size: 0.65rem;
+        padding: 0.25rem 0.5rem;
+        display: inline-block;
+        white-space: nowrap;
     }
     
     /* Card de artículos */
@@ -2295,32 +2344,35 @@
     .contab-card-articulos .contab-card-title-compact {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.5rem;
+        gap: 0.3rem;
     }
     
     .contab-card-articulos .contab-total-compact {
-        font-size: 0.85rem;
-        margin-top: 0.25rem;
+        font-size: 0.7rem;
+        margin-top: 0.2rem;
+        white-space: nowrap;
     }
     
     .pedido-items-list-compact {
-        gap: 0.5rem;
-        max-height: 300px;
+        gap: 0.4rem;
+        max-height: 200px;
         overflow-y: auto;
     }
     
     .pedido-item {
-        flex-direction: row;
-        align-items: flex-start;
-        padding: 0.75rem;
-        gap: 0.75rem;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 0.5rem;
+        gap: 0.5rem;
     }
     
     .pedido-item-foto,
     .pedido-item-foto-placeholder {
-        width: 60px;
-        height: 60px;
+        width: 100%;
+        height: 80px;
         flex-shrink: 0;
+        align-self: center;
+        max-width: 80px;
     }
     
     .pedido-item-info {
@@ -2329,40 +2381,42 @@
     }
     
     .pedido-item-name {
-        font-size: 0.85rem;
-        margin-bottom: 0.35rem;
-        line-height: 1.3;
+        font-size: 0.75rem;
+        margin-bottom: 0.3rem;
+        line-height: 1.2;
     }
     
     .pedido-item-description {
-        font-size: 0.75rem;
-        margin-bottom: 0.35rem;
+        font-size: 0.65rem;
+        margin-bottom: 0.3rem;
     }
     
     .pedido-item-meta {
-        font-size: 0.7rem;
-        gap: 0.5rem;
+        font-size: 0.65rem;
+        gap: 0.4rem;
         flex-wrap: wrap;
     }
     
     .pedido-item-actions {
-        flex-direction: column;
-        gap: 0.5rem;
+        flex-direction: row;
+        gap: 0.4rem;
         flex-shrink: 0;
+        justify-content: center;
     }
     
     .emoji-btn {
-        width: 36px;
-        height: 36px;
+        width: 32px;
+        height: 32px;
         padding: 0;
-        font-size: 1rem;
+        font-size: 0.9rem;
     }
     
     /* Botón de anulación */
     .contab-card-articulos .btn {
-        font-size: 0.8rem;
-        padding: 0.5rem 1rem;
-        margin-top: 0.75rem;
+        font-size: 0.65rem;
+        padding: 0.4rem 0.6rem;
+        margin-top: 0.5rem;
+        white-space: nowrap;
     }
     
     /* Card de comentarios */
@@ -2372,63 +2426,65 @@
     }
     
     .comentarios-input-wrapper {
-        margin-top: 0.5rem;
+        margin-top: 0.4rem;
     }
     
     .comentarios-input {
-        min-height: 60px;
-        max-height: 100px;
-        font-size: 0.85rem;
-        padding: 0.75rem;
+        min-height: 50px;
+        max-height: 80px;
+        font-size: 0.7rem;
+        padding: 0.5rem;
     }
     
     .comentarios-buttons-row {
-        margin-top: 0.75rem;
-        gap: 0.5rem;
+        margin-top: 0.5rem;
+        gap: 0.4rem;
+        flex-direction: column;
     }
     
     .btn-ver-comentarios {
-        font-size: 0.75rem;
-        padding: 0.5rem 0.75rem;
-        flex: 1;
+        font-size: 0.65rem;
+        padding: 0.4rem 0.6rem;
+        width: 100%;
     }
     
     .btn-xs {
-        font-size: 0.75rem;
-        padding: 0.5rem 1rem;
+        font-size: 0.65rem;
+        padding: 0.4rem 0.6rem;
+        width: 100%;
     }
     
     .contab-collapse {
-        margin-top: 0.75rem;
-        padding: 0.75rem;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
     }
     
     .pedido-notas-list-compact-scroll {
-        max-height: 250px;
-        gap: 0.75rem;
+        max-height: 150px;
+        gap: 0.5rem;
     }
     
     .pedido-nota-entry {
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-    }
-    
-    .nota-meta {
-        font-size: 0.75rem;
+        padding: 0.5rem;
         margin-bottom: 0.5rem;
     }
     
+    .nota-meta {
+        font-size: 0.65rem;
+        margin-bottom: 0.4rem;
+    }
+    
     .nota-meta strong {
-        font-size: 0.75rem;
+        font-size: 0.65rem;
     }
     
     .nota-fecha {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
     }
     
     .pedido-nota-entry p {
-        font-size: 0.8rem;
-        line-height: 1.5;
+        font-size: 0.7rem;
+        line-height: 1.4;
     }
     
     /* Mejorar espaciado general */
@@ -2440,15 +2496,48 @@
     .doc-actions {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.25rem;
+        gap: 0.2rem;
     }
     
     .doc-link {
-        font-size: 0.8rem;
+        font-size: 0.65rem;
+        word-break: break-all;
     }
     
     .doc-placeholder {
-        font-size: 0.75rem;
+        font-size: 0.65rem;
+    }
+    
+    /* Asegurar que las cards no se rompan */
+    .contab-info-card-compact {
+        overflow: visible;
+    }
+    
+    /* Ajustar el header del pedido para que sea más compacto */
+    .contab-pedido-header-compact {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .pedido-code {
+        font-size: 0.9rem;
+    }
+    
+    .contab-estado-envio {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .contab-estado-envio > span:first-child {
+        font-size: 0.7rem;
+    }
+    
+    .estado-envio-pill {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.6rem;
     }
 }
 
