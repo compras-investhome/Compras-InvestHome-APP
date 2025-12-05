@@ -1496,6 +1496,7 @@
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
+    position: relative;
 }
 
 .btn-cargar-mas {
@@ -2069,21 +2070,53 @@
     .contab-card-comentarios .contab-collapse[style*="display: block"],
     .contab-card-comentarios .contab-collapse:not([style*="display: none"]) {
         position: relative;
-        z-index: 10;
+        z-index: 100;
         background: var(--card-bg);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         border-radius: 8px;
         margin-top: 0.5rem;
     }
     
-    /* Cuando la card de comentarios está expandida, aumentar z-index */
-    .contab-card-comentarios.comentarios-expandidos {
-        z-index: 10;
+    /* Cuando la card de comentarios está expandida, aumentar z-index de toda la card de pedido */
+    .pedido-gestion-card:has(.contab-card-comentarios.comentarios-expandidos) {
+        z-index: 100;
         position: relative;
     }
     
-    .pedido-gestion-card:hover .contab-card-comentarios.comentarios-expandidos {
-        z-index: 20;
+    .pedido-gestion-card:has(.contab-card-comentarios.comentarios-expandidos):hover {
+        z-index: 101;
+    }
+    
+    /* Fallback para navegadores que no soportan :has() */
+    .pedido-gestion-card.comentarios-expandidos-card {
+        z-index: 100;
+        position: relative;
+    }
+    
+    .pedido-gestion-card.comentarios-expandidos-card:hover {
+        z-index: 101;
+    }
+    
+    /* Asegurar que el contenedor de comentarios expandido tenga z-index alto */
+    .contab-card-comentarios.comentarios-expandidos {
+        position: relative;
+        z-index: 100;
+        overflow: visible;
+    }
+    
+    .contab-card-comentarios.comentarios-expandidos .contab-collapse {
+        position: relative;
+        z-index: 100;
+        overflow: visible;
+    }
+    
+    /* Asegurar que el grid también permita overflow cuando hay comentarios expandidos */
+    .pedido-gestion-card.comentarios-expandidos-card .contab-info-grid-compact {
+        overflow: visible;
+    }
+    
+    .pedido-gestion-card.comentarios-expandidos-card .contab-card-comentarios {
+        overflow: visible;
     }
 }
 
