@@ -2167,7 +2167,7 @@
     /* Ficha ampliada en móvil - título debajo de la foto */
     .producto-card-admin.ampliada .producto-card-header {
         flex-direction: column;
-        align-items: center;
+        align-items: flex-start;
         gap: 1rem;
         padding-right: 45px;
     }
@@ -2183,12 +2183,13 @@
     
     .producto-card-admin.ampliada .producto-card-info {
         width: 100%;
-        text-align: center;
+        text-align: left;
         padding-right: 0;
     }
     
     .producto-card-admin.ampliada .producto-nombre {
         padding-right: 0;
-        text-align: center;
+        text-align: left;
+        font-size: 1.25rem;
     }
 }
