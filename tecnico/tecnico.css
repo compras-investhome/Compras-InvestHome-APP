@@ -2233,18 +2233,53 @@
         padding: 0.3rem 0.8rem;
     }
     
-    /* Grid de cards - apilar verticalmente en móvil */
+    /* Grid de cards - apilar verticalmente en móvil - FORZAR */
     .contab-info-grid-compact {
-        flex-direction: column;
-        gap: 0.75rem;
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        width: 100% !important;
     }
     
     .contab-info-grid-compact > .contab-info-card-compact {
-        width: 100%;
-        min-width: 100%;
-        max-width: 100%;
-        padding: 0.75rem;
-        max-height: none;
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 auto !important;
+        padding: 0.75rem !important;
+        max-height: none !important;
+    }
+    
+    /* Anular todos los anchos fijos y flex de las cards individuales en móvil */
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-datos {
+        flex: 0 0 auto !important;
+        min-width: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-estado {
+        flex: 0 0 auto !important;
+        min-width: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos {
+        flex: 0 0 auto !important;
+        min-width: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact.contab-card-comentarios {
+        flex: 0 0 auto !important;
+        min-width: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
     }
     
     /* Títulos de las cards */
