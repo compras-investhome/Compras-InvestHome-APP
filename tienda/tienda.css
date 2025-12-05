@@ -591,9 +591,31 @@
 /* Grid de solicitud de modificación */
 .solicitud-modificacion-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-template-columns: 0.5fr 0.5fr 1.5fr auto;
     gap: 1rem;
     margin-top: 1rem;
+}
+
+/* Cards pequeñas (50% más pequeñas) */
+.solicitud-modificacion-grid .solicitud-card-small {
+    font-size: 0.85rem;
+    padding: 0.4rem;
+}
+
+.solicitud-modificacion-grid .solicitud-card-small .contab-card-title-compact {
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
+.solicitud-modificacion-grid .solicitud-card-small .contab-info-row-compact {
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+}
+
+/* Card grande (modificación solicitada) */
+.solicitud-modificacion-grid .solicitud-card-large {
+    flex: 1;
+    min-width: 0;
 }
 
 @media (max-width: 1200px) {

@@ -767,18 +767,18 @@ async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
     
     // Información del artículo de la solicitud
     const item = solicitud.item || {};
-    const nombreItem = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+    const nombreItem = escapeHtml(item.nombre || 'Artículo sin nombre');
     const descripcionItem = item.descripcion ? escapeHtml(item.descripcion) : '';
     const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
     const cantidadActual = solicitud.cantidadActual || 0;
     const cantidadSolicitada = solicitud.cantidadSolicitada || 0;
     const precioUnitario = item.precio || 0;
     const totalLinea = precioUnitario * cantidadActual;
-    const referencia = escapeHtml(item.designacion || item.referencia || '');
+    const referencia = escapeHtml(item.referencia || item.designacion || '');
     const ean = escapeHtml(item.ean || '');
     const refEanParts = [];
-    if (referencia) refEanParts.push(referencia);
-    if (ean) refEanParts.push(ean);
+    if (referencia) refEanParts.push(`Ref: ${referencia}`);
+    if (ean) refEanParts.push(`EAN: ${ean}`);
     const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
     
     // Determinar tipo de solicitud
@@ -801,8 +801,8 @@ async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
         
         <!-- Grid con tres sub-cards y botones de acción -->
         <div class="solicitud-modificacion-grid">
-            <!-- Card 1: Datos del Pedido -->
-            <div class="contab-info-card-compact contab-card-datos">
+            <!-- Card 1: Datos del Pedido (50% más pequeña) -->
+            <div class="contab-info-card-compact contab-card-datos solicitud-card-small">
                 <div class="contab-card-title-compact">Datos del Pedido</div>
                 <div class="contab-info-row-compact"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
                 <div class="contab-info-row-compact"><span>Pedido por</span><strong>${persona}</strong></div>
@@ -814,8 +814,8 @@ async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
                 <div class="contab-info-row-compact"><span>Fecha</span><strong>${fechaPedido}</strong></div>
             </div>
             
-            <!-- Card 2: Estado de Pago y Envío -->
-            <div class="contab-info-card-compact contab-card-estado">
+            <!-- Card 2: Estado de Pago y Envío (50% más pequeña) -->
+            <div class="contab-info-card-compact contab-card-estado solicitud-card-small">
                 <div class="contab-card-title-compact">Estado</div>
                 <div class="contab-info-row-compact">
                     <span>Estado de pago</span>
@@ -831,16 +831,16 @@ async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
                 </div>
             </div>
             
-            <!-- Card 3: Modificación Solicitada -->
-            <div class="contab-info-card-compact">
+            <!-- Card 3: Modificación Solicitada (más grande) -->
+            <div class="contab-info-card-compact solicitud-card-large">
                 <div class="contab-card-title-compact">${tipoSolicitud}</div>
                 <div class="pedido-item" style="display: flex; align-items: flex-start; gap: 1rem; padding: 0.5rem 0;">
                     ${fotoHtml}
                     ${fotoPlaceholder}
                     <div class="pedido-item-info" style="flex: 1;">
-                        <p class="pedido-item-name">${nombreItem}</p>
-                        ${descripcionItem ? `<p class="pedido-item-desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">${descripcionItem}</p>` : ''}
-                        ${refEanText ? `<p class="pedido-item-ref-ean" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${refEanText}</p>` : ''}
+                        <p class="pedido-item-name" style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem;">${nombreItem}</p>
+                        ${refEanText ? `<p class="pedido-item-ref-ean" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${refEanText}</p>` : ''}
+                        ${descripcionItem ? `<p class="pedido-item-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.4;">${descripcionItem}</p>` : ''}
                         <div class="pedido-item-meta" style="margin-top: 0.5rem;">
                             <span>Cantidad actual: <strong>${cantidadActual}</strong></span>
                             <span>Cantidad solicitada: <strong>${cantidadSolicitada}</strong></span>
