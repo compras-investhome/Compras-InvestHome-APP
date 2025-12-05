@@ -629,13 +629,14 @@
 .contab-info-card-compact .estado-pago-pill,
 .contab-card-estado .estado-pago-pill,
 .estado-pago-pill {
-    padding: 0.05rem 0.15rem !important;
-    border-radius: 3px !important;
-    font-size: 0.25rem !important;
-    font-weight: 700 !important;
+    padding: 0.03rem 0.1rem !important;
+    border-radius: 2px !important;
+    font-size: 0.2rem !important;
+    font-weight: 600 !important;
     text-transform: capitalize !important;
     display: inline-block !important;
-    line-height: 0.9 !important;
+    line-height: 0.85 !important;
+    letter-spacing: 0 !important;
 }
 
 .estado-pago-pendiente {
