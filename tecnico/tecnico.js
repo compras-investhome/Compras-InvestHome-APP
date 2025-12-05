@@ -80,6 +80,7 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
         const promptPopup = document.getElementById('custom-prompt');
         const promptTitle = document.getElementById('custom-prompt-title');
         const promptMessage = document.getElementById('custom-prompt-message');
+        const promptBody = promptMessage.parentElement; // custom-popup-body
         const promptInput = document.getElementById('custom-prompt-input');
         const promptOk = document.getElementById('custom-prompt-ok');
         const promptCancel = document.getElementById('custom-prompt-cancel');
@@ -90,28 +91,42 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
         promptInput.value = '';
         promptInput.style.display = '';
         
+        // Remover cualquier contenido HTML previo del body
+        const existingHTML = promptBody.querySelector('.prompt-html-content');
+        if (existingHTML) {
+            existingHTML.remove();
+        }
+        
         promptTitle.textContent = title;
         
-        // Si el mensaje contiene HTML (como un selector), usar innerHTML, sino textContent
+        // Si el mensaje contiene HTML (como un selector), insertarlo en el body, sino usar textContent
         const hasHTML = message.includes('<') && message.includes('>');
         const hasSelect = hasHTML && message.includes('<select');
         
-        if (hasHTML) {
-            promptMessage.innerHTML = message;
-        } else {
-            promptMessage.textContent = message;
-        }
-        
-        // Si hay un selector en el HTML, ocultar el input de texto y usar el selector
         let selectElement = null;
-        if (hasSelect) {
-            selectElement = promptMessage.querySelector('select');
-            if (selectElement) {
-                promptInput.style.display = 'none';
-            }
-        }
         
-        if (!selectElement) {
+        if (hasHTML) {
+            // Ocultar el párrafo de mensaje y el input
+            promptMessage.style.display = 'none';
+            promptInput.style.display = 'none';
+            
+            // Crear un contenedor para el HTML
+            const htmlContainer = document.createElement('div');
+            htmlContainer.className = 'prompt-html-content';
+            htmlContainer.innerHTML = message;
+            
+            // Insertar el HTML antes del input
+            promptBody.insertBefore(htmlContainer, promptInput);
+            
+            // Buscar el selector dentro del contenedor HTML
+            if (hasSelect) {
+                selectElement = htmlContainer.querySelector('select');
+            }
+        } else {
+            // Mostrar el mensaje normal y el input
+            promptMessage.style.display = '';
+            promptMessage.textContent = message;
+            promptInput.style.display = '';
             promptInput.value = defaultValue;
         }
         
@@ -125,8 +140,15 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
             
             promptPopup.classList.remove('active');
             promptInput.style.display = '';
+            promptMessage.style.display = '';
             promptMessage.innerHTML = '';
             promptMessage.textContent = '';
+            
+            // Remover contenido HTML si existe
+            const htmlContent = promptBody.querySelector('.prompt-html-content');
+            if (htmlContent) {
+                htmlContent.remove();
+            }
             
             // Remover event listeners
             promptOk.removeEventListener('click', handleOkClick);
@@ -1922,7 +1944,19 @@ async function openModalPedidoEspecialAdmin(pedidoId = null) {
     
     // Cargar obras en el desplegable
     if (obraSelect) {
-        const obras = await db.getAllObras();
+        // Obtener obras asignadas al usuario
+        const obrasAsignadas = currentUser?.obrasAsignadas || [];
+        
+        // Obtener todas las obras
+        let obras = await db.getAllObras();
+        
+        // Filtrar obras según las asignadas al usuario
+        // Si el usuario tiene obras asignadas, mostrar solo esas
+        // Si no tiene obras asignadas, mostrar todas
+        if (obrasAsignadas.length > 0) {
+            obras = obras.filter(obra => obrasAsignadas.includes(obra.id));
+        }
+        
         obraSelect.innerHTML = '<option value="">-- Selecciona una obra --</option>';
         obras.forEach(obra => {
             const option = document.createElement('option');
