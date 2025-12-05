@@ -816,6 +816,8 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     // IDs para inputs de archivos
     const pedidoRealInputId = `pedido-real-${pedido.id}`;
     const facturaInputId = `factura-${pedido.id}`;
+    const precioRealInputId = `precio-real-${pedido.id}`;
+    const precioRealDisplayId = `precio-real-display-${pedido.id}`;
     
     if (tabContext === 'seleccionar-pago') {
         // Pestaña 1: Seleccionar Pago - Permitir seleccionar método de pago con estilo pill
