@@ -3690,7 +3690,7 @@ function setupTecnicoEventListeners() {
     
     // Botones de pedidos en curso
     document.getElementById('pedidos-curso-volver-obras')?.addEventListener('click', () => {
-        loadPedidosEnCursoEncargado();
+        loadPedidosEnCursoTecnico();
     });
     
     document.getElementById('pedidos-curso-cargar-mas-btn')?.addEventListener('click', () => {
