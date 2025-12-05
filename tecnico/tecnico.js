@@ -84,37 +84,97 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
         const promptOk = document.getElementById('custom-prompt-ok');
         const promptCancel = document.getElementById('custom-prompt-cancel');
         
+        // Limpiar contenido previo
+        promptMessage.innerHTML = '';
+        promptMessage.textContent = '';
+        promptInput.value = '';
+        promptInput.style.display = '';
+        
         promptTitle.textContent = title;
-        promptMessage.textContent = message;
-        promptInput.value = defaultValue;
+        
+        // Si el mensaje contiene HTML (como un selector), usar innerHTML, sino textContent
+        const hasHTML = message.includes('<') && message.includes('>');
+        const hasSelect = hasHTML && message.includes('<select');
+        
+        if (hasHTML) {
+            promptMessage.innerHTML = message;
+        } else {
+            promptMessage.textContent = message;
+        }
+        
+        // Si hay un selector en el HTML, ocultar el input de texto y usar el selector
+        let selectElement = null;
+        if (hasSelect) {
+            selectElement = promptMessage.querySelector('select');
+            if (selectElement) {
+                promptInput.style.display = 'none';
+            }
+        }
+        
+        if (!selectElement) {
+            promptInput.value = defaultValue;
+        }
+        
         promptPopup.classList.add('active');
         
-        setTimeout(() => promptInput.focus(), 100);
-        
+        // Función para cerrar el prompt
+        let resolved = false;
         const closePrompt = (result) => {
+            if (resolved) return;
+            resolved = true;
+            
             promptPopup.classList.remove('active');
-            promptOk.removeEventListener('click', () => closePrompt(true));
-            promptCancel.removeEventListener('click', () => closePrompt(false));
-            promptInput.removeEventListener('keypress', handleKeyPress);
-            promptPopup.querySelector('.custom-popup-overlay').removeEventListener('click', () => closePrompt(false));
-            resolve(result);
+            promptInput.style.display = '';
+            promptMessage.innerHTML = '';
+            promptMessage.textContent = '';
+            
+            // Remover event listeners
+            promptOk.removeEventListener('click', handleOkClick);
+            promptCancel.removeEventListener('click', handleCancelClick);
+            if (selectElement) {
+                selectElement.removeEventListener('keypress', handleSelectKeyPress);
+            } else {
+                promptInput.removeEventListener('keypress', handleInputKeyPress);
+            }
+            overlay.removeEventListener('click', handleCancelClick);
+            
+            // Resolver con el valor apropiado
+            if (result) {
+                if (selectElement) {
+                    resolve(selectElement.value || null);
+                } else {
+                    resolve(promptInput.value || null);
+                }
+            } else {
+                resolve(null);
+            }
         };
         
-        const handleKeyPress = (e) => {
+        const overlay = promptPopup.querySelector('.custom-popup-overlay');
+        const handleOkClick = () => closePrompt(true);
+        const handleCancelClick = () => closePrompt(false);
+        const handleInputKeyPress = (e) => {
+            if (e.key === 'Enter') {
+                closePrompt(true);
+            }
+        };
+        const handleSelectKeyPress = (e) => {
             if (e.key === 'Enter') {
                 closePrompt(true);
             }
         };
         
-        promptOk.addEventListener('click', () => closePrompt(true));
-        promptCancel.addEventListener('click', () => closePrompt(false));
-        promptInput.addEventListener('keypress', handleKeyPress);
-        promptPopup.querySelector('.custom-popup-overlay').addEventListener('click', () => closePrompt(false));
-    }).then((confirmed) => {
-        if (confirmed) {
-            return document.getElementById('custom-prompt-input').value;
+        // Agregar event listeners
+        promptOk.addEventListener('click', handleOkClick);
+        promptCancel.addEventListener('click', handleCancelClick);
+        if (selectElement) {
+            selectElement.addEventListener('keypress', handleSelectKeyPress);
+            setTimeout(() => selectElement.focus(), 100);
+        } else {
+            promptInput.addEventListener('keypress', handleInputKeyPress);
+            setTimeout(() => promptInput.focus(), 100);
         }
-        return null;
+        overlay.addEventListener('click', handleCancelClick);
     });
 }
 
@@ -1228,11 +1288,25 @@ async function finalizarPedidoAdmin() {
         return;
     }
     
-    // Pedir selección de obra
-    const obras = await db.getAll('obras');
+    // Obtener obras asignadas al usuario
+    const obrasAsignadas = currentUser?.obrasAsignadas || [];
+    
+    // Obtener todas las obras
+    let obras = await db.getAll('obras');
     if (obras.length === 0) {
         await showAlert('No hay obras disponibles. Por favor, crea una obra primero.', 'Error');
         return;
+    }
+    
+    // Filtrar obras según las asignadas al usuario
+    // Si el usuario tiene obras asignadas, mostrar solo esas
+    // Si no tiene obras asignadas, mostrar todas
+    if (obrasAsignadas.length > 0) {
+        obras = obras.filter(obra => obrasAsignadas.includes(obra.id));
+        if (obras.length === 0) {
+            await showAlert('No tienes obras asignadas disponibles.', 'Error');
+            return;
+        }
     }
     
     // Crear opciones de obras
