@@ -1398,12 +1398,8 @@ async function finalizarPedidoAdmin() {
         try {
             const tienda = await db.get('tiendas', tiendaId);
             
-            let estadoPago = null;
-            if (!tienda.servicios?.cuenta) {
-                estadoPago = 'Pendiente de pago';
-            } else {
-                estadoPago = 'Sin Asignar';
-            }
+            // Estado inicial siempre "Sin Asignar" para todos los pedidos
+            const estadoPago = 'Sin Asignar';
             
             const pedido = {
                 tiendaId: tiendaId,
@@ -2133,7 +2129,8 @@ async function guardarPedidoEspecial() {
         userId: currentUser.id,
         persona: currentUser.username,
         fechaCreacion: new Date().toISOString(),
-        estado: 'Nuevo' // Estado inicial para que aparezca en la subpestaña "Nuevo"
+        estado: 'Nuevo', // Estado inicial para que aparezca en la subpestaña "Nuevo"
+        estadoPago: 'Sin Asignar' // Estado inicial de pago siempre "Sin Asignar"
     };
     
     // Si hay notas iniciales del formulario, convertirlas a formato de comentario
