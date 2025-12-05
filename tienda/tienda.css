@@ -1051,3 +1051,462 @@
     min-width: fit-content;
 }
 
+/* ========== ESTILOS COMPACTOS PARA CARDS DE PEDIDOS (igual que técnico) ========== */
+
+.contab-pedido-header-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0.75rem;
+    overflow: visible;
+}
+
+.contab-info-grid-compact {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.contab-info-card-compact {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.contab-info-grid-compact > .contab-info-card-compact {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.contab-info-grid-compact > .contab-info-card-compact.contab-card-datos {
+    flex: 0 0 20%;
+    min-width: 160px;
+    height: fit-content;
+    max-height: 200px;
+}
+
+.contab-info-grid-compact > .contab-info-card-compact.contab-card-estado {
+    flex: 0 0 15%;
+    min-width: 140px;
+    height: fit-content;
+    max-height: 200px;
+}
+
+.contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos {
+    flex: 1 1 45%;
+    min-width: 300px;
+    max-height: 200px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: max-height 0.2s ease;
+}
+
+.contab-card-articulos .contab-card-title-compact {
+    flex-shrink: 0;
+    margin-bottom: 0.5rem;
+}
+
+.contab-card-articulos .pedido-items-list-compact {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    padding-right: 0.25rem;
+}
+
+.contab-card-articulos .pedido-items-list-compact::-webkit-scrollbar {
+    width: 6px;
+}
+
+.contab-card-articulos .pedido-items-list-compact::-webkit-scrollbar-track {
+    background: var(--bg-color);
+    border-radius: 3px;
+}
+
+.contab-card-articulos .pedido-items-list-compact::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.contab-card-articulos .pedido-items-list-compact::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+.contab-info-grid-compact > .contab-info-card-compact.contab-card-comentarios {
+    flex: 0 0 20%;
+    min-width: 180px;
+    height: fit-content;
+    max-height: 200px;
+    display: flex;
+    flex-direction: column;
+}
+
+.contab-pedido-card > .contab-info-card-compact:not(:first-child):not(:nth-child(2)) {
+    width: 100%;
+}
+
+.contab-info-card-compact:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+}
+
+.contab-card-title-compact {
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: var(--text-primary);
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+
+.contab-info-row-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+    padding: 0.15rem 0;
+}
+
+.contab-info-row-compact:last-child {
+    margin-bottom: 0;
+}
+
+.contab-info-row-compact span:first-child {
+    color: var(--text-secondary);
+    font-weight: 500;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+.contab-info-row-compact strong,
+.contab-info-row-compact a {
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: right;
+    word-break: break-word;
+    font-size: 0.75rem;
+}
+
+.contab-info-row-compact a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.contab-info-row-compact a:hover {
+    text-decoration: underline;
+}
+
+.contab-total-compact {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.pedido-items-list-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.pedido-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: visible;
+}
+
+.pedido-item:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+}
+
+.pedido-item-foto {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+    border: 1px solid var(--border-color);
+}
+
+.pedido-item-foto-placeholder {
+    width: 40px;
+    height: 40px;
+    background: var(--bg-color);
+    border: 1px dashed var(--border-color);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.pedido-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pedido-item-name {
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.pedido-item-description {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.2rem;
+    line-height: 1.2;
+}
+
+.pedido-item-meta {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.pedido-item-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.pedido-item-meta strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.pedido-item-ref-ean {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.comentarios-count {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.65rem;
+}
+
+.comentarios-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.comentarios-input {
+    width: 100%;
+    min-height: 50px;
+    max-height: 80px;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-family: inherit;
+    resize: none;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    overflow-y: auto;
+}
+
+.comentarios-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.comentarios-buttons-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+    justify-content: flex-start;
+}
+
+.btn-xs {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    align-self: flex-end;
+}
+
+.pedido-notas-list-compact-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.25rem;
+    padding-bottom: 0.5rem;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar-track {
+    background: var(--bg-color);
+    border-radius: 3px;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+.pedido-nota-entry {
+    padding: 0.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-color);
+    flex-shrink: 0;
+    margin-bottom: 0.5rem;
+}
+
+.pedido-nota-entry:last-child {
+    margin-bottom: 0;
+}
+
+.nota-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+    font-size: 0.7rem;
+}
+
+.nota-meta strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.nota-meta .nota-rol {
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+    margin-left: 0.5rem;
+}
+
+.nota-fecha {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+.pedido-nota-entry p {
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.contab-toggle-compact {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
+}
+
+.contab-toggle-compact:hover {
+    background: var(--card-bg);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.contab-toggle-compact .toggle-text {
+    flex: 1;
+    text-align: left;
+}
+
+.contab-toggle-compact .chevron {
+    font-size: 0.65rem;
+    transition: transform 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.contab-collapse-compact {
+    padding: 0.75rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-top: 0.5rem;
+    border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* Abreviar "Documento de pago" */
+.contab-card-estado .label-doc-pago {
+    font-size: 0;
+    position: relative;
+}
+
+.contab-card-estado .label-doc-pago::after {
+    content: "Doc. pago";
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Estilos para el select de estado de envío en header compacto */
+.contab-pedido-header-compact .estado-select {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.contab-pedido-header-compact .estado-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
