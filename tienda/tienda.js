@@ -305,16 +305,27 @@ async function loadPedidosSeleccionarPago() {
     const pedidos = await db.getPedidosByTienda(tiendaId);
     
     // Pedidos que están en "Seleccionar Pago":
-    // 1. Sin asignar método de pago y sin pedido real
-    // 2. O tienen estado "Pendiente de pago" o "Pago A cuenta" pero aún NO tienen pedido real adjunto
+    // El pedido permanece aquí hasta que se cumplan las TRES condiciones simultáneamente:
+    // 1. Documento de pago real adjunto (pedidoSistemaPDF)
+    // 2. Precio real asignado (precioReal)
+    // 3. Estado "Pendiente de pago" o "Pago A cuenta" (estadoPago)
     const pedidosSeleccionar = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
-        // Debe estar sin pedido real adjunto Y (sin asignar método de pago O tener Pendiente de pago/Pago A cuenta sin pedido real)
-        return !tienePedidoReal && 
-               (estadoPago === 'Sin Asignar' || estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') &&
-               p.estado !== 'Completado' && 
-               !p.esPedidoEspecial;
+        const tienePrecioReal = p.precioReal !== null && p.precioReal !== undefined;
+        
+        // El pedido está aquí si NO se cumplen las tres condiciones a la vez
+        const cumpleTodasLasCondiciones = tienePedidoReal && 
+                                         tienePrecioReal && 
+                                         (estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta');
+        
+        // Excluir pedidos completados y especiales
+        if (p.estado === 'Completado' || p.esPedidoEspecial) {
+            return false;
+        }
+        
+        // El pedido permanece aquí si no cumple las tres condiciones
+        return !cumpleTodasLasCondiciones;
     });
     
     const container = document.getElementById('seleccionar-pago-list');
