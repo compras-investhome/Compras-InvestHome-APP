@@ -847,15 +847,15 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-            : `<span class="doc-placeholder">Sin documento adjunto</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+            : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: no disponible aún en esta pestaña
-        facturaContent = '<span class="doc-placeholder">Sin factura adjunta</span>';
+        facturaContent = '<span class="doc-placeholder">Sin factura</span>';
     } else if (tabContext === 'pendientes-pago') {
         // Pestaña 2: Pendientes de Pago - Permite editar pedido real
         estadoPagoContent = `<span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>`;
@@ -864,12 +864,12 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
-            : `<span class="doc-placeholder">Sin documento adjunto</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+            : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
     } else if (tabContext === 'pagados') {
         // Pestaña 3: Pagados - Solo visualización (no editable)
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -877,18 +877,18 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : `<span class="doc-placeholder">Sin factura adjunta</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
+            : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'pago-cuenta') {
         // Pestaña 4: Pago A Cuenta - Permite editar pedido real
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-cuenta">Pago A cuenta</span>`;
@@ -897,18 +897,18 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
-            : `<span class="doc-placeholder">Sin documento adjunto</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+            : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : `<span class="doc-placeholder">Sin factura adjunta</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
+            : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'facturas-pendientes') {
         // Pestaña 5: Facturas Pendientes
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -916,18 +916,18 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : `<span class="doc-placeholder">Sin factura adjunta</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
+            : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -935,17 +935,17 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento adjunto</span>';
+            : '<span class="doc-placeholder">Sin documento</span>';
         
         const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
-            : '<span class="doc-placeholder">Sin factura adjunta</span>';
+            : '<span class="doc-placeholder">Sin factura</span>';
     }
     
     // Generar HTML de items
@@ -1081,37 +1081,32 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 ${(tabContext === 'facturas-pendientes' || tabContext === 'pagados' || tabContext === 'pago-cuenta') ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
             </div>
             
-            <!-- Card: Artículos (colapsable) -->
+            <!-- Card: Artículos (siempre visible) -->
             <div class="contab-info-card-compact contab-card-articulos">
                 <div class="contab-card-title-compact">
                     <span>Artículos (${items.length})</span>
                     <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
                 </div>
-                <button class="contab-toggle-compact" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos" onclick="togglePedidoSection('${itemsSectionId}', this)">
-                    <span class="toggle-text">Ver artículos</span>
-                    <span class="chevron">▼</span>
-                </button>
-                <div id="${itemsSectionId}" class="contab-collapse-compact" style="display: none; margin-top: 0.5rem;">
-                    <div class="pedido-items-list-compact">
-                        ${itemsHtml}
-                    </div>
+                <div class="pedido-items-list-compact">
+                    ${itemsHtml}
                 </div>
             </div>
             
-            <!-- Card: Comentarios (colapsable) -->
+            <!-- Card: Comentarios (siempre visible) -->
             <div class="contab-info-card-compact contab-card-comentarios">
                 <div class="contab-card-title-compact">
                     <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
                 </div>
-                <button class="contab-toggle-compact" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios" onclick="togglePedidoSection('${notasSectionId}', this)">
-                    <span class="toggle-text">Ver comentarios</span>
-                    <span class="chevron">▼</span>
-                </button>
-                <div id="${notasSectionId}" class="contab-collapse-compact" style="display: none; margin-top: 0.5rem;">
+                <div class="comentarios-input-wrapper">
                     <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
                     <div class="comentarios-buttons-row">
+                        <button class="btn-ver-comentarios" type="button" onclick="togglePedidoSection('${notasSectionId}', this)" id="btn-ver-comentarios-${pedido.id}" data-open-label="Ocultar Comentarios" data-close-label="Ver Comentarios">
+                            Ver Comentarios
+                        </button>
                         <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
                     </div>
+                </div>
+                <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
                     <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
                 </div>
             </div>
