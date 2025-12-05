@@ -2233,55 +2233,18 @@
         padding: 0.3rem 0.8rem;
     }
     
-    /* Grid de cards - alinear horizontalmente en móvil */
+    /* Grid de cards - apilar verticalmente en móvil */
     .contab-info-grid-compact {
-        flex-direction: row;
-        gap: 0.5rem;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-    }
-    
-    .contab-info-grid-compact::-webkit-scrollbar {
-        height: 4px;
-    }
-    
-    .contab-info-grid-compact::-webkit-scrollbar-track {
-        background: var(--bg-color);
-        border-radius: 2px;
-    }
-    
-    .contab-info-grid-compact::-webkit-scrollbar-thumb {
-        background: var(--border-color);
-        border-radius: 2px;
+        flex-direction: column;
+        gap: 0.75rem;
     }
     
     .contab-info-grid-compact > .contab-info-card-compact {
-        flex: 0 0 auto;
-        min-width: 0;
-        padding: 0.5rem;
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
+        padding: 0.75rem;
         max-height: none;
-    }
-    
-    /* Ajustar anchos de cada card para que quepan las 4 en línea */
-    .contab-info-grid-compact > .contab-info-card-compact.contab-card-datos {
-        flex: 0 0 28%;
-        min-width: 110px;
-    }
-    
-    .contab-info-grid-compact > .contab-info-card-compact.contab-card-estado {
-        flex: 0 0 28%;
-        min-width: 110px;
-    }
-    
-    .contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos {
-        flex: 0 0 28%;
-        min-width: 130px;
-    }
-    
-    .contab-info-grid-compact > .contab-info-card-compact.contab-card-comentarios {
-        flex: 0 0 16%;
-        min-width: 100px;
     }
     
     /* Títulos de las cards */
@@ -2562,16 +2525,6 @@
         font-weight: 500;
     }
     
-    /* Asegurar que el grid tenga ancho mínimo para scroll horizontal */
-    .contab-info-grid-compact {
-        min-width: 100%;
-        width: max-content;
-    }
-    
-    /* Forzar que las cards no se envuelvan */
-    .contab-info-grid-compact > .contab-info-card-compact {
-        flex-shrink: 0;
-    }
     
     /* Asegurar que las cards no se rompan */
     .contab-info-card-compact {
