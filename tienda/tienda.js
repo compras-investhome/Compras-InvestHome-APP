@@ -385,11 +385,12 @@ async function loadPedidosPendientesPago() {
     const tiendaId = currentTienda.id;
     const pedidos = await db.getPedidosByTienda(tiendaId);
     
-    // Pedidos con estadoPago = "Pendiente de pago" y pedido real adjunto
+    // Pedidos con estadoPago = "Pendiente de pago", pedido real adjunto y precio real asignado
     const pedidosPendientes = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
-        return estadoPago === 'Pendiente de pago' && tienePedidoReal && p.estado !== 'Completado' && !p.esPedidoEspecial;
+        const tienePrecioReal = p.precioReal !== null && p.precioReal !== undefined;
+        return estadoPago === 'Pendiente de pago' && tienePedidoReal && tienePrecioReal && p.estado !== 'Completado' && !p.esPedidoEspecial;
     });
     
     const container = document.getElementById('pendientes-pago-list');
@@ -469,11 +470,15 @@ async function loadPedidosPagoCuentaTienda(estadoLogistico) {
     const tiendaId = currentTienda.id;
     const pedidos = await db.getPedidosByTienda(tiendaId);
     
-    // Pedidos con estadoPago = "Pago A cuenta"
+    // Pedidos con estadoPago = "Pago A cuenta", pedido real adjunto y precio real asignado
     const pedidosCuenta = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
+        const tienePrecioReal = p.precioReal !== null && p.precioReal !== undefined;
         return estadoPago === 'Pago A cuenta' && 
+               tienePedidoReal &&
+               tienePrecioReal &&
                estadoLog === estadoLogistico && 
                p.estado !== 'Completado' && 
                !p.esPedidoEspecial;
@@ -804,6 +809,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     // Generar contenido de estado de pago según el contexto
     let estadoPagoContent = '';
     let pedidoRealContent = '';
+    let precioRealContent = '';
     let documentoPagoContent = '';
     let facturaContent = '';
     
@@ -849,6 +855,24 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
+        // Precio Real: campo para introducir el precio real del pedido
+        const precioReal = pedido.precioReal || null;
+        if (precioReal !== null && precioReal !== undefined) {
+            precioRealContent = `
+                <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(precioReal)}</span>
+                    <button class="emoji-btn" type="button" aria-label="Editar precio real" onclick="editarPrecioRealTienda('${pedido.id}', '${precioRealInputId}', '${precioRealDisplayId}')">✏️</button>
+                </div>
+            `;
+        } else {
+            precioRealContent = `
+                <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap;">
+                    <input type="number" id="${precioRealInputId}" step="0.01" min="0" placeholder="0.00" style="width: 80px; padding: 0.2rem 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.7rem;">
+                    <button class="emoji-btn" type="button" aria-label="Guardar precio real" onclick="guardarPrecioRealTienda('${pedido.id}', '${precioRealInputId}')">💾</button>
+                </div>
+            `;
+        }
+        
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
             ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
@@ -865,6 +889,24 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         pedidoRealContent = pedidoRealLink
             ? `<div style="display: inline-flex; align-items: center; gap: 0.35rem;"><a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button></div>`
             : `<div style="display: inline-flex; align-items: center; gap: 0.35rem;"><span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button></div>`;
+        
+        // Precio Real: mostrar o editar
+        const precioReal = pedido.precioReal || null;
+        if (precioReal !== null && precioReal !== undefined) {
+            precioRealContent = `
+                <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(precioReal)}</span>
+                    <button class="emoji-btn" type="button" aria-label="Editar precio real" onclick="editarPrecioRealTienda('${pedido.id}', '${precioRealInputId}', '${precioRealDisplayId}')">✏️</button>
+                </div>
+            `;
+        } else {
+            precioRealContent = `
+                <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap;">
+                    <input type="number" id="${precioRealInputId}" step="0.01" min="0" placeholder="0.00" style="width: 80px; padding: 0.2rem 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.7rem;">
+                    <button class="emoji-btn" type="button" aria-label="Guardar precio real" onclick="guardarPrecioRealTienda('${pedido.id}', '${precioRealInputId}')">💾</button>
+                </div>
+            `;
+        }
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
@@ -898,6 +940,24 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
+        
+        // Precio Real: mostrar o editar
+        const precioReal = pedido.precioReal || null;
+        if (precioReal !== null && precioReal !== undefined) {
+            precioRealContent = `
+                <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(precioReal)}</span>
+                    <button class="emoji-btn" type="button" aria-label="Editar precio real" onclick="editarPrecioRealTienda('${pedido.id}', '${precioRealInputId}', '${precioRealDisplayId}')">✏️</button>
+                </div>
+            `;
+        } else {
+            precioRealContent = `
+                <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap;">
+                    <input type="number" id="${precioRealInputId}" step="0.01" min="0" placeholder="0.00" style="width: 80px; padding: 0.2rem 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.7rem;">
+                    <button class="emoji-btn" type="button" aria-label="Guardar precio real" onclick="guardarPrecioRealTienda('${pedido.id}', '${precioRealInputId}')">💾</button>
+                </div>
+            `;
+        }
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
@@ -1068,6 +1128,10 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 <div class="contab-info-row-compact">
                     <span>Pedido real</span>
                     <div class="doc-actions">${pedidoRealContent}</div>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Precio Real</span>
+                    <div class="doc-actions">${precioRealContent}</div>
                 </div>
                 <div class="contab-info-row-compact">
                     <span>Doc. pago</span>
@@ -1323,20 +1387,24 @@ window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, sele
         // Actualizar el estado en la base de datos
         await updateEstadoPagoTienda(pedidoId, nuevoEstado);
         
-        // Si el nuevo estado es "Pendiente de pago" y el pedido ya tiene pedido real adjunto,
-        // mover el pedido a la pestaña "Pendientes de Pago"
-        if (nuevoEstado === 'Pendiente de pago') {
-            const pedido = await db.get('pedidos', pedidoId);
-            if (pedido && pedido.pedidoSistemaPDF) {
-                // El pedido tiene pedido real, debe moverse a "Pendientes de Pago"
-                await showAlert('Estado actualizado. El pedido se ha movido a Pendientes de Pago.', 'Éxito');
+        // Verificar si se cumplen todas las condiciones para mover el pedido
+        // (estado + pedido real + precio real)
+        const pedido = await db.get('pedidos', pedidoId);
+        if (pedido && pedido.pedidoSistemaPDF && pedido.precioReal !== null && pedido.precioReal !== undefined) {
+            if (nuevoEstado === 'Pendiente de pago' || nuevoEstado === 'Pago A cuenta') {
+                const mensaje = nuevoEstado === 'Pendiente de pago' 
+                    ? 'Estado actualizado. El pedido se ha movido a Pendientes de Pago.'
+                    : 'Estado actualizado. El pedido se ha movido a Pago A Cuenta.';
+                await showAlert(mensaje, 'Éxito');
                 // Recargar todas las pestañas relevantes para que el pedido se mueva
                 recargarPestañasTiendaRelevantes();
                 
                 // Disparar evento personalizado para que contabilidad se recargue si está abierta
-                window.dispatchEvent(new CustomEvent('pedidoEstadoCambiado', {
-                    detail: { pedidoId, nuevoEstado: 'Pendiente de pago' }
-                }));
+                if (nuevoEstado === 'Pendiente de pago') {
+                    window.dispatchEvent(new CustomEvent('pedidoEstadoCambiado', {
+                        detail: { pedidoId, nuevoEstado: 'Pendiente de pago' }
+                    }));
+                }
             }
         }
         
@@ -1367,10 +1435,12 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
                 await db.update('pedidos', pedido);
                 
                 const estadoPago = pedido.estadoPago || 'Sin Asignar';
+                const precioReal = pedido.precioReal || null;
                 
                 // Solo mover el pedido si tiene estado "Pendiente de pago" o "Pago A cuenta"
-                // Y ahora tiene el pedido real adjunto (disparador doble)
-                if (estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') {
+                // Y tiene el pedido real adjunto Y tiene precio real asignado
+                if ((estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') && 
+                    precioReal !== null && precioReal !== undefined) {
                     await showAlert('Pedido real adjuntado correctamente. El pedido se ha movido a la pestaña correspondiente.', 'Éxito');
                     // Recargar todas las pestañas relevantes para que el pedido se mueva
                     recargarPestañasTiendaRelevantes();
@@ -1382,7 +1452,7 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
                         }));
                     }
                 } else {
-                    await showAlert('Pedido real adjuntado correctamente. Seleccione el método de pago para continuar.', 'Éxito');
+                    await showAlert('Pedido real adjuntado correctamente. Complete el estado de pago y el precio real para continuar.', 'Éxito');
                     // Solo recargar la pestaña actual
                     loadPedidosSeleccionarPago();
                 }
@@ -1395,6 +1465,78 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
     } catch (error) {
         console.error('Error al leer archivo:', error);
         await showAlert('Error al leer archivo: ' + error.message, 'Error');
+    }
+};
+
+// Guardar precio real del pedido
+window.guardarPrecioRealTienda = async function(pedidoId, inputId) {
+    try {
+        const input = document.getElementById(inputId);
+        if (!input) {
+            await showAlert('Error: No se pudo encontrar el campo de precio', 'Error');
+            return;
+        }
+        
+        const precioReal = parseFloat(input.value);
+        if (isNaN(precioReal) || precioReal < 0) {
+            await showAlert('Por favor, ingrese un precio válido', 'Atención');
+            return;
+        }
+        
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        pedido.precioReal = precioReal;
+        await db.update('pedidos', pedido);
+        
+        const estadoPago = pedido.estadoPago || 'Sin Asignar';
+        const tienePedidoReal = Boolean(pedido.pedidoSistemaPDF);
+        
+        // Verificar si se cumplen todas las condiciones para mover el pedido
+        if ((estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') && tienePedidoReal) {
+            await showAlert('Precio real guardado. El pedido se ha movido a la pestaña correspondiente.', 'Éxito');
+            recargarPestañasTiendaRelevantes();
+            
+            // Si el estado es "Pendiente de pago", disparar evento para recargar contabilidad
+            if (estadoPago === 'Pendiente de pago') {
+                window.dispatchEvent(new CustomEvent('pedidoEstadoCambiado', {
+                    detail: { pedidoId, nuevoEstado: 'Pendiente de pago' }
+                }));
+            }
+        } else {
+            await showAlert('Precio real guardado correctamente', 'Éxito');
+            loadPedidosSeleccionarPago();
+        }
+    } catch (error) {
+        console.error('Error al guardar precio real:', error);
+        await showAlert('Error al guardar precio real: ' + error.message, 'Error');
+    }
+};
+
+// Editar precio real del pedido
+window.editarPrecioRealTienda = async function(pedidoId, inputId, displayId) {
+    try {
+        const display = document.getElementById(displayId);
+        if (!display) return;
+        
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido || pedido.precioReal === null || pedido.precioReal === undefined) return;
+        
+        const precioActual = pedido.precioReal;
+        
+        // Reemplazar el display con un input para editar
+        display.outerHTML = `
+            <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap;">
+                <input type="number" id="${inputId}" step="0.01" min="0" value="${precioActual}" style="width: 80px; padding: 0.2rem 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.7rem;">
+                <button class="emoji-btn" type="button" aria-label="Guardar precio real" onclick="guardarPrecioRealTienda('${pedidoId}', '${inputId}')">💾</button>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error al editar precio real:', error);
+        await showAlert('Error al editar precio real: ' + error.message, 'Error');
     }
 };
 
