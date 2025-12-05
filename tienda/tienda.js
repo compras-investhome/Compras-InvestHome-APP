@@ -354,9 +354,16 @@ async function loadModificacionPedidoTienda() {
     
     const tiendaId = currentTienda.id;
     const solicitudesModificacion = await db.getSolicitudesModificacionByTienda(tiendaId);
+    const solicitudesAnulacion = await db.getSolicitudesAnulacionByTienda(tiendaId);
     
-    // Filtrar solo las solicitudes pendientes
-    const solicitudesPendientes = solicitudesModificacion.filter(s => s.estado === 'Pendiente');
+    // Combinar ambas listas y marcar el tipo
+    const todasLasSolicitudes = [
+        ...solicitudesModificacion.map(s => ({ ...s, tipoSolicitud: 'modificacion' })),
+        ...solicitudesAnulacion.map(s => ({ ...s, tipoSolicitud: 'anulacion' }))
+    ];
+    
+    // Filtrar solo las solicitudes pendientes (aunque ya vienen filtradas, por si acaso)
+    const solicitudesPendientes = todasLasSolicitudes.filter(s => s.estado === 'Pendiente');
     
     const container = document.getElementById('modificacion-pedido-list');
     const emptyState = document.getElementById('modificacion-pedido-empty');
@@ -766,25 +773,57 @@ async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
     const estadoLogistico = pedido.estadoLogistico || 'Nuevo';
     
     // Información del artículo de la solicitud
-    const item = solicitud.item || {};
-    const nombreItem = escapeHtml(item.nombre || 'Artículo sin nombre');
-    const descripcionItem = item.descripcion ? escapeHtml(item.descripcion) : '';
-    const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
-    const cantidadActual = solicitud.cantidadActual || 0;
-    const cantidadSolicitada = solicitud.cantidadSolicitada || 0;
-    const precioUnitario = item.precio || 0;
-    const totalLinea = precioUnitario * cantidadActual;
-    const referencia = escapeHtml(item.referencia || item.designacion || '');
-    const ean = escapeHtml(item.ean || '');
+    const esAnulacion = solicitud.tipoSolicitud === 'anulacion' || solicitud.tipo === 'item' || solicitud.tipo === 'pedido';
+    const esAnulacionPedido = esAnulacion && solicitud.tipo === 'pedido';
+    const esAnulacionItem = esAnulacion && solicitud.tipo === 'item';
+    
+    let item = {};
+    let nombreItem = 'Pedido completo';
+    let descripcionItem = '';
+    let fotoUrl = null;
+    let cantidadActual = 0;
+    let cantidadSolicitada = 0;
+    let precioUnitario = 0;
+    let totalLinea = 0;
+    let referencia = '';
+    let ean = '';
+    
+    if (esAnulacionPedido) {
+        // Anulación de pedido completo
+        const items = Array.isArray(pedido.items) ? pedido.items : [];
+        const totalPedido = items.reduce((total, it) => {
+            const precioItem = Number(it.precio) || 0;
+            const cantidadItem = Number(it.cantidad) || 0;
+            return total + precioItem * cantidadItem;
+        }, 0);
+        cantidadActual = items.length;
+        totalLinea = totalPedido;
+    } else {
+        // Modificación o anulación de artículo
+        item = solicitud.item || {};
+        nombreItem = escapeHtml(item.nombre || 'Artículo sin nombre');
+        descripcionItem = item.descripcion ? escapeHtml(item.descripcion) : '';
+        fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+        cantidadActual = solicitud.cantidadActual || (item.cantidad || 0);
+        cantidadSolicitada = esAnulacionItem ? 0 : (solicitud.cantidadSolicitada || 0);
+        precioUnitario = item.precio || 0;
+        totalLinea = precioUnitario * cantidadActual;
+        referencia = escapeHtml(item.referencia || item.designacion || '');
+        ean = escapeHtml(item.ean || '');
+    }
+    
     const refEanParts = [];
     if (referencia) refEanParts.push(`Ref: ${referencia}`);
     if (ean) refEanParts.push(`EAN: ${ean}`);
     const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
     
     // Determinar tipo de solicitud
-    const tipoSolicitud = solicitud.cantidadSolicitada === 0 
-        ? 'Anulación de artículo' 
-        : 'Modificación de cantidad';
+    let tipoSolicitud = 'Modificación de cantidad';
+    if (esAnulacionPedido) {
+        tipoSolicitud = 'Anulación de pedido completo';
+    } else if (esAnulacionItem || cantidadSolicitada === 0) {
+        tipoSolicitud = 'Anulación de artículo';
+    }
     
     const fotoPlaceholderId = `foto-solicitud-${solicitud.id}`;
     const fotoHtml = fotoUrl
@@ -834,29 +873,39 @@ async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
             <!-- Card 3: Modificación Solicitada (más grande) -->
             <div class="contab-info-card-compact solicitud-card-large">
                 <div class="contab-card-title-compact">${tipoSolicitud}</div>
-                <div class="pedido-item" style="display: flex; align-items: flex-start; gap: 1rem; padding: 0.5rem 0;">
-                    ${fotoHtml}
-                    ${fotoPlaceholder}
-                    <div class="pedido-item-info" style="flex: 1;">
-                        <p class="pedido-item-name" style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem;">${nombreItem}</p>
-                        ${refEanText ? `<p class="pedido-item-ref-ean" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${refEanText}</p>` : ''}
-                        ${descripcionItem ? `<p class="pedido-item-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.4;">${descripcionItem}</p>` : ''}
+                ${esAnulacionPedido ? `
+                    <div style="padding: 0.5rem 0;">
+                        <p style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem;">Anulación del pedido completo</p>
                         <div class="pedido-item-meta" style="margin-top: 0.5rem;">
-                            <span>Cantidad actual: <strong>${cantidadActual}</strong></span>
-                            <span>Cantidad solicitada: <strong>${cantidadSolicitada}</strong></span>
-                            <span>Precio unitario: <strong>${formatCurrency(precioUnitario)}</strong></span>
-                            <span>Total línea: <strong>${formatCurrency(totalLinea)}</strong></span>
+                            <span>Artículos en pedido: <strong>${cantidadActual}</strong></span>
+                            <span>Total pedido: <strong>${formatCurrency(totalLinea)}</strong></span>
                         </div>
                     </div>
-                </div>
+                ` : `
+                    <div class="pedido-item" style="display: flex; align-items: flex-start; gap: 1rem; padding: 0.5rem 0;">
+                        ${fotoHtml}
+                        ${fotoPlaceholder}
+                        <div class="pedido-item-info" style="flex: 1;">
+                            <p class="pedido-item-name" style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem;">${nombreItem}</p>
+                            ${refEanText ? `<p class="pedido-item-ref-ean" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${refEanText}</p>` : ''}
+                            ${descripcionItem ? `<p class="pedido-item-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.4;">${descripcionItem}</p>` : ''}
+                            <div class="pedido-item-meta" style="margin-top: 0.5rem;">
+                                <span>Cantidad actual: <strong>${cantidadActual}</strong></span>
+                                ${!esAnulacionItem ? `<span>Cantidad solicitada: <strong>${cantidadSolicitada}</strong></span>` : ''}
+                                <span>Precio unitario: <strong>${formatCurrency(precioUnitario)}</strong></span>
+                                <span>Total línea: <strong>${formatCurrency(totalLinea)}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                `}
             </div>
             
             <!-- Botones de Acción -->
             <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: flex-start;">
-                <button class="btn btn-primary" onclick="aceptarSolicitudModificacion('${solicitud.id}')" style="white-space: nowrap; min-width: 120px;">
+                <button class="btn btn-primary" onclick="${esAnulacion ? `aceptarSolicitudAnulacion('${solicitud.id}')` : `aceptarSolicitudModificacion('${solicitud.id}')`}" style="white-space: nowrap; min-width: 120px;">
                     Aceptar
                 </button>
-                <button class="btn btn-danger" onclick="rechazarSolicitudModificacion('${solicitud.id}')" style="white-space: nowrap; min-width: 120px;">
+                <button class="btn btn-danger" onclick="${esAnulacion ? `rechazarSolicitudAnulacion('${solicitud.id}')` : `rechazarSolicitudModificacion('${solicitud.id}')`}" style="white-space: nowrap; min-width: 120px;">
                     Denegar
                 </button>
             </div>
@@ -1950,8 +1999,103 @@ window.rechazarSolicitudModificacion = async function(solicitudId) {
         if (activeTab === 'modificacion-pedido') {
             loadModificacionPedidoTienda();
         }
+        
+        // Recargar pestañas relevantes
+        recargarPestañasTiendaRelevantes();
     } catch (error) {
         console.error('Error al rechazar solicitud:', error);
+        await showAlert('Error al rechazar solicitud: ' + error.message, 'Error');
+    }
+};
+
+// Aceptar solicitud de anulación
+window.aceptarSolicitudAnulacion = async function(solicitudId) {
+    const confirmar = await showConfirm('¿Está seguro de aceptar esta solicitud de anulación?', 'Confirmar');
+    if (!confirmar) return;
+    
+    try {
+        const solicitud = await db.get('solicitudesAnulacion', solicitudId);
+        if (!solicitud) {
+            await showAlert('Error: No se pudo encontrar la solicitud', 'Error');
+            return;
+        }
+        
+        const pedido = await db.get('pedidos', solicitud.pedidoId);
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        if (solicitud.tipo === 'pedido') {
+            // Anulación de pedido completo
+            await db.delete('pedidos', solicitud.pedidoId);
+            await showAlert('Pedido anulado correctamente', 'Éxito');
+        } else if (solicitud.tipo === 'item') {
+            // Anulación de artículo
+            if (!pedido.items || solicitud.itemIndex >= pedido.items.length) {
+                await showAlert('Error: No se pudo encontrar el artículo', 'Error');
+                return;
+            }
+            
+            // Eliminar el artículo
+            pedido.items.splice(solicitud.itemIndex, 1);
+            
+            // Si no quedan artículos, eliminar el pedido
+            if (pedido.items.length === 0) {
+                await db.delete('pedidos', solicitud.pedidoId);
+                await showAlert('Artículo anulado. El pedido se ha eliminado por estar vacío.', 'Éxito');
+            } else {
+                await db.update('pedidos', pedido);
+                await showAlert('Artículo anulado correctamente', 'Éxito');
+            }
+        }
+        
+        // Marcar solicitud como aceptada
+        solicitud.estado = 'Aceptada';
+        await db.update('solicitudesAnulacion', solicitud);
+        
+        // Recargar pestaña de modificación de pedido si está activa
+        const activeTab = document.querySelector('#tienda-gestion-view .tab-btn.active')?.dataset.tab;
+        if (activeTab === 'modificacion-pedido') {
+            loadModificacionPedidoTienda();
+        }
+        
+        // Recargar pestañas relevantes
+        recargarPestañasTiendaRelevantes();
+    } catch (error) {
+        console.error('Error al aceptar solicitud de anulación:', error);
+        await showAlert('Error al aceptar solicitud: ' + error.message, 'Error');
+    }
+};
+
+// Rechazar solicitud de anulación
+window.rechazarSolicitudAnulacion = async function(solicitudId) {
+    const confirmar = await showConfirm('¿Está seguro de rechazar esta solicitud de anulación?', 'Confirmar');
+    if (!confirmar) return;
+    
+    try {
+        const solicitud = await db.get('solicitudesAnulacion', solicitudId);
+        if (!solicitud) {
+            await showAlert('Error: No se pudo encontrar la solicitud', 'Error');
+            return;
+        }
+        
+        // Marcar solicitud como rechazada
+        solicitud.estado = 'Rechazada';
+        await db.update('solicitudesAnulacion', solicitud);
+        
+        await showAlert('Solicitud de anulación rechazada', 'Éxito');
+        
+        // Recargar pestaña de modificación de pedido si está activa
+        const activeTab = document.querySelector('#tienda-gestion-view .tab-btn.active')?.dataset.tab;
+        if (activeTab === 'modificacion-pedido') {
+            loadModificacionPedidoTienda();
+        }
+        
+        // Recargar pestañas relevantes
+        recargarPestañasTiendaRelevantes();
+    } catch (error) {
+        console.error('Error al rechazar solicitud de anulación:', error);
         await showAlert('Error al rechazar solicitud: ' + error.message, 'Error');
     }
 };
