@@ -1591,18 +1591,6 @@
     border-top-right-radius: 0;
 }
 
-/* Abreviar "Documento de pago" */
-.contab-card-estado .label-doc-pago {
-    font-size: 0;
-    position: relative;
-}
-
-.contab-card-estado .label-doc-pago::after {
-    content: "Doc. pago";
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    font-weight: 500;
-}
 
 /* Estilos para el select de estado de envío en header compacto */
 .contab-pedido-header-compact .estado-select {

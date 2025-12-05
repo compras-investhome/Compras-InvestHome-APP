@@ -1070,7 +1070,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     <div class="doc-actions">${pedidoRealContent}</div>
                 </div>
                 <div class="contab-info-row-compact">
-                    <span class="label-doc-pago">Documento de pago</span>
+                    <span>Doc. pago</span>
                     <div class="doc-actions">${documentoPagoContent}</div>
                 </div>
                 <div class="contab-info-row-compact">
