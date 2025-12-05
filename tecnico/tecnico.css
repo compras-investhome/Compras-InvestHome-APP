@@ -2163,4 +2163,32 @@
         width: 56px;
         height: 56px;
     }
+    
+    /* Ficha ampliada en móvil - título debajo de la foto */
+    .producto-card-admin.ampliada .producto-card-header {
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding-right: 45px;
+    }
+    
+    .producto-card-admin.ampliada .producto-foto,
+    .producto-card-admin.ampliada .producto-foto-placeholder {
+        width: 100%;
+        max-width: 300px;
+        height: auto;
+        aspect-ratio: 1;
+        margin: 0 auto;
+    }
+    
+    .producto-card-admin.ampliada .producto-card-info {
+        width: 100%;
+        text-align: center;
+        padding-right: 0;
+    }
+    
+    .producto-card-admin.ampliada .producto-nombre {
+        padding-right: 0;
+        text-align: center;
+    }
 }
