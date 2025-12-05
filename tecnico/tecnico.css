@@ -2204,33 +2204,35 @@
         margin-bottom: 1rem;
     }
     
-    /* Header del pedido */
+    /* Header del pedido - más pequeño en móvil */
     .contab-pedido-header-compact {
-        flex-direction: column;
-        gap: 0.75rem;
-        padding-bottom: 0.75rem;
-        margin-bottom: 0.75rem;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
     }
     
     .pedido-code {
-        font-size: 1.1rem;
-        font-weight: 700;
+        font-size: 0.75rem;
+        font-weight: 600;
     }
     
     .contab-estado-envio {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.4rem;
     }
     
     .contab-estado-envio > span:first-child {
-        font-size: 0.85rem;
+        font-size: 0.65rem;
         color: var(--text-secondary);
     }
     
     .estado-envio-pill {
-        font-size: 0.75rem;
-        padding: 0.3rem 0.8rem;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
     }
     
     /* Grid de cards - apilar verticalmente en móvil - FORZAR */
