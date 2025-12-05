@@ -384,7 +384,7 @@ async function loadModificacionPedidoTienda() {
         if (!pedido) continue;
         
         const usuario = await db.get('usuarios', solicitud.userId);
-        const card = createSolicitudModificacionCard(solicitud, pedido, usuario);
+        const card = await createSolicitudModificacionCard(solicitud, pedido, usuario);
         container.appendChild(card);
     }
 }
@@ -708,65 +708,158 @@ window.removePedidoPaymentDocument = async function(pedidoId) {
 // Función eliminada: confirmarPagoPedidoEspecial - No se usa en tienda (solo en contabilidad)
 
 // Funciones para crear cards de pedidos
-function createSolicitudModificacionCard(solicitud, pedido, usuario) {
+async function createSolicitudModificacionCard(solicitud, pedido, usuario) {
     const card = document.createElement('div');
-    card.className = 'pedido-gestion-card';
+    card.className = 'pedido-gestion-card contab-pedido-card';
     
-    let fecha;
-    let fechaObj;
-    if (solicitud.fecha && solicitud.fecha.toDate) {
-        fechaObj = solicitud.fecha.toDate();
-    } else if (solicitud.fecha) {
-        fechaObj = new Date(solicitud.fecha);
-    } else if (solicitud.createdAt && solicitud.createdAt.toDate) {
-        fechaObj = solicitud.createdAt.toDate();
-    } else if (solicitud.createdAt) {
-        fechaObj = new Date(solicitud.createdAt);
+    // Obtener información adicional
+    const tienda = await db.get('tiendas', pedido.tiendaId);
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    
+    // Formatear fecha del pedido
+    let fechaPedidoObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaPedidoObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaPedidoObj = new Date(pedido.fecha);
+    } else if (pedido.createdAt && pedido.createdAt.toDate) {
+        fechaPedidoObj = pedido.createdAt.toDate();
+    } else if (pedido.createdAt) {
+        fechaPedidoObj = new Date(pedido.createdAt);
     } else {
-        fechaObj = new Date();
+        fechaPedidoObj = new Date();
     }
+    const fechaPedido = formatDateTime(fechaPedidoObj);
     
-    const dia = fechaObj.getDate().toString().padStart(2, '0');
-    const mes = (fechaObj.getMonth() + 1).toString().padStart(2, '0');
-    const año = fechaObj.getFullYear();
-    fecha = `${dia}/${mes}/${año}`;
+    // Formatear fecha de la solicitud
+    let fechaSolicitudObj;
+    if (solicitud.fecha && solicitud.fecha.toDate) {
+        fechaSolicitudObj = solicitud.fecha.toDate();
+    } else if (solicitud.fecha) {
+        fechaSolicitudObj = new Date(solicitud.fecha);
+    } else if (solicitud.createdAt && solicitud.createdAt.toDate) {
+        fechaSolicitudObj = solicitud.createdAt.toDate();
+    } else if (solicitud.createdAt) {
+        fechaSolicitudObj = new Date(solicitud.createdAt);
+    } else {
+        fechaSolicitudObj = new Date();
+    }
+    const fechaSolicitud = formatDateTime(fechaSolicitudObj);
     
-    const obraNombre = pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    // Información de la obra
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo || { direccionGoogleMaps: pedido.obraDireccionGoogleMaps }, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || pedido.obraEncargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || pedido.obraTelefono || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
     
-    const telefonoUsuario = usuario?.telefono || pedido.obraTelefono || 'No disponible';
-    const usuarioNombre = usuario ? usuario.username : pedido.persona;
+    // Información de la tienda y persona
+    const tiendaNombre = escapeHtml(tienda?.nombre || 'Desconocida');
+    const persona = escapeHtml(pedido.persona || pedido.usuarioNombre || 'Sin especificar');
+    
+    // Estado de pago y envío
+    const estadoPago = pedido.estadoPago || 'Sin Asignar';
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    const estadoEnvio = pedido.estado || 'Nuevo';
+    const estadoLogistico = pedido.estadoLogistico || 'Nuevo';
+    
+    // Información del artículo de la solicitud
+    const item = solicitud.item || {};
+    const nombreItem = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+    const descripcionItem = item.descripcion ? escapeHtml(item.descripcion) : '';
+    const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+    const cantidadActual = solicitud.cantidadActual || 0;
+    const cantidadSolicitada = solicitud.cantidadSolicitada || 0;
+    const precioUnitario = item.precio || 0;
+    const totalLinea = precioUnitario * cantidadActual;
+    const referencia = escapeHtml(item.designacion || item.referencia || '');
+    const ean = escapeHtml(item.ean || '');
+    const refEanParts = [];
+    if (referencia) refEanParts.push(referencia);
+    if (ean) refEanParts.push(ean);
+    const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
+    
+    // Determinar tipo de solicitud
+    const tipoSolicitud = solicitud.cantidadSolicitada === 0 
+        ? 'Anulación de artículo' 
+        : 'Modificación de cantidad';
+    
+    const fotoPlaceholderId = `foto-solicitud-${solicitud.id}`;
+    const fotoHtml = fotoUrl
+        ? `<img src="${fotoUrl}" alt="${nombreItem}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${fotoPlaceholderId}').style.display='flex';">`
+        : '';
+    const fotoPlaceholder = `<div id="${fotoPlaceholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
     
     card.innerHTML = `
-        <div class="pedido-gestion-header">
-            <div class="pedido-gestion-info">
-                <h4>Solicitud de Modificación de Cantidad</h4>
-                <p><strong>Usuario:</strong> ${usuarioNombre}${telefonoUsuario !== 'No disponible' ? ` | Tel: ${telefonoUsuario}` : ''}</p>
-                <p><strong>Obra:</strong> ${obraNombre}</p>
-                <p><strong>Pedido:</strong> #${pedido.id}</p>
-                <p style="font-size: 0.75rem; color: var(--text-secondary);">${fecha}</p>
-            </div>
+        <!-- Header del pedido -->
+        <div class="contab-pedido-header-compact">
+            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
             <span class="pedido-estado estado-pendiente">Pendiente</span>
         </div>
-        <div class="pedido-items">
-            <div class="pedido-item" style="padding: 0.75rem; background: var(--bg-color); border-radius: 8px;">
-                <p><strong>Solicitud:</strong> Modificar cantidad de artículo</p>
-                <div style="margin-top: 0.5rem;">
-                    <strong>${solicitud.item.nombre}</strong>
-                    ${solicitud.item.descripcion ? `<p style="font-size: 0.875rem; color: var(--text-secondary);">${solicitud.item.descripcion}</p>` : ''}
-                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        Cantidad actual: <strong>x${solicitud.cantidadActual}</strong><br>
-                        Cantidad solicitada: <strong>x${solicitud.cantidadSolicitada}</strong>
-                    </p>
+        
+        <!-- Grid con tres sub-cards y botones de acción -->
+        <div class="solicitud-modificacion-grid">
+            <!-- Card 1: Datos del Pedido -->
+            <div class="contab-info-card-compact contab-card-datos">
+                <div class="contab-card-title-compact">Datos del Pedido</div>
+                <div class="contab-info-row-compact"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row-compact"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row-compact">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row-compact"><span>Encargado</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row-compact"><span>Fecha</span><strong>${fechaPedido}</strong></div>
+            </div>
+            
+            <!-- Card 2: Estado de Pago y Envío -->
+            <div class="contab-info-card-compact contab-card-estado">
+                <div class="contab-card-title-compact">Estado</div>
+                <div class="contab-info-row-compact">
+                    <span>Estado de pago</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Estado de envío</span>
+                    <strong>${escapeHtml(estadoEnvio)}</strong>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Estado logístico</span>
+                    <strong>${escapeHtml(estadoLogistico)}</strong>
                 </div>
             </div>
-        </div>
-        <div class="pedido-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-            <button class="btn btn-danger" onclick="rechazarSolicitudModificacion('${solicitud.id}')" style="flex: 1;">
-                Rechazar
-            </button>
-            <button class="btn btn-primary" onclick="aceptarSolicitudModificacion('${solicitud.id}')" style="flex: 1;">
-                Aceptar
-            </button>
+            
+            <!-- Card 3: Modificación Solicitada -->
+            <div class="contab-info-card-compact">
+                <div class="contab-card-title-compact">${tipoSolicitud}</div>
+                <div class="pedido-item" style="display: flex; align-items: flex-start; gap: 1rem; padding: 0.5rem 0;">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info" style="flex: 1;">
+                        <p class="pedido-item-name">${nombreItem}</p>
+                        ${descripcionItem ? `<p class="pedido-item-desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">${descripcionItem}</p>` : ''}
+                        ${refEanText ? `<p class="pedido-item-ref-ean" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${refEanText}</p>` : ''}
+                        <div class="pedido-item-meta" style="margin-top: 0.5rem;">
+                            <span>Cantidad actual: <strong>${cantidadActual}</strong></span>
+                            <span>Cantidad solicitada: <strong>${cantidadSolicitada}</strong></span>
+                            <span>Precio unitario: <strong>${formatCurrency(precioUnitario)}</strong></span>
+                            <span>Total línea: <strong>${formatCurrency(totalLinea)}</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Botones de Acción -->
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: flex-start;">
+                <button class="btn btn-primary" onclick="aceptarSolicitudModificacion('${solicitud.id}')" style="white-space: nowrap; min-width: 120px;">
+                    Aceptar
+                </button>
+                <button class="btn btn-danger" onclick="rechazarSolicitudModificacion('${solicitud.id}')" style="white-space: nowrap; min-width: 120px;">
+                    Denegar
+                </button>
+            </div>
         </div>
     `;
     
