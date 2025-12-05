@@ -1323,6 +1323,23 @@ window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, sele
         // Actualizar el estado en la base de datos
         await updateEstadoPagoTienda(pedidoId, nuevoEstado);
         
+        // Si el nuevo estado es "Pendiente de pago" y el pedido ya tiene pedido real adjunto,
+        // mover el pedido a la pestaña "Pendientes de Pago"
+        if (nuevoEstado === 'Pendiente de pago') {
+            const pedido = await db.get('pedidos', pedidoId);
+            if (pedido && pedido.pedidoSistemaPDF) {
+                // El pedido tiene pedido real, debe moverse a "Pendientes de Pago"
+                await showAlert('Estado actualizado. El pedido se ha movido a Pendientes de Pago.', 'Éxito');
+                // Recargar todas las pestañas relevantes para que el pedido se mueva
+                recargarPestañasTiendaRelevantes();
+                
+                // Disparar evento personalizado para que contabilidad se recargue si está abierta
+                window.dispatchEvent(new CustomEvent('pedidoEstadoCambiado', {
+                    detail: { pedidoId, nuevoEstado: 'Pendiente de pago' }
+                }));
+            }
+        }
+        
     } catch (error) {
         console.error('Error al actualizar estado de pago:', error);
         await showAlert('Error al actualizar estado de pago: ' + error.message, 'Error');
@@ -1357,6 +1374,13 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
                     await showAlert('Pedido real adjuntado correctamente. El pedido se ha movido a la pestaña correspondiente.', 'Éxito');
                     // Recargar todas las pestañas relevantes para que el pedido se mueva
                     recargarPestañasTiendaRelevantes();
+                    
+                    // Si el estado es "Pendiente de pago", disparar evento para recargar contabilidad
+                    if (estadoPago === 'Pendiente de pago') {
+                        window.dispatchEvent(new CustomEvent('pedidoEstadoCambiado', {
+                            detail: { pedidoId, nuevoEstado: 'Pendiente de pago' }
+                        }));
+                    }
                 } else {
                     await showAlert('Pedido real adjuntado correctamente. Seleccione el método de pago para continuar.', 'Éxito');
                     // Solo recargar la pestaña actual

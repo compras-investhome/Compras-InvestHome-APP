@@ -1502,6 +1502,31 @@ function setupContabilidadEventListeners() {
             }
         }
     });
+    
+    // Escuchar eventos de cambio de estado de pedidos desde tienda
+    window.addEventListener('pedidoEstadoCambiado', async (e) => {
+        const { nuevoEstado } = e.detail;
+        // Si el estado es "Pendiente de pago" y estamos en la vista de contabilidad,
+        // recargar la pestaña de pendientes de pago
+        if (nuevoEstado === 'Pendiente de pago') {
+            const activeTab = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
+            if (activeTab && activeTab.dataset.tab === 'pendientes-pago-contabilidad') {
+                // Si estamos viendo la pestaña de pendientes, recargar
+                loadPedidosContabilidad();
+            } else {
+                // Si no, solo actualizar el badge
+                const todosPedidos = await db.getAll('pedidos');
+                const pedidosPendientes = todosPedidos.filter(pedido => {
+                    if (pedido.estado === 'Completado') return false;
+                    if (pedido.estadoPago !== 'Pendiente de pago') return false;
+                    if (!pedido.pedidoSistemaPDF) return false;
+                    if (pedido.transferenciaPDF) return false;
+                    return true;
+                });
+                updateContabilidadTabBadge('pendientes', pedidosPendientes.length);
+            }
+        }
+    });
 }
 
 // Inicialización
