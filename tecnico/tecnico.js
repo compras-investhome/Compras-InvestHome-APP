@@ -130,9 +130,9 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
         } else {
             // Mostrar el mensaje normal y el input
             promptMessage.style.display = '';
-            promptMessage.textContent = message;
+        promptMessage.textContent = message;
             promptInput.style.display = '';
-            promptInput.value = defaultValue;
+        promptInput.value = defaultValue;
         }
         
         promptPopup.classList.add('active');
@@ -1838,12 +1838,12 @@ async function createPedidoTecnicoCard(pedido) {
     card.innerHTML = `
         <!-- Header del pedido -->
         <div class="contab-pedido-header-compact">
-            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
-            <div class="contab-estado-envio">
-                <span>Estado de envío:</span>
-                <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                </div>
             </div>
-        </div>
         
         <!-- Cards compactas: Datos del pedido, Estado de pago, Artículos y Comentarios -->
         <div class="contab-info-grid-compact">
@@ -1886,7 +1886,7 @@ async function createPedidoTecnicoCard(pedido) {
                 <div class="contab-card-title-compact">
                     <span>Artículos (${items.length})</span>
                     <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
-                </div>
+        </div>
                 <div class="pedido-items-list-compact">
                     ${itemsHtml}
                 </div>
@@ -1895,13 +1895,13 @@ async function createPedidoTecnicoCard(pedido) {
                         Solicitar Anulación del Pedido
                     </button>
                 </div>
-            </div>
+                </div>
             
             <!-- Card: Comentarios -->
             <div class="contab-info-card-compact contab-card-comentarios">
                 <div class="contab-card-title-compact">
                     <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
-                </div>
+            </div>
                 <div class="comentarios-input-wrapper">
                     <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
                     <div class="comentarios-buttons-row">
@@ -1909,7 +1909,7 @@ async function createPedidoTecnicoCard(pedido) {
                             Ver Comentarios
                         </button>
                         <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
-                    </div>
+        </div>
                 </div>
                 <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
                     <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
@@ -3554,7 +3554,7 @@ function setupTecnicoEventListeners() {
             if (sidebar) {
                 // Solo colapsar/expandir en desktop
                 if (window.innerWidth > 768) {
-                    sidebar.classList.toggle('collapsed');
+                sidebar.classList.toggle('collapsed');
                 }
             }
         });

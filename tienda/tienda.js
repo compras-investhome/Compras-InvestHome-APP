@@ -1036,12 +1036,12 @@ async function createPedidoTiendaCard(pedido, tabContext) {
     card.innerHTML = `
         <!-- Header del pedido -->
         <div class="contab-pedido-header-compact">
-            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
-            <div class="contab-estado-envio">
-                <span>Estado de envío:</span>
-                ${estadoEnvioHtml}
+                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    ${estadoEnvioHtml}
+                </div>
             </div>
-        </div>
         
         <!-- Cards compactas: Datos del pedido, Estado de pago, Artículos y Comentarios -->
         <div class="contab-info-grid-compact">
@@ -1086,7 +1086,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 <div class="contab-card-title-compact">
                     <span>Artículos (${items.length})</span>
                     <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
-                </div>
+        </div>
                 <div class="pedido-items-list-compact">
                     ${itemsHtml}
                 </div>
@@ -1103,15 +1103,15 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             <div class="contab-info-card-compact contab-card-comentarios">
                 <div class="contab-card-title-compact">
                     <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
-                </div>
+        </div>
                 <div class="comentarios-input-wrapper">
                     <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
                     <div class="comentarios-buttons-row">
                         <button class="btn-ver-comentarios" type="button" onclick="togglePedidoSection('${notasSectionId}', this)" id="btn-ver-comentarios-${pedido.id}" data-open-label="Ocultar Comentarios" data-close-label="Ver Comentarios">
                             Ver Comentarios
-                        </button>
+            </button>
                         <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
-                    </div>
+                </div>
                 </div>
                 <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
                     <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
@@ -1800,11 +1800,11 @@ function setupTiendaEventListeners() {
         if (e.target.closest('#btn-logout-tienda')) {
             e.preventDefault();
             e.stopPropagation();
-            await db.clearSesion();
-            currentUser = null;
-            currentUserType = null;
-            currentTienda = null;
-            window.location.href = '../index.html';
+        await db.clearSesion();
+        currentUser = null;
+        currentUserType = null;
+        currentTienda = null;
+        window.location.href = '../index.html';
         }
     });
 
@@ -1820,7 +1820,7 @@ function setupTiendaEventListeners() {
                 e.preventDefault();
                 e.stopPropagation();
                 showTiendaView(viewName);
-                
+
                 // Actualizar estado activo
                 document.querySelectorAll('#tienda-sidebar .admin-nav-item').forEach(btn => {
                     if (btn.id !== 'btn-logout-tienda') {
@@ -1872,7 +1872,7 @@ function setupTiendaEventListeners() {
 // Inicialización
 async function initTienda() {
     try {
-        // Cargar sesión
+    // Cargar sesión
         const sesion = await db.getSesionCompleta();
         
         if (!sesion || !sesion.userId) {
@@ -1903,10 +1903,10 @@ async function initTienda() {
         
         if (tiendaId) {
             try {
-                const tienda = await db.get('tiendas', tiendaId);
-                if (tienda) {
-                    currentTienda = tienda;
-                } else {
+            const tienda = await db.get('tiendas', tiendaId);
+            if (tienda) {
+                currentTienda = tienda;
+        } else {
                     console.error('Tienda no encontrada con ID:', tiendaId);
                     window.location.href = '../index.html';
                     return;
@@ -1915,7 +1915,7 @@ async function initTienda() {
                 console.error('Error al cargar tienda:', error);
                 window.location.href = '../index.html';
                 return;
-            }
+        }
         } else {
             console.error('No se encontró tiendaId en sesión ni en usuario');
             window.location.href = '../index.html';
@@ -1972,15 +1972,15 @@ async function initTienda() {
     // Usar múltiples frames para asegurar que todo esté listo
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-            // Configurar event listeners
-            setupTiendaEventListeners();
+    // Configurar event listeners
+    setupTiendaEventListeners();
 
             // Cargar todos los badges al inicializar
             actualizarTodosLosBadges();
 
-            // Cargar vista inicial
+    // Cargar vista inicial
             if (typeof switchTabTienda === 'function') {
-                switchTabTienda('seleccionar-pago');
+    switchTabTienda('seleccionar-pago');
             }
         });
     });
