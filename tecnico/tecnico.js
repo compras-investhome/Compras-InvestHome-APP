@@ -1820,78 +1820,84 @@ async function createPedidoTecnicoCard(pedido) {
     const notaInputId = `pedido-nota-input-tec-${pedido.id}`;
     
     card.innerHTML = `
-        <div class="contab-pedido-header">
-            <div>
-                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
-                <div class="contab-estado-envio">
-                    <span>Estado de envío:</span>
-                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
-                </div>
+        <!-- Header del pedido -->
+        <div class="contab-pedido-header-compact">
+            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+            <div class="contab-estado-envio">
+                <span>Estado de envío:</span>
+                <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
             </div>
         </div>
-        <div class="contab-info-grid">
-            <div class="contab-info-card">
-                <div class="contab-card-title">Datos del pedido</div>
-                <div class="contab-info-row"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
-                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
-                <div class="contab-info-row">
+        
+        <!-- Cards compactas: Datos del pedido, Estado de pago, Artículos y Comentarios -->
+        <div class="contab-info-grid-compact">
+            <!-- Card: Datos del pedido -->
+            <div class="contab-info-card-compact contab-card-datos">
+                <div class="contab-card-title-compact">Datos del pedido</div>
+                <div class="contab-info-row-compact"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row-compact"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row-compact">
                     <span>Obra</span>
                     <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
                 </div>
-                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
-                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+                <div class="contab-info-row-compact"><span>Encargado</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row-compact"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
             </div>
-            <div class="contab-info-card">
-                <div class="contab-card-title">Estado de pago</div>
-                <div class="contab-info-row">
+            
+            <!-- Card: Estado de pago -->
+            <div class="contab-info-card-compact contab-card-estado">
+                <div class="contab-card-title-compact">Estado de pago</div>
+                <div class="contab-info-row-compact">
                     <span>Estado</span>
                     <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
                 </div>
-                <div class="contab-info-row">
+                <div class="contab-info-row-compact">
                     <span>Pedido real</span>
                     <div class="doc-actions">${pedidoRealContent}</div>
                 </div>
-                <div class="contab-info-row">
+                <div class="contab-info-row-compact">
                     <span>Documento de pago</span>
                     <div class="doc-actions">${documentoPagoContent}</div>
                 </div>
-                <div class="contab-info-row">
+                <div class="contab-info-row-compact">
                     <span>Factura</span>
                     <div class="doc-actions">${facturaContent}</div>
                 </div>
             </div>
-        </div>
-        <div>
-            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
-                <span class="toggle-text">Ver artículos del pedido</span>
-                <span class="chevron">▼</span>
-            </button>
-            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
-                <div class="pedido-items-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
-                    <button class="btn btn-secondary" type="button" onclick="solicitarAnulacionPedido('${pedido.id}')" style="font-size: 0.875rem; padding: 0.5rem 1rem;">
+            
+            <!-- Card: Artículos (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-articulos">
+                <div class="contab-card-title-compact">
+                    <span>Artículos (${items.length})</span>
+                    <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
+                </div>
+                <div class="pedido-items-list-compact">
+                    ${itemsHtml}
+                </div>
+                <div style="margin-top: 0.5rem;">
+                    <button class="btn btn-secondary btn-sm" type="button" onclick="solicitarAnulacionPedido('${pedido.id}')" style="font-size: 0.75rem; padding: 0.4rem 0.75rem; width: 100%;">
                         Solicitar Anulación del Pedido
                     </button>
                 </div>
-                <div class="pedido-items-list">
-                    ${itemsHtml}
-                </div>
             </div>
-        </div>
-        <div class="contab-notes-block">
-            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
-                <div class="toggle-label">
-                    <span class="toggle-text">Ver comentarios del pedido</span>
-                    <span class="toggle-extra">( <span id="${notasCountId}">${notas.length}</span> )</span>
+            
+            <!-- Card: Comentarios -->
+            <div class="contab-info-card-compact contab-card-comentarios">
+                <div class="contab-card-title-compact">
+                    <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
                 </div>
-                <span class="chevron">▼</span>
-            </button>
-            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
-                <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
-                <div class="contab-note-actions">
-                    <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
+                <div class="comentarios-input-wrapper">
+                    <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
+                    <div class="comentarios-buttons-row">
+                        <button class="btn-ver-comentarios" type="button" onclick="togglePedidoSection('${notasSectionId}', this)" id="btn-ver-comentarios-${pedido.id}" data-open-label="Ocultar Comentarios" data-close-label="Ver Comentarios">
+                            Ver Comentarios
+                        </button>
+                        <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
+                    </div>
                 </div>
-                <div id="${notasListId}" class="pedido-notas-list"></div>
+                <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
+                    <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
+                </div>
             </div>
         </div>
     `;
@@ -1899,6 +1905,12 @@ async function createPedidoTecnicoCard(pedido) {
     const notasListElement = card.querySelector(`#${notasListId}`);
     const notasCountElement = card.querySelector(`#${notasCountId}`);
     renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
+    
+    // Actualizar contador de comentarios en el título
+    const comentariosCountElement = card.querySelector('.comentarios-count');
+    if (comentariosCountElement) {
+        comentariosCountElement.textContent = `(${notas.length})`;
+    }
     
     return card;
 }
@@ -2605,6 +2617,15 @@ window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
         const listEl = document.getElementById(listId);
         const countEl = document.getElementById(countId);
         renderPedidoNotasUI(pedidoId, notas, listEl, countEl);
+        
+        // Actualizar contador de comentarios en el título de la card
+        const card = document.querySelector(`[id*="${pedidoId}"]`)?.closest('.pedido-gestion-card');
+        if (card) {
+            const comentariosCountElement = card.querySelector('.comentarios-count');
+            if (comentariosCountElement) {
+                comentariosCountElement.textContent = `(${notas.length})`;
+            }
+        }
     } catch (error) {
         console.error('Error al guardar nota:', error);
         await showAlert('No se pudo guardar la nota: ' + error.message, 'Error');

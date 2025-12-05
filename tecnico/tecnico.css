@@ -1938,10 +1938,206 @@
     margin-bottom: 0.25rem;
 }
 
+/* Estilos para diseño compacto (4 bloques en línea) */
+.contab-info-row-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+    padding: 0.15rem 0;
+}
+
+.contab-info-row-compact:last-child {
+    margin-bottom: 0;
+}
+
+.contab-info-row-compact span:first-child {
+    color: var(--text-secondary);
+    font-weight: 500;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+.contab-info-row-compact strong,
+.contab-info-row-compact a {
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: right;
+    word-break: break-word;
+    font-size: 0.75rem;
+}
+
+.contab-info-row-compact a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.contab-info-row-compact a:hover {
+    text-decoration: underline;
+}
+
+.contab-total-compact {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.comentarios-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.comentarios-input {
+    width: 100%;
+    min-height: 50px;
+    max-height: 80px;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-family: inherit;
+    resize: none;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    overflow-y: auto;
+}
+
+.comentarios-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.comentarios-buttons-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+    justify-content: flex-start;
+}
+
+.btn-ver-comentarios {
+    padding: 0.4rem 0.75rem;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.btn-ver-comentarios:hover {
+    background: var(--card-bg);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.btn-xs {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
+    align-self: flex-end;
+}
+
+.pedido-notas-list-compact-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.25rem;
+    padding-bottom: 0.5rem;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar-track {
+    background: var(--bg-color);
+    border-radius: 3px;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.pedido-notas-list-compact-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+.comentarios-count {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.65rem;
+}
+
+.pedido-nota-entry {
+    padding: 0.5rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-color);
+    flex-shrink: 0;
+    margin-bottom: 0.5rem;
+}
+
+.pedido-nota-entry:last-child {
+    margin-bottom: 0;
+}
+
+.nota-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+    font-size: 0.7rem;
+}
+
+.nota-meta strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.nota-meta .nota-rol {
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+    margin-left: 0.5rem;
+}
+
+.nota-fecha {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+.pedido-nota-entry p {
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.4;
+}
+
 /* Responsive para cards de pedidos */
 @media (max-width: 768px) {
-    .contab-info-grid {
-        grid-template-columns: 1fr;
+    .contab-info-grid-compact {
+        flex-direction: column;
+    }
+    
+    .contab-info-grid-compact > .contab-info-card-compact {
+        width: 100%;
+        min-width: 100%;
     }
     
     .pedido-item {
