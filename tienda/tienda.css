@@ -639,6 +639,14 @@
     letter-spacing: 0 !important;
 }
 
+/* Chip de estado más grande en pestaña pendientes-pago */
+.contab-card-estado .estado-pago-pill {
+    padding: 0.2rem 0.5rem !important;
+    font-size: 0.7rem !important;
+    line-height: 1.2 !important;
+    border-radius: 4px !important;
+}
+
 .estado-pago-pendiente {
     background: #fee2e2;
     color: #991b1b;
@@ -674,17 +682,18 @@
 .doc-actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
     justify-content: flex-end;
 }
 
 .doc-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 8px;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
     background: white;
     border: 1px solid var(--border-color);
     font-size: 0.85rem;
@@ -697,8 +706,9 @@
 }
 
 .doc-placeholder {
-    font-size: 0.85rem;
+    font-size: 0.7rem;
     color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 .contab-toggle {
@@ -1270,7 +1280,7 @@
 .contab-info-row-compact {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.4rem;
     font-size: 0.75rem;
     margin-bottom: 0.3rem;
