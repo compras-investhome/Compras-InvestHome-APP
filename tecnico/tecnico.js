@@ -85,9 +85,10 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
         const promptOk = document.getElementById('custom-prompt-ok');
         const promptCancel = document.getElementById('custom-prompt-cancel');
         
-        // Limpiar contenido previo
+        // Limpiar contenido previo completamente
         promptMessage.innerHTML = '';
         promptMessage.textContent = '';
+        promptMessage.style.display = '';
         promptInput.value = '';
         promptInput.style.display = '';
         
@@ -106,21 +107,25 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
         let selectElement = null;
         
         if (hasHTML) {
-            // Ocultar el párrafo de mensaje y el input
+            // Ocultar completamente el párrafo de mensaje y el input
             promptMessage.style.display = 'none';
             promptInput.style.display = 'none';
             
             // Crear un contenedor para el HTML
             const htmlContainer = document.createElement('div');
             htmlContainer.className = 'prompt-html-content';
+            htmlContainer.style.width = '100%';
             htmlContainer.innerHTML = message;
             
-            // Insertar el HTML antes del input
+            // Insertar el HTML antes del input (que está oculto)
             promptBody.insertBefore(htmlContainer, promptInput);
             
             // Buscar el selector dentro del contenedor HTML
             if (hasSelect) {
                 selectElement = htmlContainer.querySelector('select');
+                if (selectElement) {
+                    selectElement.style.width = '100%';
+                }
             }
         } else {
             // Mostrar el mensaje normal y el input
@@ -1346,8 +1351,8 @@ async function finalizarPedidoAdmin() {
         </div>
     `;
     
-    // Mostrar prompt con selector de obra
-    const obraId = await showPrompt('Selecciona la obra para el pedido', obraSelectHtml);
+    // Mostrar prompt con selector de obra (el HTML va como primer parámetro)
+    const obraId = await showPrompt(obraSelectHtml, '', 'Selecciona la obra para el pedido');
     if (!obraId) return;
     
     const obra = await db.get('obras', obraId);
