@@ -1015,10 +1015,10 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
             if (ean) refEanParts.push(ean);
             const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
             return `
-                <div class="pedido-item">
+                <div class="pedido-item" style="display: flex; align-items: center; gap: 1rem;">
                     ${fotoHtml}
                     ${fotoPlaceholder}
-                    <div class="pedido-item-info">
+                    <div class="pedido-item-info" style="flex: 1;">
                         <p class="pedido-item-name">${nombre}</p>
                         ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
                         <div class="pedido-item-meta">
@@ -1062,76 +1062,83 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     const notaInputId = `pedido-nota-input-${pedido.id}`;
     
     card.innerHTML = `
-        <div class="contab-pedido-header">
-            <div>
-                <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
-                <div class="contab-estado-envio">
-                    <span>Estado de envío:</span>
-                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
-                </div>
-            </div>
+        <!-- Header del pedido -->
+        <div class="contab-pedido-header-compact">
+            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
         </div>
-        <div class="contab-info-grid">
-            <div class="contab-info-card">
-                <div class="contab-card-title">Datos del pedido</div>
-                <div class="contab-info-row"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
-                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
-                <div class="contab-info-row">
+        
+        <!-- Cards compactas: Datos del pedido, Estado de pago, Artículos y Comentarios -->
+        <div class="contab-info-grid-compact">
+            <!-- Card: Datos del pedido -->
+            <div class="contab-info-card-compact contab-card-datos">
+                <div class="contab-card-title-compact">Datos del pedido</div>
+                <div class="contab-info-row-compact"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row-compact"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row-compact">
                     <span>Obra</span>
                     <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
                 </div>
-                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
-                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+                <div class="contab-info-row-compact"><span>Encargado</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row-compact"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
             </div>
-            <div class="contab-info-card">
-                <div class="contab-card-title">Estado de pago</div>
-                <div class="contab-info-row">
+            
+            <!-- Card: Estado de pago -->
+            <div class="contab-info-card-compact contab-card-estado">
+                <div class="contab-card-title-compact">Estado de pago</div>
+                <div class="contab-info-row-compact">
                     <span>Estado</span>
                     <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
                 </div>
-                <div class="contab-info-row">
+                <div class="contab-info-row-compact">
                     <span>Pedido real</span>
                     <div class="doc-actions">${pedidoRealContent}</div>
                 </div>
-                <div class="contab-info-row">
-                    <span>Documento de pago</span>
+                <div class="contab-info-row-compact">
+                    <span>Doc. pago</span>
                     <div class="doc-actions">${documentoPagoContent}</div>
                 </div>
-                <div class="contab-info-row">
+                <div class="contab-info-row-compact">
                     <span>Factura</span>
-                    <div class="doc-actions">${facturaContent}</div>
+                    <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura</span>'}</div>
                 </div>
                 ${puedeGestionarPago ? `<input type="file" id="${pagoInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="handlePedidoPagoUpload('${pedido.id}', '${pagoInputId}')">` : ''}
             </div>
-        </div>
-        <div>
-            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
-                <span class="toggle-text">Ver artículos del pedido</span>
-                <span class="chevron">▼</span>
-            </button>
-            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
-                <div class="pedido-items-header">
-                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+            
+            <!-- Card: Artículos (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-articulos" id="articulos-card-${pedido.id}">
+                <div class="contab-card-title-compact">
+                    <span>Artículos (${items.length})</span>
+                    <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
                 </div>
-                <div class="pedido-items-list">
+                <div class="pedido-items-list-compact">
                     ${itemsHtml}
                 </div>
+                ${items.length > 3 ? `
+                    <button class="expand-arrow" type="button" onclick="toggleExpandArticulos('${pedido.id}')" title="Expandir para ver todos los artículos">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
             </div>
-        </div>
-        <div class="contab-notes-block">
-            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios del pedido" onclick="togglePedidoSection('${notasSectionId}', this)">
-                <div class="toggle-label">
-                    <span class="toggle-text">Ver comentarios del pedido</span>
-                    <span class="toggle-extra">( <span id="${notasCountId}">${notas.length}</span> )</span>
+            
+            <!-- Card: Comentarios (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-comentarios">
+                <div class="contab-card-title-compact">
+                    <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
                 </div>
-                <span class="chevron">▼</span>
-            </button>
-            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
-                <textarea id="${notaInputId}" class="contab-note-input" placeholder="Escribe un comentario para este pedido..."></textarea>
-                <div class="contab-note-actions">
-                    <button class="btn btn-primary" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Guardar</button>
+                <div class="comentarios-input-wrapper">
+                    <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
+                    <div class="comentarios-buttons-row">
+                        <button class="btn-ver-comentarios" type="button" onclick="togglePedidoSection('${notasSectionId}', this)" id="btn-ver-comentarios-${pedido.id}" data-open-label="Ocultar Comentarios" data-close-label="Ver Comentarios">
+                            Ver Comentarios
+                        </button>
+                        <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
+                    </div>
                 </div>
-                <div id="${notasListId}" class="pedido-notas-list"></div>
+                <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
+                    <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
+                </div>
             </div>
         </div>
     `;
@@ -1141,6 +1148,14 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
     
     return card;
+}
+
+// Función para expandir/colapsar artículos
+function toggleExpandArticulos(pedidoId) {
+    const articulosCard = document.getElementById(`articulos-card-${pedidoId}`);
+    if (articulosCard) {
+        articulosCard.classList.toggle('expanded');
+    }
 }
 
 // Esta función es muy larga, la incluyo simplificada
