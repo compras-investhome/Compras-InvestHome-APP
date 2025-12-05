@@ -1071,7 +1071,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 </div>
                 <div class="contab-info-row-compact">
                     <span class="label-doc-pago">Documento de pago</span>
-                    <div class="doc-actions">${documentoPagoContent || '<span class="doc-placeholder">Sin documento</span>'}</div>
+                    <div class="doc-actions">${documentoPagoContent}</div>
                 </div>
                 <div class="contab-info-row-compact">
                     <span>Factura</span>
@@ -1082,7 +1082,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             </div>
             
             <!-- Card: Artículos (siempre visible) -->
-            <div class="contab-info-card-compact contab-card-articulos">
+            <div class="contab-info-card-compact contab-card-articulos" id="articulos-card-${pedido.id}">
                 <div class="contab-card-title-compact">
                     <span>Artículos (${items.length})</span>
                     <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
@@ -1090,6 +1090,13 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                 <div class="pedido-items-list-compact">
                     ${itemsHtml}
                 </div>
+                ${items.length > 3 ? `
+                    <button class="expand-arrow" type="button" onclick="toggleExpandArticulos('${pedido.id}')" title="Expandir para ver todos los artículos">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
             </div>
             
             <!-- Card: Comentarios (siempre visible) -->
@@ -2054,4 +2061,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = '../index.html';
     }
 });
+
+// Función para expandir/contraer la card de artículos
+function toggleExpandArticulos(pedidoId) {
+    const articulosCard = document.getElementById(`articulos-card-${pedidoId}`);
+    if (articulosCard) {
+        articulosCard.classList.toggle('expanded');
+    }
+}
 

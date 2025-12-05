@@ -627,12 +627,13 @@
 }
 
 .estado-pago-pill {
-    padding: 0.25rem 0.6rem;
-    border-radius: 12px;
-    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.6rem;
     font-weight: 700;
     text-transform: capitalize;
     display: inline-block;
+    line-height: 1.2;
 }
 
 .estado-pago-pendiente {
@@ -832,21 +833,35 @@
 }
 
 .emoji-btn {
-    border: none;
-    background: transparent;
-    font-size: 1.1rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    font-size: 0.75rem;
     cursor: pointer;
-    padding: 0.25rem;
+    padding: 0.2rem;
     border-radius: 4px;
-    transition: background-color 0.2s;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
 }
 
 .emoji-btn:hover {
-    background-color: var(--bg-color);
+    background-color: var(--primary-color-light);
+    border-color: var(--primary-color);
+    transform: scale(1.1);
 }
 
 .emoji-btn.danger {
     color: #ef4444;
+    border-color: #ef4444;
+}
+
+.emoji-btn.danger:hover {
+    background-color: #fee2e2;
+    border-color: #ef4444;
 }
 
 .contab-notes-block {
@@ -1116,10 +1131,16 @@
 .contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos {
     flex: 1 1 45%;
     min-width: 300px;
-    max-height: none;
+    max-height: 200px;
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;
+    position: relative;
+    transition: max-height 0.3s ease;
+}
+
+.contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos.expanded {
+    max-height: none;
 }
 
 .contab-card-articulos .contab-card-title-compact {
@@ -1132,7 +1153,55 @@
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
+    max-height: 150px;
     padding-right: 0.25rem;
+    transition: max-height 0.3s ease;
+}
+
+.contab-card-articulos.expanded .pedido-items-list-compact {
+    max-height: none;
+}
+
+/* Flecha para expandir artículos */
+.contab-card-articulos {
+    position: relative;
+}
+
+.contab-card-articulos .expand-arrow {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    width: 24px;
+    height: 24px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 5;
+    opacity: 0.8;
+}
+
+.contab-card-articulos .expand-arrow:hover {
+    background: var(--primary-hover);
+    transform: scale(1.15);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+}
+
+.contab-card-articulos.expanded .expand-arrow {
+    transform: rotate(180deg);
+}
+
+.contab-card-articulos .expand-arrow svg {
+    width: 12px;
+    height: 12px;
 }
 
 .contab-card-articulos .pedido-items-list-compact::-webkit-scrollbar {
