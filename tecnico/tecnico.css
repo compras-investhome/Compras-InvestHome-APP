@@ -2265,33 +2265,42 @@
     
     /* Ajustar anchos de cada card para que quepan las 4 en línea */
     .contab-info-grid-compact > .contab-info-card-compact.contab-card-datos {
-        flex: 0 0 22%;
-        min-width: 80px;
+        flex: 0 0 28%;
+        min-width: 110px;
     }
     
     .contab-info-grid-compact > .contab-info-card-compact.contab-card-estado {
-        flex: 0 0 20%;
-        min-width: 75px;
+        flex: 0 0 28%;
+        min-width: 110px;
     }
     
     .contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos {
-        flex: 0 0 35%;
-        min-width: 120px;
+        flex: 0 0 28%;
+        min-width: 130px;
     }
     
     .contab-info-grid-compact > .contab-info-card-compact.contab-card-comentarios {
-        flex: 0 0 23%;
-        min-width: 85px;
+        flex: 0 0 16%;
+        min-width: 100px;
     }
     
     /* Títulos de las cards */
     .contab-card-title-compact {
-        font-size: 0.65rem;
-        padding-bottom: 0.4rem;
-        margin-bottom: 0.5rem;
+        font-size: 0.6rem;
+        padding-bottom: 0.35rem;
+        margin-bottom: 0.4rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        line-height: 1.2;
+    }
+    
+    .contab-card-title-compact span {
+        display: inline-block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
     }
     
     /* Card de datos del pedido */
@@ -2300,27 +2309,45 @@
     }
     
     .contab-info-row-compact {
-        font-size: 0.7rem;
-        margin-bottom: 0.4rem;
-        padding: 0.2rem 0;
+        font-size: 0.65rem;
+        margin-bottom: 0.35rem;
+        padding: 0.15rem 0;
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.2rem;
+        gap: 0.15rem;
     }
     
     .contab-info-row-compact span:first-child {
-        font-size: 0.65rem;
+        font-size: 0.6rem;
         min-width: auto;
         color: var(--text-secondary);
         font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
     }
     
     .contab-info-row-compact strong,
     .contab-info-row-compact a {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         text-align: left;
         word-break: break-word;
-        line-height: 1.3;
+        line-height: 1.2;
+        width: 100%;
+    }
+    
+    /* Asegurar que los textos largos se ajusten */
+    .contab-info-row-compact .doc-actions {
+        width: 100%;
+        overflow: hidden;
+    }
+    
+    .contab-info-row-compact .doc-link,
+    .contab-info-row-compact .doc-placeholder {
+        font-size: 0.6rem;
+        word-break: break-all;
+        white-space: normal;
     }
     
     /* Card de estado de pago */
@@ -2493,19 +2520,57 @@
     }
     
     /* Ajustar documentos */
-    .doc-actions {
+    .contab-info-row-compact .doc-actions {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.2rem;
+        gap: 0.15rem;
+        width: 100%;
     }
     
-    .doc-link {
-        font-size: 0.65rem;
+    .contab-info-row-compact .doc-link {
+        font-size: 0.6rem;
         word-break: break-all;
+        line-height: 1.2;
     }
     
-    .doc-placeholder {
-        font-size: 0.65rem;
+    .contab-info-row-compact .doc-placeholder {
+        font-size: 0.6rem;
+        line-height: 1.2;
+    }
+    
+    /* Asegurar que "Documento de pago" no se trunque */
+    .contab-info-row-compact span:first-child {
+        max-width: 100%;
+    }
+    
+    /* Abreviar textos largos en labels */
+    .contab-card-estado .contab-info-row-compact span:first-child {
+        font-size: 0.55rem;
+        line-height: 1.2;
+    }
+    
+    /* Abreviar "Documento de pago" en móvil usando CSS */
+    .contab-card-estado .label-doc-pago {
+        font-size: 0;
+        position: relative;
+    }
+    
+    .contab-card-estado .label-doc-pago::after {
+        content: "Doc. pago";
+        font-size: 0.55rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+    
+    /* Asegurar que el grid tenga ancho mínimo para scroll horizontal */
+    .contab-info-grid-compact {
+        min-width: 100%;
+        width: max-content;
+    }
+    
+    /* Forzar que las cards no se envuelvan */
+    .contab-info-grid-compact > .contab-info-card-compact {
+        flex-shrink: 0;
     }
     
     /* Asegurar que las cards no se rompan */

@@ -358,11 +358,18 @@ window.togglePedidoSection = function(sectionId, triggerEl) {
     // Agregar/quitar clase para z-index en comentarios
     if (section.classList.contains('pedido-notas-list-compact-scroll') || sectionId.includes('notas')) {
         const comentariosCard = section.closest('.contab-card-comentarios');
+        const pedidoCard = section.closest('.pedido-gestion-card');
         if (comentariosCard) {
             if (isHidden) {
                 comentariosCard.classList.add('comentarios-expandidos');
+                if (pedidoCard) {
+                    pedidoCard.classList.add('comentarios-expandidos-card');
+                }
             } else {
                 comentariosCard.classList.remove('comentarios-expandidos');
+                if (pedidoCard) {
+                    pedidoCard.classList.remove('comentarios-expandidos-card');
+                }
             }
         }
     }
@@ -1869,7 +1876,7 @@ async function createPedidoTecnicoCard(pedido) {
                     <div class="doc-actions">${pedidoRealContent}</div>
                 </div>
                 <div class="contab-info-row-compact">
-                    <span>Documento de pago</span>
+                    <span class="label-doc-pago">Documento de pago</span>
                     <div class="doc-actions">${documentoPagoContent}</div>
                 </div>
                 <div class="contab-info-row-compact">
