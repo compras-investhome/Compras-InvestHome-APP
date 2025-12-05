@@ -2435,7 +2435,40 @@ window.guardarPedidoEspecial = guardarPedidoEspecial;
 
 // ========== SOLICITUDES ==========
 
+// Función auxiliar para verificar si un pedido tiene solicitudes pendientes
+async function tieneSolicitudesPendientes(pedidoId) {
+    try {
+        // Obtener el pedido para verificar su tiendaId
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) return false;
+        
+        // Buscar solicitudes de modificación pendientes para esta tienda
+        const solicitudesModificacion = await db.getSolicitudesModificacionByTienda(pedido.tiendaId);
+        const tieneModificacionPendiente = solicitudesModificacion.some(s => 
+            s.pedidoId === pedidoId && s.estado === 'Pendiente'
+        );
+        
+        // Buscar solicitudes de anulación pendientes para esta tienda
+        const solicitudesAnulacion = await db.getSolicitudesAnulacionByTienda(pedido.tiendaId);
+        const tieneAnulacionPendiente = solicitudesAnulacion.some(s => 
+            s.pedidoId === pedidoId && s.estado === 'Pendiente'
+        );
+        
+        return tieneModificacionPendiente || tieneAnulacionPendiente;
+    } catch (error) {
+        console.error('Error al verificar solicitudes pendientes:', error);
+        return false;
+    }
+}
+
 window.solicitarModificacionCantidad = async function(pedidoId, itemIndex, cantidadActual) {
+    // Verificar si ya hay una solicitud pendiente para este pedido
+    const tienePendiente = await tieneSolicitudesPendientes(pedidoId);
+    if (tienePendiente) {
+        await showAlert('Este pedido ya tiene una solicitud pendiente. Por favor, espere a que sea atendida antes de crear una nueva solicitud.', 'Atención');
+        return;
+    }
+    
     const nuevaCantidadStr = await showPrompt(`Cantidad actual: ${cantidadActual}\n\nIngrese la nueva cantidad que desea solicitar:`, cantidadActual.toString(), 'Modificar Cantidad');
     
     if (nuevaCantidadStr === null) return;
@@ -2483,6 +2516,13 @@ window.solicitarModificacionCantidad = async function(pedidoId, itemIndex, canti
 };
 
 window.solicitarAnulacionItem = async function(pedidoId, itemIndex) {
+    // Verificar si ya hay una solicitud pendiente para este pedido
+    const tienePendiente = await tieneSolicitudesPendientes(pedidoId);
+    if (tienePendiente) {
+        await showAlert('Este pedido ya tiene una solicitud pendiente. Por favor, espere a que sea atendida antes de crear una nueva solicitud.', 'Atención');
+        return;
+    }
+    
     const confirmar = await showConfirm('¿Está seguro de solicitar la anulación de este artículo?', 'Confirmar Anulación');
     if (!confirmar) return;
     
@@ -2515,6 +2555,13 @@ window.solicitarAnulacionItem = async function(pedidoId, itemIndex) {
 };
 
 window.solicitarAnulacionPedido = async function(pedidoId) {
+    // Verificar si ya hay una solicitud pendiente para este pedido
+    const tienePendiente = await tieneSolicitudesPendientes(pedidoId);
+    if (tienePendiente) {
+        await showAlert('Este pedido ya tiene una solicitud pendiente. Por favor, espere a que sea atendida antes de crear una nueva solicitud.', 'Atención');
+        return;
+    }
+    
     const confirmar = await showConfirm('¿Está seguro de solicitar la anulación completa de este pedido?', 'Confirmar Anulación');
     if (!confirmar) return;
     
