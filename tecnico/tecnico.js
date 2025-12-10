@@ -4055,6 +4055,35 @@ function setupTecnicoEventListeners() {
     document.getElementById('historico-cargar-mas-btn')?.addEventListener('click', () => {
         cargarMasPedidosHistoricosTecnico();
     });
+    
+    // Escuchar cambios en estado logístico desde tienda para actualizar la vista
+    window.addEventListener('pedidoEstadoLogisticoCambiado', async (event) => {
+        const { pedidoId } = event.detail;
+        
+        // Verificar si estamos en la vista de pedidos en curso
+        const pedidosCursoView = document.getElementById('pedidos-curso-pedidos-view');
+        const pedidosCursoObasView = document.getElementById('pedidos-curso-obras-view');
+        const activeView = document.querySelector('.admin-content-view.active');
+        
+        // Si estamos en la vista de pedidos en curso, recargar
+        if (activeView && activeView.id === 'view-tecnico-pedidos-curso') {
+            // Si estamos viendo una obra específica, recargar esa vista
+            const pedidosCursoPedidosView = document.getElementById('pedidos-curso-pedidos-view');
+            if (pedidosCursoPedidosView && pedidosCursoPedidosView.style.display !== 'none') {
+                const obraId = pedidosCursoPaginationState.obraId;
+                if (obraId) {
+                    const obraNombreElement = document.getElementById('pedidos-curso-obra-nombre');
+                    const obraNombre = obraNombreElement ? obraNombreElement.textContent : '';
+                    await loadPedidosCursoPorObraTecnico(obraId, obraNombre);
+                } else {
+                    await loadPedidosEnCursoTecnico();
+                }
+            } else {
+                // Si estamos en la vista de obras, recargar
+                await loadPedidosEnCursoTecnico();
+            }
+        }
+    });
 
     // Botón nuevo pedido especial
     document.getElementById('btn-nuevo-pedido-especial-admin')?.addEventListener('click', () => {

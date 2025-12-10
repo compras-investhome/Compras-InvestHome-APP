@@ -1945,6 +1945,11 @@ window.updateEstadoLogisticoTienda = async function(pedidoId, nuevoEstadoLogisti
         // Recargar todas las pestañas relevantes: Pagados, Pago A Cuenta y Facturas Pendientes
         recargarPestañasTiendaRelevantes();
         
+        // Disparar evento para que técnico actualice la vista si está abierta
+        window.dispatchEvent(new CustomEvent('pedidoEstadoLogisticoCambiado', {
+            detail: { pedidoId, nuevoEstadoLogistico }
+        }));
+        
     } catch (error) {
         console.error('Error al actualizar estado logístico:', error);
         await showAlert('Error al actualizar estado logístico: ' + error.message, 'Error');
