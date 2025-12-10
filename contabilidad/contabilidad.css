@@ -470,11 +470,12 @@
 }
 
 .estado-pago-pill {
-    padding: 0.35rem 0.85rem;
+    padding: 0.2rem 0.5rem;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: 700;
     color: white;
+    line-height: 1.2;
 }
 
 .estado-pago-pendiente {
@@ -500,12 +501,12 @@
 .doc-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 8px;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
     background: white;
     border: 1px solid var(--border-color);
-    font-size: 0.85rem;
+    font-size: 0.7rem;
     text-decoration: none;
     color: var(--primary-color);
 }
