@@ -1346,10 +1346,6 @@ function renderPedidoNotasUI(pedidoId, notas = [], listElement, countElement) {
     if (!listEl) return;
     listEl.innerHTML = '';
     if (!Array.isArray(notas) || notas.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'cascade-empty';
-        empty.textContent = 'No hay comentarios registrados';
-        listEl.appendChild(empty);
         return;
     }
     const sorted = [...notas].sort((a, b) => {

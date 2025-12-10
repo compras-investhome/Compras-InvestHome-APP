@@ -665,9 +665,9 @@
 .emoji-btn {
     border: none;
     background: transparent;
-    font-size: 1.1rem;
+    font-size: 0.85rem;
     cursor: pointer;
-    padding: 0.25rem;
+    padding: 0.15rem;
     border-radius: 4px;
     transition: background-color 0.2s;
 }
