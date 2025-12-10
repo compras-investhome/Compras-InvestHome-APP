@@ -1019,11 +1019,10 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Precio Real: campo para introducir el precio real del pedido
-        const precioReal = pedido.precioReal || null;
-        if (precioReal !== null && precioReal !== undefined) {
+        if (pedido.precioReal !== null && pedido.precioReal !== undefined && pedido.precioReal !== '') {
             precioRealContent = `
                 <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(precioReal)}</span>
+                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(pedido.precioReal)}</span>
                     <button class="emoji-btn" type="button" aria-label="Editar precio real" onclick="editarPrecioRealTienda('${pedido.id}', '${precioRealInputId}', '${precioRealDisplayId}')">✏️</button>
                 </div>
             `;
@@ -1054,11 +1053,10 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             : `<div style="display: inline-flex; align-items: center; gap: 0.35rem;"><span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button></div>`;
         
         // Precio Real: mostrar o editar
-        const precioReal = pedido.precioReal || null;
-        if (precioReal !== null && precioReal !== undefined) {
+        if (pedido.precioReal !== null && pedido.precioReal !== undefined && pedido.precioReal !== '') {
             precioRealContent = `
                 <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(precioReal)}</span>
+                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(pedido.precioReal)}</span>
                     <button class="emoji-btn" type="button" aria-label="Editar precio real" onclick="editarPrecioRealTienda('${pedido.id}', '${precioRealInputId}', '${precioRealDisplayId}')">✏️</button>
                 </div>
             `;
@@ -1084,9 +1082,16 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
+        // Precio Real: solo mostrar (no editable en pagados)
+        if (pedido.precioReal !== null && pedido.precioReal !== undefined && pedido.precioReal !== '') {
+            precioRealContent = `<span style="font-weight: 600; color: var(--text-primary);">${formatCurrency(pedido.precioReal)}</span>`;
+        } else {
+            precioRealContent = '<span class="doc-placeholder">Sin precio</span>';
+        }
+        
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
@@ -1105,11 +1110,10 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Precio Real: mostrar o editar
-        const precioReal = pedido.precioReal || null;
-        if (precioReal !== null && precioReal !== undefined) {
+        if (pedido.precioReal !== null && pedido.precioReal !== undefined && pedido.precioReal !== '') {
             precioRealContent = `
                 <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(precioReal)}</span>
+                    <span id="${precioRealDisplayId}" style="font-weight: 600; color: var(--text-primary);">${formatCurrency(pedido.precioReal)}</span>
                     <button class="emoji-btn" type="button" aria-label="Editar precio real" onclick="editarPrecioRealTienda('${pedido.id}', '${precioRealInputId}', '${precioRealDisplayId}')">✏️</button>
                 </div>
             `;
@@ -1604,12 +1608,11 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
                 await db.update('pedidos', pedido);
                 
                 const estadoPago = pedido.estadoPago || 'Sin Asignar';
-                const precioReal = pedido.precioReal || null;
                 
                 // Solo mover el pedido si tiene estado "Pendiente de pago" o "Pago A cuenta"
-                // Y tiene el pedido real adjunto Y tiene precio real asignado
+                // Y tiene el pedido real adjunto Y tiene precio real asignado (incluyendo 0)
                 if ((estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') && 
-                    precioReal !== null && precioReal !== undefined) {
+                    pedido.precioReal !== null && pedido.precioReal !== undefined && pedido.precioReal !== '') {
                     await showAlert('Pedido real adjuntado correctamente. El pedido se ha movido a la pestaña correspondiente.', 'Éxito');
                     // Recargar todas las pestañas relevantes para que el pedido se mueva
                     recargarPestañasTiendaRelevantes();
