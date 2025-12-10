@@ -454,10 +454,19 @@ async function loadPedidosPagadosTienda(estadoLogistico) {
     const pedidos = await db.getPedidosByTienda(tiendaId);
     
     // Pedidos con estadoPago = "Pagado" (tiene transferenciaPDF)
+    // EXCLUIR pedidos que tengan factura adjuntada Y estado entregado
     const pedidosPagados = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tieneTransferencia = Boolean(p.transferenciaPDF);
         const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tieneFactura = Boolean(p.albaran);
+        const esEntregado = estadoLog === 'Entregado';
+        
+        // Excluir si tiene factura y está entregado
+        if (tieneFactura && esEntregado) {
+            return false;
+        }
+        
         return (estadoPago === 'Pagado' || tieneTransferencia) && 
                estadoLog === estadoLogistico && 
                p.estado !== 'Completado' && 
@@ -473,10 +482,19 @@ async function loadPedidosPagadosTienda(estadoLogistico) {
     
     if (!container || !emptyState) return;
     
-    // Actualizar badge total de pagados
+    // Actualizar badge total de pagados (excluyendo los que tienen factura + entregado)
     const todosPagados = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tieneTransferencia = Boolean(p.transferenciaPDF);
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tieneFactura = Boolean(p.albaran);
+        const esEntregado = estadoLog === 'Entregado';
+        
+        // Excluir si tiene factura y está entregado
+        if (tieneFactura && esEntregado) {
+            return false;
+        }
+        
         return (estadoPago === 'Pagado' || tieneTransferencia) && p.estado !== 'Completado' && !p.esPedidoEspecial;
     });
     updateTabBadge('pagados', todosPagados.length);
@@ -504,11 +522,20 @@ async function loadPedidosPagoCuentaTienda(estadoLogistico) {
     const pedidos = await db.getPedidosByTienda(tiendaId);
     
     // Pedidos con estadoPago = "Pago A cuenta", pedido real adjunto y precio real asignado
+    // EXCLUIR pedidos que tengan factura adjuntada Y estado entregado
     const pedidosCuenta = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const estadoLog = p.estadoLogistico || 'Nuevo';
         const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
         const tienePrecioReal = p.precioReal !== null && p.precioReal !== undefined;
+        const tieneFactura = Boolean(p.albaran);
+        const esEntregado = estadoLog === 'Entregado';
+        
+        // Excluir si tiene factura y está entregado
+        if (tieneFactura && esEntregado) {
+            return false;
+        }
+        
         return estadoPago === 'Pago A cuenta' && 
                tienePedidoReal &&
                tienePrecioReal &&
@@ -526,9 +553,18 @@ async function loadPedidosPagoCuentaTienda(estadoLogistico) {
     
     if (!container || !emptyState) return;
     
-    // Actualizar badge total de pago a cuenta
+    // Actualizar badge total de pago a cuenta (excluyendo los que tienen factura + entregado)
     const todosCuenta = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tieneFactura = Boolean(p.albaran);
+        const esEntregado = estadoLog === 'Entregado';
+        
+        // Excluir si tiene factura y está entregado
+        if (tieneFactura && esEntregado) {
+            return false;
+        }
+        
         return estadoPago === 'Pago A cuenta' && p.estado !== 'Completado' && !p.esPedidoEspecial;
     });
     updateTabBadge('pago-cuenta', todosCuenta.length);
@@ -548,47 +584,6 @@ async function loadPedidosPagoCuentaTienda(estadoLogistico) {
     }
 }
 
-// Pestaña 5: Facturas Pendientes
-async function loadPedidosFacturasPendientesTienda() {
-    if (!currentTienda) return;
-    
-    const tiendaId = currentTienda.id;
-    const pedidos = await db.getPedidosByTienda(tiendaId);
-    
-    // Pedidos que deben ir a facturas pendientes:
-    // 1. Camino 1: estadoPago = "Pagado" + estadoLogistico = "Entregado" (sin factura)
-    // 2. Camino 2: estadoPago = "Pagado" (tiene transferencia) + estadoLogistico = "Entregado" (sin factura)
-    const pedidosFacturas = pedidos.filter(p => {
-        const estadoPago = p.estadoPago || 'Sin Asignar';
-        const tieneTransferencia = Boolean(p.transferenciaPDF);
-        const estadoLog = p.estadoLogistico || 'Nuevo';
-        const tieneFactura = Boolean(p.albaran);
-        
-        const esPagado = estadoPago === 'Pagado' || tieneTransferencia;
-        const esEntregado = estadoLog === 'Entregado';
-        
-        return esPagado && esEntregado && !tieneFactura && p.estado !== 'Completado' && !p.esPedidoEspecial;
-    });
-    
-    const container = document.getElementById('facturas-pendientes-list');
-    const emptyState = document.getElementById('facturas-pendientes-empty');
-    
-    updateTabBadge('facturas-pendientes', pedidosFacturas.length);
-    
-    if (pedidosFacturas.length === 0) {
-        container.innerHTML = '';
-        emptyState.style.display = 'block';
-        return;
-    }
-    
-    emptyState.style.display = 'none';
-    container.innerHTML = '';
-    
-    for (const pedido of pedidosFacturas) {
-        const card = await createPedidoTiendaCard(pedido, 'facturas-pendientes');
-        container.appendChild(card);
-    }
-}
 
 // Pestaña 6: Histórico
 
@@ -776,7 +771,6 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         // Recargar pestañas relevantes
         loadPedidosSeleccionarPago();
         loadPedidosPendientesPago();
-        loadPedidosFacturasPendientesTienda();
     } catch (error) {
         console.error('Error al subir pago de cuenta:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
@@ -818,7 +812,6 @@ window.uploadTransferencia = async function(pedidoId, file) {
         // Recargar pestañas relevantes
         loadPedidosSeleccionarPago();
         loadPedidosPendientesPago();
-        loadPedidosFacturasPendientesTienda();
     } catch (error) {
         console.error('Error al subir transferencia:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
@@ -888,7 +881,6 @@ window.removePedidoPaymentDocument = async function(pedidoId) {
         // Recargar pestañas relevantes
         loadPedidosSeleccionarPago();
         loadPedidosPendientesPago();
-        loadPedidosFacturasPendientesTienda();
     } catch (error) {
         console.error('Error al eliminar documento de pago:', error);
         await showAlert('No se pudo eliminar el documento: ' + error.message, 'Error');
@@ -1316,23 +1308,6 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         facturaContent = pedido.albaran
             ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
-    } else if (tabContext === 'facturas-pendientes') {
-        // Pestaña 5: Facturas Pendientes
-        estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
-        
-        pedidoRealContent = pedido.pedidoSistemaPDF
-            ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
-            : '<span class="doc-placeholder">Sin documento</span>';
-        
-        // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
-        documentoPagoContent = tieneTransferencia
-            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
-            : '<span class="doc-placeholder">Sin documento</span>';
-        
-        // Factura: botón + para adjuntar o ver si ya existe
-        facturaContent = pedido.albaran
-            ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
-            : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
@@ -1485,7 +1460,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
                     <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura</span>'}</div>
                 </div>
                 ${(tabContext === 'seleccionar-pago' || tabContext === 'pendientes-pago' || tabContext === 'pago-cuenta') ? `<input type="file" id="${pedidoRealInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadPedidoRealTienda('${pedido.id}', this)">` : ''}
-                ${(tabContext === 'facturas-pendientes' || tabContext === 'pagados' || tabContext === 'pago-cuenta') ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
+                ${(tabContext === 'pagados' || tabContext === 'pago-cuenta') ? `<input type="file" id="${facturaInputId}" style="display: none;" accept=".pdf,.jpg,.jpeg,.png" onchange="uploadFacturaTienda('${pedido.id}', this)">` : ''}
             </div>
             
             <!-- Card: Artículos (siempre visible) -->
@@ -1644,7 +1619,6 @@ function recargarPestañasTiendaRelevantes() {
     // Recargar todas las pestañas principales que pueden verse afectadas
     loadPedidosSeleccionarPago();
     loadPedidosPendientesPago();
-    loadPedidosFacturasPendientesTienda();
     
     // Recargar todas las sub-pestañas de Pagados
     loadPedidosPagadosTienda('Nuevo');
@@ -1927,22 +1901,7 @@ window.updateEstadoLogisticoTienda = async function(pedidoId, nuevoEstadoLogisti
         pedido.estadoLogistico = nuevoEstadoLogistico;
         await db.update('pedidos', pedido);
         
-        // Verificar si debe moverse a "Facturas Pendientes"
-        const estadoPago = pedido.estadoPago || 'Sin Asignar';
-        const tieneTransferencia = Boolean(pedido.transferenciaPDF);
-        const esPagado = estadoPago === 'Pagado' || tieneTransferencia;
-        const esEntregado = nuevoEstadoLogistico === 'Entregado';
-        const tieneFactura = Boolean(pedido.albaran);
-        
-        // Camino 1: Pagado + Entregado -> Facturas Pendientes
-        // Camino 2: Pago A cuenta + Entregado + tiene transferencia -> Facturas Pendientes
-        if (esEntregado && !tieneFactura) {
-            if (esPagado || (estadoPago === 'Pago A cuenta' && tieneTransferencia)) {
-                // El pedido se moverá automáticamente a Facturas Pendientes
-            }
-        }
-        
-        // Recargar todas las pestañas relevantes: Pagados, Pago A Cuenta y Facturas Pendientes
+        // Recargar todas las pestañas relevantes: Pagados y Pago A Cuenta
         recargarPestañasTiendaRelevantes();
         
         // Disparar evento para que técnico actualice la vista si está abierta
@@ -1979,9 +1938,9 @@ window.uploadFacturaTienda = async function(pedidoId, input) {
                 pedido.albaran = base64;
                 await db.update('pedidos', pedido);
                 
-                await showAlert('Factura adjuntada. El pedido se ha movido al "Histórico".', 'Éxito');
+                await showAlert('Factura adjuntada correctamente. Si el pedido está entregado, desaparecerá de esta vista.', 'Éxito');
                 
-                // Recargar pestañas relevantes: Facturas Pendientes e Histórico
+                // Recargar pestañas relevantes
                 recargarPestañasTiendaRelevantes();
             } catch (error) {
                 console.error('Error al guardar factura:', error);
@@ -2365,8 +2324,6 @@ function switchTabTienda(tab) {
         switchSubTabTienda('pagados', 'pagados-nuevo');
     } else if (tab === 'pago-cuenta' && typeof switchSubTabTienda === 'function') {
         switchSubTabTienda('pago-cuenta', 'pago-cuenta-nuevo');
-    } else if (tab === 'facturas-pendientes' && typeof loadPedidosFacturasPendientesTienda === 'function') {
-        loadPedidosFacturasPendientesTienda();
     }
 }
 
@@ -2678,34 +2635,38 @@ async function actualizarTodosLosBadges() {
     });
     updateTabBadge('pendientes-pago', pedidosPendientes.length);
     
-    // 4. Pagados (suma de todos los estados logísticos)
+    // 4. Pagados (suma de todos los estados logísticos, excluyendo factura + entregado)
     const todosPagados = pedidos.filter(p => {
-        const estadoPago = p.estadoPago || 'Sin Asignar';
-        const tieneTransferencia = Boolean(p.transferenciaPDF);
-        return (estadoPago === 'Pagado' || tieneTransferencia) && p.estado !== 'Completado' && !p.esPedidoEspecial;
-    });
-    updateTabBadge('pagados', todosPagados.length);
-    
-    // 5. Pagado A Cuenta (suma de todos los estados logísticos)
-    const todosCuenta = pedidos.filter(p => {
-        const estadoPago = p.estadoPago || 'Sin Asignar';
-        return estadoPago === 'Pago A cuenta' && p.estado !== 'Completado' && !p.esPedidoEspecial;
-    });
-    updateTabBadge('pago-cuenta', todosCuenta.length);
-    
-    // 6. Facturas Pendientes
-    const pedidosFacturas = pedidos.filter(p => {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tieneTransferencia = Boolean(p.transferenciaPDF);
         const estadoLog = p.estadoLogistico || 'Nuevo';
         const tieneFactura = Boolean(p.albaran);
-        
-        const esPagado = estadoPago === 'Pagado' || tieneTransferencia;
         const esEntregado = estadoLog === 'Entregado';
         
-        return esPagado && esEntregado && !tieneFactura && p.estado !== 'Completado' && !p.esPedidoEspecial;
+        // Excluir si tiene factura y está entregado
+        if (tieneFactura && esEntregado) {
+            return false;
+        }
+        
+        return (estadoPago === 'Pagado' || tieneTransferencia) && p.estado !== 'Completado' && !p.esPedidoEspecial;
     });
-    updateTabBadge('facturas-pendientes', pedidosFacturas.length);
+    updateTabBadge('pagados', todosPagados.length);
+    
+    // 5. Pagado A Cuenta (suma de todos los estados logísticos, excluyendo factura + entregado)
+    const todosCuenta = pedidos.filter(p => {
+        const estadoPago = p.estadoPago || 'Sin Asignar';
+        const estadoLog = p.estadoLogistico || 'Nuevo';
+        const tieneFactura = Boolean(p.albaran);
+        const esEntregado = estadoLog === 'Entregado';
+        
+        // Excluir si tiene factura y está entregado
+        if (tieneFactura && esEntregado) {
+            return false;
+        }
+        
+        return estadoPago === 'Pago A cuenta' && p.estado !== 'Completado' && !p.esPedidoEspecial;
+    });
+    updateTabBadge('pago-cuenta', todosCuenta.length);
 }
 
 // Inicializar cuando el DOM esté listo
