@@ -1738,35 +1738,32 @@ function switchTabPedidos(tab) {
 
 // ========== CREACIÓN DE CARDS ==========
 
-// Abrir documento en nueva pestaña convirtiendo data URL a blob URL
-window.abrirDocumento = function(button) {
-    const dataURL = button.getAttribute('data-document-url');
+// Descargar o abrir documento desde data URL
+window.descargarDocumento = function(dataURL, nombreArchivo = 'documento') {
     if (!dataURL) return;
     
     try {
-        if (dataURL.startsWith('data:')) {
-            // Convertir data URL a Blob
-            const arr = dataURL.split(',');
-            const mime = arr[0].match(/:(.*?);/)[1];
-            const bstr = atob(arr[1]);
-            let n = bstr.length;
-            const u8arr = new Uint8Array(n);
-            while (n--) {
-                u8arr[n] = bstr.charCodeAt(n);
-            }
-            const blob = new Blob([u8arr], { type: mime });
-            const blobURL = URL.createObjectURL(blob);
-            window.open(blobURL, '_blank');
-            // Limpiar el blob URL después de un tiempo para liberar memoria
-            setTimeout(() => URL.revokeObjectURL(blobURL), 100);
-        } else {
-            // Si no es data URL, abrir directamente
-            window.open(dataURL, '_blank');
+        // Convertir data URL a Blob
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        const u8arr = new Uint8Array(bstr.length);
+        for (let i = 0; i < bstr.length; i++) {
+            u8arr[i] = bstr.charCodeAt(i);
         }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobURL = URL.createObjectURL(blob);
+        
+        // Crear enlace temporal para descargar/abrir
+        const link = document.createElement('a');
+        link.href = blobURL;
+        link.target = '_blank';
+        link.click();
+        
+        // Limpiar después de un momento
+        setTimeout(() => URL.revokeObjectURL(blobURL), 100);
     } catch (error) {
         console.error('Error al abrir documento:', error);
-        // Fallback: intentar abrir directamente
-        window.open(dataURL, '_blank');
     }
 };
 
@@ -1854,19 +1851,17 @@ async function createPedidoTecnicoCard(pedido) {
         }).join('')
         : '<p class="cascade-empty">No hay artículos en este pedido</p>';
     
-    const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-    const pedidoRealContent = pedidoRealLink
-        ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedidoRealLink.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver documento</button>`
+    const pedidoRealContent = pedido.pedidoSistemaPDF
+        ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
         : '<span class="doc-placeholder">Sin documento</span>';
     
-    const facturaLink = pedido.albaran ? pedido.albaran : null;
-    const facturaContent = facturaLink
-        ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.albaran.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver factura</button>`
+    const facturaContent = pedido.albaran
+        ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
         : '<span class="doc-placeholder">Sin factura</span>';
     
     const tienePago = Boolean(pedido.transferenciaPDF);
     const documentoPagoContent = tienePago
-        ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+        ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
         : '<span class="doc-placeholder">Sin documento</span>';
     
     const itemsSectionId = `pedido-items-tec-${pedido.id}`;

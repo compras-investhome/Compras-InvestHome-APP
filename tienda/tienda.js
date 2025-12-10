@@ -601,35 +601,32 @@ function fileToBase64(file) {
     });
 }
 
-// Abrir documento en nueva pestaña convirtiendo data URL a blob URL
-window.abrirDocumento = function(button) {
-    const dataURL = button.getAttribute('data-document-url');
+// Descargar o abrir documento desde data URL
+window.descargarDocumento = function(dataURL, nombreArchivo = 'documento') {
     if (!dataURL) return;
     
     try {
-        if (dataURL.startsWith('data:')) {
-            // Convertir data URL a Blob
-            const arr = dataURL.split(',');
-            const mime = arr[0].match(/:(.*?);/)[1];
-            const bstr = atob(arr[1]);
-            let n = bstr.length;
-            const u8arr = new Uint8Array(n);
-            while (n--) {
-                u8arr[n] = bstr.charCodeAt(n);
-            }
-            const blob = new Blob([u8arr], { type: mime });
-            const blobURL = URL.createObjectURL(blob);
-            window.open(blobURL, '_blank');
-            // Limpiar el blob URL después de un tiempo para liberar memoria
-            setTimeout(() => URL.revokeObjectURL(blobURL), 100);
-        } else {
-            // Si no es data URL, abrir directamente
-            window.open(dataURL, '_blank');
+        // Convertir data URL a Blob
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        const u8arr = new Uint8Array(bstr.length);
+        for (let i = 0; i < bstr.length; i++) {
+            u8arr[i] = bstr.charCodeAt(i);
         }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobURL = URL.createObjectURL(blob);
+        
+        // Crear enlace temporal para descargar/abrir
+        const link = document.createElement('a');
+        link.href = blobURL;
+        link.target = '_blank';
+        link.click();
+        
+        // Limpiar después de un momento
+        setTimeout(() => URL.revokeObjectURL(blobURL), 100);
     } catch (error) {
         console.error('Error al abrir documento:', error);
-        // Fallback: intentar abrir directamente
-        window.open(dataURL, '_blank');
     }
 };
 
@@ -1076,9 +1073,8 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         `;
         
         // Pedido real: botón + para adjuntar o ver si ya existe
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-        pedidoRealContent = pedidoRealLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedidoRealLink.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver documento</button>`
+        pedidoRealContent = pedido.pedidoSistemaPDF
+            ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Precio Real: campo para introducir el precio real del pedido
@@ -1100,7 +1096,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: no disponible aún en esta pestaña
@@ -1134,15 +1130,14 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
     } else if (tabContext === 'pagados') {
         // Pestaña 3: Pagados - Solo visualización (no editable)
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-        pedidoRealContent = pedidoRealLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedidoRealLink.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver documento</button>`
+        pedidoRealContent = pedido.pedidoSistemaPDF
+            ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Precio Real: solo mostrar (no editable en pagados)
@@ -1154,13 +1149,12 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
-        facturaContent = facturaLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.albaran.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver factura</button>`
+        facturaContent = pedido.albaran
+            ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'pago-cuenta') {
         // Pestaña 4: Pago A Cuenta - Permite editar pedido real
@@ -1191,50 +1185,45 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
-        facturaContent = facturaLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.albaran.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver factura</button>`
+        facturaContent = pedido.albaran
+            ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'facturas-pendientes') {
         // Pestaña 5: Facturas Pendientes
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-        pedidoRealContent = pedidoRealLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedidoRealLink.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver documento</button>`
+        pedidoRealContent = pedido.pedidoSistemaPDF
+            ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
-        facturaContent = facturaLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.albaran.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver factura</button>`
+        facturaContent = pedido.albaran
+            ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
     } else if (tabContext === 'historico') {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-        pedidoRealContent = pedidoRealLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedidoRealLink.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver documento</button>`
+        pedidoRealContent = pedido.pedidoSistemaPDF
+            ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.transferenciaPDF.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver pago</button>`
+            ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
-        facturaContent = facturaLink
-            ? `<button type="button" onclick="abrirDocumento(this)" data-document-url="${pedido.albaran.replace(/"/g, '&quot;')}" class="doc-link" style="background: none; border: none; cursor: pointer; padding: 0; color: inherit; text-decoration: underline;">📄 Ver factura</button>`
+        facturaContent = pedido.albaran
+            ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
             : '<span class="doc-placeholder">Sin factura</span>';
     }
     
