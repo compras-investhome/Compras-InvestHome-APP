@@ -1738,6 +1738,30 @@ function switchTabPedidos(tab) {
 
 // ========== CREACIÓN DE CARDS ==========
 
+// Convertir data URL a blob URL para poder abrirlo en nueva pestaña
+function dataURLToBlobURL(dataURL) {
+    if (!dataURL || !dataURL.startsWith('data:')) {
+        return dataURL; // Si no es un data URL, devolverlo tal cual
+    }
+    
+    try {
+        // Convertir data URL a Blob
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        return URL.createObjectURL(blob);
+    } catch (error) {
+        console.error('Error al convertir data URL a blob URL:', error);
+        return dataURL; // Fallback al data URL original
+    }
+}
+
 async function createPedidoTecnicoCard(pedido) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
@@ -1822,19 +1846,19 @@ async function createPedidoTecnicoCard(pedido) {
         }).join('')
         : '<p class="cascade-empty">No hay artículos en este pedido</p>';
     
-    const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
+    const pedidoRealLink = pedido.pedidoSistemaPDF ? dataURLToBlobURL(pedido.pedidoSistemaPDF) : null;
     const pedidoRealContent = pedidoRealLink
         ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
         : '<span class="doc-placeholder">Sin documento</span>';
     
-    const facturaLink = pedido.albaran ? pedido.albaran : null;
+    const facturaLink = pedido.albaran ? dataURLToBlobURL(pedido.albaran) : null;
     const facturaContent = facturaLink
         ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
         : '<span class="doc-placeholder">Sin factura</span>';
     
     const tienePago = Boolean(pedido.transferenciaPDF);
     const documentoPagoContent = tienePago
-        ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+        ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
         : '<span class="doc-placeholder">Sin documento</span>';
     
     const itemsSectionId = `pedido-items-tec-${pedido.id}`;

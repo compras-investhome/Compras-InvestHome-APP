@@ -601,6 +601,30 @@ function fileToBase64(file) {
     });
 }
 
+// Convertir data URL a blob URL para poder abrirlo en nueva pestaña
+function dataURLToBlobURL(dataURL) {
+    if (!dataURL || !dataURL.startsWith('data:')) {
+        return dataURL; // Si no es un data URL, devolverlo tal cual
+    }
+    
+    try {
+        // Convertir data URL a Blob
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        return URL.createObjectURL(blob);
+    } catch (error) {
+        console.error('Error al convertir data URL a blob URL:', error);
+        return dataURL; // Fallback al data URL original
+    }
+}
+
 // Funciones de upload
 window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
     if (!file) return;
@@ -1044,7 +1068,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         `;
         
         // Pedido real: botón + para adjuntar o ver si ya existe
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? dataURLToBlobURL(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
@@ -1068,7 +1092,7 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: no disponible aún en esta pestaña
@@ -1102,13 +1126,13 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
     } else if (tabContext === 'pagados') {
         // Pestaña 3: Pagados - Solo visualización (no editable)
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? dataURLToBlobURL(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
@@ -1122,11 +1146,11 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
+        const facturaLink = pedido.albaran ? dataURLToBlobURL(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
@@ -1159,11 +1183,11 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
+        const facturaLink = pedido.albaran ? dataURLToBlobURL(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
@@ -1171,18 +1195,18 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         // Pestaña 5: Facturas Pendientes
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? dataURLToBlobURL(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Factura: botón + para adjuntar o ver si ya existe
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
+        const facturaLink = pedido.albaran ? dataURLToBlobURL(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
             : `<span class="doc-placeholder">Sin factura</span> <button class="emoji-btn" type="button" aria-label="Adjuntar factura" onclick="document.getElementById('${facturaInputId}').click()" style="margin-left: 0.5rem;">➕</button>`;
@@ -1190,17 +1214,17 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         // Pestaña 6: Histórico - Solo visualización
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-pagado">Pagado</span>`;
         
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
+        const pedidoRealLink = pedido.pedidoSistemaPDF ? dataURLToBlobURL(pedido.pedidoSistemaPDF) : null;
         pedidoRealContent = pedidoRealLink
             ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
         // Documento de pago: solo ver (contabilidad lo sube) - siempre visible
         documentoPagoContent = tieneTransferencia
-            ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+            ? `<a href="${dataURLToBlobURL(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
             : '<span class="doc-placeholder">Sin documento</span>';
         
-        const facturaLink = pedido.albaran ? pedido.albaran : null;
+        const facturaLink = pedido.albaran ? dataURLToBlobURL(pedido.albaran) : null;
         facturaContent = facturaLink
             ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
             : '<span class="doc-placeholder">Sin factura</span>';
