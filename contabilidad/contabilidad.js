@@ -1078,14 +1078,20 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
         : '<span class="doc-placeholder">Sin factura</span>';
     
     const tienePago = Boolean(pedido.transferenciaPDF);
+    const tieneFactura = Boolean(pedido.albaran);
     const puedeGestionarPago = currentUserType === 'Contabilidad';
+    // No permitir eliminar documento de pago solo si el pedido está en histórico (tiene pago Y factura)
+    // En histórico: tienePago && tieneFactura = true → puedeEliminarPago = false
+    // En otros lugares: puede ser que tenga pago sin factura, o sin pago, etc. → puedeEliminarPago = true (si tiene pago)
+    const estaEnHistorico = tienePago && tieneFactura;
+    const puedeEliminarPago = puedeGestionarPago && tienePago && !estaEnHistorico;
     const pagoInputId = `pago-upload-${pedido.id}`;
     
     const documentoPagoContent = `
         ${tienePago ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>` : '<span class="doc-placeholder">Sin documento</span>'}
         ${puedeGestionarPago ? (
             tienePago
-                ? `<button class="emoji-btn danger" type="button" aria-label="Eliminar documento de pago" onclick="removePedidoPaymentDocument('${pedido.id}')">✖️</button>`
+                ? (puedeEliminarPago ? `<button class="emoji-btn danger" type="button" aria-label="Eliminar documento de pago" onclick="removePedidoPaymentDocument('${pedido.id}')">✖️</button>` : '')
                 : `<button class="emoji-btn" type="button" aria-label="Adjuntar documento de pago" onclick="document.getElementById('${pagoInputId}').click()">➕</button>`
         ) : ''}
     `;
