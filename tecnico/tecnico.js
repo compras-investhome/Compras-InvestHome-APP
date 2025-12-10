@@ -4030,10 +4030,6 @@ function setupTecnicoEventListeners() {
     });
     
     // Botones de histórico
-    document.getElementById('historico-volver-obras')?.addEventListener('click', () => {
-        loadHistoricoTecnico();
-    });
-    
     document.getElementById('historico-cargar-mas-btn')?.addEventListener('click', () => {
         cargarMasPedidosHistoricosTecnico();
     });
