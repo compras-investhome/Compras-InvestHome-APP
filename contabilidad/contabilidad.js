@@ -740,11 +740,19 @@ async function calcularGastadoCuenta(tiendaId) {
     
     for (const pedido of pedidos) {
         if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.pedidoSistemaPDF && !pedido.transferenciaPDF) {
-            const totalPedido = pedido.items.reduce((total, item) => {
-                const precioItem = item.precio || 0;
-                const cantidad = item.cantidad || 0;
-                return total + (precioItem * cantidad);
-            }, 0);
+            // Usar precioReal si está disponible (precio que escribe la tienda)
+            // Si no existe, calcular el total de los items como fallback
+            let totalPedido = 0;
+            if (pedido.precioReal !== null && pedido.precioReal !== undefined) {
+                totalPedido = Number(pedido.precioReal) || 0;
+            } else {
+                // Fallback: calcular total de items
+                totalPedido = pedido.items.reduce((total, item) => {
+                    const precioItem = item.precio || 0;
+                    const cantidad = item.cantidad || 0;
+                    return total + (precioItem * cantidad);
+                }, 0);
+            }
             gastado += totalPedido;
         }
     }
