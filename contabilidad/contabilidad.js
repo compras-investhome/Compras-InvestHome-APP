@@ -802,6 +802,120 @@ function fileToBase64(file) {
     });
 }
 
+// Validar tamaño de archivo antes de subirlo a Firestore
+// Firestore tiene un límite de 1 MB por documento, y base64 aumenta el tamaño en ~33%
+// Por lo tanto, limitamos el archivo original a 750 KB
+const MAX_FILE_SIZE_FIRESTORE = 750 * 1024; // 750 KB
+const MAX_IMAGE_DIMENSION = 2000; // Máximo de ancho/alto en píxeles
+
+// Comprimir imagen usando Canvas API
+async function comprimirImagen(file, maxWidth = MAX_IMAGE_DIMENSION, maxHeight = MAX_IMAGE_DIMENSION, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                // Calcular nuevas dimensiones manteniendo aspecto
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width = width * ratio;
+                    height = height * ratio;
+                }
+                
+                // Crear canvas y dibujar imagen redimensionada
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convertir a blob (JPG para mejor compresión)
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error('Error al comprimir la imagen'));
+                        return;
+                    }
+                    
+                    // Convertir blob a File
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    
+                    resolve(compressedFile);
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = () => reject(new Error('Error al cargar la imagen'));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Error al leer el archivo'));
+        reader.readAsDataURL(file);
+    });
+}
+
+// Procesar archivo: comprimir si es imagen, validar si es PDF
+async function procesarArchivoParaUpload(file) {
+    // Si es una imagen, intentar comprimirla
+    if (file.type.startsWith('image/')) {
+        // Si la imagen ya es pequeña, no comprimir
+        if (file.size <= MAX_FILE_SIZE_FIRESTORE) {
+            return file;
+        }
+        
+        try {
+            // Compresión progresiva: intentar diferentes niveles hasta conseguir el tamaño adecuado
+            let compressedFile = await comprimirImagen(file, MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, 0.85);
+            
+            // Si sigue siendo grande, reducir dimensiones y calidad
+            if (compressedFile.size > MAX_FILE_SIZE_FIRESTORE) {
+                compressedFile = await comprimirImagen(file, 1500, 1500, 0.75);
+            }
+            
+            // Si aún es grande, comprimir más agresivamente
+            if (compressedFile.size > MAX_FILE_SIZE_FIRESTORE) {
+                compressedFile = await comprimirImagen(file, 1200, 1200, 0.65);
+            }
+            
+            // Último intento: compresión muy agresiva
+            if (compressedFile.size > MAX_FILE_SIZE_FIRESTORE) {
+                compressedFile = await comprimirImagen(file, 1000, 1000, 0.55);
+            }
+            
+            // Si después de todas las compresiones sigue siendo grande, avisar al usuario
+            if (compressedFile.size > MAX_FILE_SIZE_FIRESTORE) {
+                const fileSizeKB = (compressedFile.size / 1024).toFixed(0);
+                console.warn(`Imagen comprimida pero aún grande: ${fileSizeKB} KB`);
+                // Intentar una última compresión más agresiva
+                compressedFile = await comprimirImagen(file, 800, 800, 0.45);
+            }
+            
+            return compressedFile;
+        } catch (error) {
+            console.error('Error al comprimir imagen:', error);
+            // Si falla la compresión y el archivo es muy grande, lanzar error
+            if (file.size > MAX_FILE_SIZE_FIRESTORE * 2) {
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                throw new Error(`No se pudo comprimir la imagen suficientemente (${fileSizeMB} MB). Por favor, use una imagen más pequeña o comprímala manualmente.`);
+            }
+            // Si el archivo no es extremadamente grande, devolver el original
+            return file;
+        }
+    }
+    
+    // Para PDFs, solo validar tamaño
+    if (file.type === 'application/pdf') {
+        if (file.size > MAX_FILE_SIZE_FIRESTORE) {
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            throw new Error(`El PDF es demasiado grande (${fileSizeMB} MB). El tamaño máximo permitido es 750 KB. Por favor, comprima el PDF usando una herramienta externa o use un archivo más pequeño.`);
+        }
+    }
+    
+    return file;
+}
+
 // Descargar o abrir documento desde data URL
 window.descargarDocumento = function(dataURL, nombreArchivo = 'documento') {
     if (!dataURL) return;
@@ -841,13 +955,16 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
     }
     
     try {
+        // Procesar archivo: comprimir imágenes si es necesario
+        const processedFile = await procesarArchivoParaUpload(file);
+        
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido) {
             await showAlert('Error: No se pudo encontrar el pedido', 'Error');
             return;
         }
         
-        const transferenciaPDF = await fileToBase64(file);
+        const transferenciaPDF = await fileToBase64(processedFile);
         
         pedido.transferenciaPDF = transferenciaPDF;
         pedido.estadoPago = 'Pagado';
@@ -865,6 +982,9 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
     } catch (error) {
         console.error('Error al subir pago de cuenta:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
+        // Limpiar input en caso de error
+        const input = document.querySelector(`input[type="file"]:not([id*="pedido-real"]):not([id*="factura"])`);
+        if (input) input.value = '';
     }
 };
 
@@ -877,13 +997,16 @@ window.uploadTransferencia = async function(pedidoId, file) {
     }
     
     try {
+        // Procesar archivo: comprimir imágenes si es necesario
+        const processedFile = await procesarArchivoParaUpload(file);
+        
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido) {
             await showAlert('Error: No se pudo encontrar el pedido', 'Error');
             return;
         }
         
-        const transferenciaPDF = await fileToBase64(file);
+        const transferenciaPDF = await fileToBase64(processedFile);
         const estadoAnterior = pedido.estadoPago;
         
         pedido.transferenciaPDF = transferenciaPDF;
@@ -902,6 +1025,9 @@ window.uploadTransferencia = async function(pedidoId, file) {
     } catch (error) {
         console.error('Error al subir transferencia:', error);
         await showAlert('Error al subir el PDF: ' + error.message, 'Error');
+        // Limpiar input en caso de error
+        const input = document.querySelector(`input[type="file"]:not([id*="pedido-real"]):not([id*="factura"])`);
+        if (input) input.value = '';
     }
 };
 
