@@ -321,6 +321,13 @@ async function loadPedidosSeleccionarPago() {
         const estadoPago = p.estadoPago || 'Sin Asignar';
         const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
         const tienePrecioReal = p.precioReal !== null && p.precioReal !== undefined;
+        const tieneTransferencia = Boolean(p.transferenciaPDF);
+        
+        // EXCLUIR EXPLÍCITAMENTE pedidos pagados (no deben aparecer aquí)
+        const estaPagado = estadoPago === 'Pagado' || tieneTransferencia;
+        if (estaPagado) {
+            return false;
+        }
         
         // El pedido está aquí si NO se cumplen las tres condiciones a la vez
         const cumpleTodasLasCondiciones = tienePedidoReal && 
@@ -1010,18 +1017,29 @@ async function createPedidoTiendaCard(pedido, tabContext) {
             return 'white'; // Flecha blanca para fondos de color
         };
         
+        // VALIDACIÓN: Si el pedido está pagado, NO permitir cambiar el estado
+        const tieneTransferencia = Boolean(pedido.transferenciaPDF);
+        const estaPagado = estadoPago === 'Pagado' || tieneTransferencia;
+        const selectDisabled = estaPagado ? 'disabled' : '';
+        
         const pillColor = getPillColor(estadoPago);
         const textColor = getTextColor(estadoPago);
         const arrowColor = getArrowColor(estadoPago);
         
         const selectId = `estado-pago-select-${pedido.id}`;
+        const selectStyle = estaPagado 
+            ? `padding: 0.15rem 1.2rem 0.15rem 0.5rem !important; border-radius: 999px !important; font-size: 0.65rem !important; font-weight: 700 !important; color: white !important; border: none !important; cursor: not-allowed !important; appearance: none !important; background-color: #10b981 !important; opacity: 0.7 !important;`
+            : `padding: 0.15rem 1.2rem 0.15rem 0.5rem !important; border-radius: 999px !important; font-size: 0.65rem !important; font-weight: 700 !important; color: ${textColor} !important; border: none !important; cursor: pointer !important; appearance: none !important; background-color: ${pillColor} !important; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>') !important; background-repeat: no-repeat !important; background-position: right 0.35rem center !important; background-size: 0.7rem !important; min-height: auto !important; height: auto !important; line-height: 1 !important;`;
+        
         estadoPagoContent = `
             <select id="${selectId}" class="estado-pago-select" 
+                    ${selectDisabled}
                     onchange="updateEstadoPagoTiendaSelect('${pedido.id}', this.value, '${selectId}')" 
-                    style="padding: 0.15rem 1.2rem 0.15rem 0.5rem !important; border-radius: 999px !important; font-size: 0.65rem !important; font-weight: 700 !important; color: ${textColor} !important; border: none !important; cursor: pointer !important; appearance: none !important; background-color: ${pillColor} !important; background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22${encodeURIComponent(arrowColor)}%22 stroke-width=%223%22><polyline points=%226 9 12 15 18 9%22></polyline></svg>') !important; background-repeat: no-repeat !important; background-position: right 0.35rem center !important; background-size: 0.7rem !important; min-height: auto !important; height: auto !important; line-height: 1 !important;">
+                    style="${selectStyle}">
                 <option value="Sin Asignar" ${estadoPago === 'Sin Asignar' ? 'selected' : ''}>Sin Asignar</option>
                 <option value="Pendiente de pago" ${estadoPago === 'Pendiente de pago' ? 'selected' : ''}>Pendiente de pago</option>
                 ${tienda?.tieneCuenta ? `<option value="Pago A cuenta" ${estadoPago === 'Pago A cuenta' ? 'selected' : ''}>Pago A cuenta</option>` : ''}
+                ${estaPagado ? '<option value="Pagado" selected>Pagado</option>' : ''}
             </select>
         `;
         
@@ -1502,6 +1520,24 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
         const pedido = await db.get('pedidos', pedidoId);
         if (!pedido) {
             await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        // VALIDACIÓN CRÍTICA: Prevenir resetear estadoPago de pedidos pagados
+        const tieneTransferencia = Boolean(pedido.transferenciaPDF);
+        const estadoActual = pedido.estadoPago || 'Sin Asignar';
+        const estaPagado = estadoActual === 'Pagado' || tieneTransferencia;
+        
+        // Si el pedido está pagado, NO permitir cambiar a "Sin Asignar" o "Pendiente de pago"
+        if (estaPagado && (nuevoEstado === 'Sin Asignar' || nuevoEstado === 'Pendiente de pago')) {
+            await showAlert('Error: No se puede cambiar el estado de un pedido pagado. Debe eliminar el documento de pago primero.', 'Error');
+            return;
+        }
+        
+        // Validación: asegurar que el pedido tiene un ID válido
+        if (!pedido.id || pedido.id !== pedidoId) {
+            console.error('[CRÍTICO] Intento de actualizar pedido sin ID válido:', { pedidoId, pedidoIdEnPedido: pedido.id });
+            await showAlert('Error crítico: El pedido no tiene un ID válido. No se puede actualizar para prevenir duplicados.', 'Error');
             return;
         }
         
