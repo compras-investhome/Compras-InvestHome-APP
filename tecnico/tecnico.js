@@ -1788,7 +1788,19 @@ async function createPedidoTecnicoCard(pedido) {
     }
     const fechaFormateada = formatDateTime(fechaObj);
     
-    const estadoEnvio = pedido.estado || 'Sin estado';
+    // Mapear estadoLogistico (de tienda) a estado de envío (para técnico)
+    // Nuevo -> Pendiente, Preparando -> Preparando, En Ruta -> En Reparto, Entregado -> Entregado
+    const estadoLogistico = pedido.estadoLogistico || 'Nuevo';
+    let estadoEnvio = 'Pendiente'; // Por defecto
+    if (estadoLogistico === 'Nuevo') {
+        estadoEnvio = 'Pendiente';
+    } else if (estadoLogistico === 'Preparando') {
+        estadoEnvio = 'Preparando';
+    } else if (estadoLogistico === 'En Ruta') {
+        estadoEnvio = 'En Reparto';
+    } else if (estadoLogistico === 'Entregado') {
+        estadoEnvio = 'Entregado';
+    }
     const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
     const estadoPago = pedido.estadoPago || 'Pendiente de pago';
     const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
@@ -3103,6 +3115,16 @@ async function cargarMasPedidosCursoTecnico() {
     }
 }
 
+// Función para convertir estado de envío (del filtro/visualización) a estadoLogistico (de BD)
+function estadoEnvioAToEstadoLogistico(estadoEnvio) {
+    // Mapeo inverso: Pendiente -> Nuevo, Preparando -> Preparando, En Reparto -> En Ruta, Entregado -> Entregado
+    if (estadoEnvio === 'Pendiente') return 'Nuevo';
+    if (estadoEnvio === 'Preparando') return 'Preparando';
+    if (estadoEnvio === 'En Reparto') return 'En Ruta';
+    if (estadoEnvio === 'Entregado') return 'Entregado';
+    return estadoEnvio; // Si no coincide, devolver el mismo valor
+}
+
 function aplicarFiltrosPedidosCursoTecnico(pedidos) {
     let filtrados = [...pedidos];
     
@@ -3115,7 +3137,12 @@ function aplicarFiltrosPedidosCursoTecnico(pedidos) {
     }
     
     if (pedidosCursoFiltros.estadoEnvio) {
-        filtrados = filtrados.filter(p => p.estado === pedidosCursoFiltros.estadoEnvio);
+        // Convertir el estado de envío del filtro al estadoLogistico correspondiente
+        const estadoLogisticoFiltro = estadoEnvioAToEstadoLogistico(pedidosCursoFiltros.estadoEnvio);
+        filtrados = filtrados.filter(p => {
+            const estadoLog = p.estadoLogistico || 'Nuevo';
+            return estadoLog === estadoLogisticoFiltro;
+        });
     }
     
     if (pedidosCursoFiltros.estadoPago) {
