@@ -216,6 +216,11 @@ class Database {
 
     // Operaciones CRUD genéricas
     async add(storeName, data) {
+        // Validación estricta: no permitir agregar documentos con ID (deben usar update)
+        if (data && data.id) {
+            throw new Error(`Error crítico: Intento de crear ${storeName} con ID existente (${data.id}). Use update() en lugar de add().`);
+        }
+        
         const docData = {
             ...data,
             createdAt: serverTimestamp()
@@ -229,7 +234,19 @@ class Database {
             docData.fecha = serverTimestamp();
         }
         
+        // Logging para detectar creación de pedidos
+        if (storeName === 'pedidos') {
+            console.log(`[DB] Creando nuevo pedido:`, {
+                tiendaId: data.tiendaId,
+                estadoPago: data.estadoPago,
+                estado: data.estado,
+                itemsCount: data.items?.length || 0,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
         const docRef = await addDoc(collection(this.db, storeName), docData);
+        console.log(`[DB] Creado ${storeName} con ID: ${docRef.id}`);
         return docRef.id;
     }
 
@@ -251,12 +268,34 @@ class Database {
     }
 
     async update(storeName, data) {
+        // Validación estricta: el ID es obligatorio
+        if (!data || !data.id) {
+            throw new Error(`Error crítico: Intento de actualizar ${storeName} sin ID. Esto podría crear duplicados.`);
+        }
+        
         const { id, ...updateData } = data;
         const docRef = doc(this.db, storeName, id);
+        
+        // Verificar que el documento existe antes de actualizar
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            throw new Error(`Error crítico: Intento de actualizar ${storeName} con ID ${id} que no existe. Esto podría crear duplicados.`);
+        }
+        
+        // Validar que no se esté intentando cambiar el ID
+        if (updateData.id && updateData.id !== id) {
+            throw new Error(`Error crítico: Intento de cambiar el ID de ${storeName} de ${id} a ${updateData.id}. Esto está prohibido.`);
+        }
+        
+        // Remover el ID de updateData si está presente (no debe actualizarse)
+        delete updateData.id;
+        
         await updateDoc(docRef, {
             ...updateData,
             updatedAt: serverTimestamp()
         });
+        
+        console.log(`[DB] Actualizado ${storeName} con ID: ${id}`);
         return id;
     }
 
@@ -573,6 +612,9 @@ class Database {
             ...doc.data()
         }));
         
+        // Detectar duplicados potenciales (mismo contenido pero diferentes IDs)
+        this.detectarDuplicados(pedidos, tiendaId);
+        
         // Ordenar manualmente por fecha (siempre, para asegurar orden correcto)
         pedidos.sort((a, b) => {
             const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha?.toMillis ? new Date(a.fecha.toMillis()) : new Date(a.fecha || 0));
@@ -581,6 +623,53 @@ class Database {
         });
         
         return pedidos;
+    }
+    
+    // Función para detectar duplicados potenciales
+    detectarDuplicados(pedidos, tiendaId) {
+        // Crear un mapa de "huellas" de pedidos para detectar duplicados
+        const huellas = new Map();
+        const duplicados = [];
+        
+        for (const pedido of pedidos) {
+            // Crear una huella única basada en contenido (sin ID)
+            const huella = JSON.stringify({
+                tiendaId: pedido.tiendaId,
+                obraId: pedido.obraId,
+                userId: pedido.userId,
+                fechaCreacion: pedido.fechaCreacion,
+                items: pedido.items?.map(item => ({
+                    productoId: item.productoId,
+                    cantidad: item.cantidad,
+                    precio: item.precio
+                })).sort((a, b) => (a.productoId || '').localeCompare(b.productoId || '')) || []
+            });
+            
+            if (huellas.has(huella)) {
+                const pedidoOriginal = huellas.get(huella);
+                duplicados.push({
+                    original: pedidoOriginal,
+                    duplicado: pedido,
+                    huella: huella
+                });
+                console.error(`[DUPLICADO DETECTADO] Pedido duplicado encontrado:`, {
+                    originalId: pedidoOriginal.id,
+                    duplicadoId: pedido.id,
+                    tiendaId: tiendaId,
+                    fechaCreacion: pedido.fechaCreacion,
+                    estadoPago: pedido.estadoPago,
+                    estado: pedido.estado
+                });
+            } else {
+                huellas.set(huella, pedido);
+            }
+        }
+        
+        if (duplicados.length > 0) {
+            console.error(`[CRÍTICO] Se detectaron ${duplicados.length} pedido(s) duplicado(s) para la tienda ${tiendaId}`);
+        }
+        
+        return duplicados;
     }
 
     async saveSesion(persona, obra) {

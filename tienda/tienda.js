@@ -694,8 +694,20 @@ window.removePedidoPaymentDocument = async function(pedidoId) {
     if (!confirmar) return;
     try {
         const pedido = await db.get('pedidos', pedidoId);
-        if (!pedido || !pedido.transferenciaPDF) {
+        if (!pedido) {
+            await showAlert('Error: No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        
+        if (!pedido.transferenciaPDF) {
             await showAlert('Este pedido no tiene documento de pago para eliminar', 'Información');
+            return;
+        }
+        
+        // Validación: asegurar que el pedido tiene un ID válido antes de actualizar
+        if (!pedido.id || pedido.id !== pedidoId) {
+            console.error('[CRÍTICO] Intento de actualizar pedido sin ID válido:', { pedidoId, pedidoIdEnPedido: pedido.id });
+            await showAlert('Error crítico: El pedido no tiene un ID válido. No se puede actualizar para prevenir duplicados.', 'Error');
             return;
         }
         
@@ -703,7 +715,8 @@ window.removePedidoPaymentDocument = async function(pedidoId) {
         const tieneCuenta = tienda && tienda.tieneCuenta;
         
         pedido.transferenciaPDF = null;
-        if (pedido.estadoPago === 'Pagado') {
+        // Solo resetear estadoPago si realmente es 'Pagado' y no tiene otros documentos
+        if (pedido.estadoPago === 'Pagado' && !pedido.pedidoSistemaPDF) {
             pedido.estadoPago = tieneCuenta ? 'Pago A cuenta' : 'Pendiente de pago';
         }
         
