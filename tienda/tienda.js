@@ -1106,9 +1106,8 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         estadoPagoContent = `<span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>`;
         
         // Pedido real: permite editar/reemplazar - todo en línea horizontal compacta
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-        pedidoRealContent = pedidoRealLink
-            ? `<div style="display: inline-flex; align-items: center; gap: 0.35rem;"><a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button></div>`
+        pedidoRealContent = pedido.pedidoSistemaPDF
+            ? `<div style="display: inline-flex; align-items: center; gap: 0.35rem;"><a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button></div>`
             : `<div style="display: inline-flex; align-items: center; gap: 0.35rem;"><span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button></div>`;
         
         // Precio Real: mostrar o editar
@@ -1161,9 +1160,8 @@ async function createPedidoTiendaCard(pedido, tabContext) {
         estadoPagoContent = `<span class="estado-pago-pill estado-pago-cuenta">Pago A cuenta</span>`;
         
         // Pedido real: permite editar/reemplazar
-        const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
-        pedidoRealContent = pedidoRealLink
-            ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
+        pedidoRealContent = pedido.pedidoSistemaPDF
+            ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a><button class="emoji-btn" type="button" aria-label="Reemplazar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()" style="margin-left: 0.5rem;">➕</button>`
             : `<span class="doc-placeholder">Sin documento</span><button class="emoji-btn" type="button" aria-label="Adjuntar pedido real" onclick="document.getElementById('${pedidoRealInputId}').click()">➕</button>`;
         
         // Precio Real: mostrar o editar
