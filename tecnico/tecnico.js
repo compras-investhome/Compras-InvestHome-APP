@@ -3245,7 +3245,6 @@ async function loadHistoricoTecnico() {
     try {
         const todosPedidos = await db.getAll('pedidos');
         // Filtrar solo pedidos a tienda (no especiales) que estén completados (con transferenciaPDF y albaran)
-        // Y que pertenezcan al usuario actual o a sus obras asignadas
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         const pedidosHistoricos = todosPedidos.filter(p => {
             // Excluir pedidos especiales
@@ -3256,14 +3255,19 @@ async function loadHistoricoTecnico() {
             if (!p.transferenciaPDF || !p.albaran) {
                 return false;
             }
-            // Filtrar por usuario o por obras asignadas
-            if (p.userId === currentUser.id) {
+            // Solo pedidos creados por el técnico actual
+            if (p.userId !== currentUser.id) {
+                return false;
+            }
+            // Si tiene obras asignadas: solo pedidos de sus obras
+            // Si no tiene obras asignadas: todos los pedidos creados por él
+            if (obrasAsignadas.length > 0) {
+                // Solo mostrar pedidos de sus obras asignadas
+                return p.obraId && obrasAsignadas.includes(p.obraId);
+            } else {
+                // Si no tiene obras asignadas, mostrar todos sus pedidos
                 return true;
             }
-            if (p.obraId && obrasAsignadas.includes(p.obraId)) {
-                return true;
-            }
-            return false;
         });
         
         if (pedidosHistoricos.length === 0) {
@@ -3427,17 +3431,22 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
             if (!p.transferenciaPDF || !p.albaran) {
                 return false;
             }
+            // Solo pedidos creados por el técnico actual
+            if (p.userId !== currentUser.id) {
+                return false;
+            }
             // Filtrar por obra
             const obraMatch = obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId;
             if (!obraMatch) return false;
-            // Filtrar por usuario o por obras asignadas
-            if (p.userId === currentUser.id) {
+            // Si tiene obras asignadas: verificar que la obra esté en sus asignadas
+            // Si no tiene obras asignadas: mostrar todos sus pedidos (sin verificar obra)
+            if (obrasAsignadas.length > 0) {
+                // Solo mostrar si la obra está en sus asignadas
+                return p.obraId && obrasAsignadas.includes(p.obraId);
+            } else {
+                // Si no tiene obras asignadas, mostrar todos sus pedidos
                 return true;
             }
-            if (p.obraId && obrasAsignadas.includes(p.obraId)) {
-                return true;
-            }
-            return false;
         });
         
         // Ordenar por fecha (más recientes primero)
@@ -3462,8 +3471,17 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
         pedidosList.innerHTML = '';
         
+        // Agregar botón Volver
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'btn-volver-historico';
+        btnVolver.innerHTML = '← Volver a obras';
+        btnVolver.addEventListener('click', () => {
+            loadHistoricoTecnico();
+        });
+        pedidosList.appendChild(btnVolver);
+        
         // Cargar primeros 5 pedidos
-        cargarMasPedidosHistoricosEncargado();
+        cargarMasPedidosHistoricosTecnico();
     } catch (error) {
         console.error('Error al cargar pedidos históricos por obra:', error);
         pedidosList.innerHTML = '<p>Error al cargar pedidos</p>';
@@ -3482,9 +3500,9 @@ async function cargarMasPedidosHistoricosTecnico() {
     const endIndex = Math.min(currentIndex + itemsPerPage, pedidos.length);
     const pedidosACargar = pedidos.slice(currentIndex, endIndex);
     
-    // Crear cards para los pedidos a cargar
+    // Crear cards para los pedidos a cargar usando la misma card que contabilidad
     for (const pedido of pedidosACargar) {
-        const card = await createPedidoTiendaCardTecnico(pedido);
+        const card = await createPedidoContabilidadCardTecnico(pedido, true);
         pedidosList.appendChild(card);
     }
     
@@ -3604,6 +3622,200 @@ async function createPedidoTiendaCardTecnico(pedido) {
     
     return card;
 }
+
+// Función para crear card de pedido con el mismo diseño que contabilidad (para histórico)
+async function createPedidoContabilidadCardTecnico(pedido, isPagado = false) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card contab-pedido-card';
+    
+    const tienda = await db.get('tiendas', pedido.tiendaId);
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
+    } else {
+        fechaObj = new Date();
+    }
+    const fechaFormateada = formatDateTime(fechaObj);
+    
+    const estadoEnvio = pedido.estado || 'Sin estado';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+    const estadoPago = pedido.estadoPago || (isPagado ? 'Pagado' : 'Pendiente de pago');
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    
+    const tiendaNombre = escapeHtml(tienda?.nombre || 'Desconocida');
+    const persona = escapeHtml(pedido.persona || pedido.usuarioNombre || 'Sin especificar');
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
+    
+    const items = Array.isArray(pedido.items) ? pedido.items : [];
+    const notas = Array.isArray(pedido.notas) ? pedido.notas : [];
+    const totalPedido = items.reduce((total, item) => {
+        const precioItem = Number(item.precio) || 0;
+        const cantidadItem = Number(item.cantidad) || 0;
+        return total + precioItem * cantidadItem;
+    }, 0);
+    
+    const itemsHtml = items.length
+        ? items.map((item, index) => {
+            const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+            const referencia = escapeHtml(item.designacion || item.referencia || '');
+            const ean = escapeHtml(item.ean || '');
+            const cantidad = Number(item.cantidad) || 0;
+            const precio = formatCurrency(item.precio || 0);
+            const subtotal = formatCurrency((item.precio || 0) * cantidad);
+            const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+            const placeholderId = `foto-placeholder-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
+            const refEanParts = [];
+            if (referencia) refEanParts.push(referencia);
+            if (ean) refEanParts.push(ean);
+            const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
+            return `
+                <div class="pedido-item" style="display: flex; align-items: center; gap: 1rem;">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info" style="flex: 1;">
+                        <p class="pedido-item-name">${nombre}</p>
+                        ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    const pedidoRealContent = pedido.pedidoSistemaPDF
+        ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
+        : '<span class="doc-placeholder">Sin documento</span>';
+    
+    const facturaContent = pedido.albaran
+        ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
+        : '<span class="doc-placeholder">Sin factura</span>';
+    
+    const tienePago = Boolean(pedido.transferenciaPDF);
+    // Técnico no puede gestionar pagos, así que siempre es false
+    const puedeGestionarPago = false;
+    const documentoPagoContent = tienePago
+        ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>`
+        : '<span class="doc-placeholder">Sin documento</span>';
+    
+    const itemsSectionId = `pedido-items-${pedido.id}`;
+    const notasSectionId = `pedido-notas-${pedido.id}`;
+    const notasListId = `pedido-notas-list-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-${pedido.id}`;
+    
+    card.innerHTML = `
+        <!-- Header del pedido -->
+        <div class="contab-pedido-header-compact">
+            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+        </div>
+        
+        <!-- Cards compactas: Datos del pedido, Estado de pago, Artículos y Comentarios -->
+        <div class="contab-info-grid-compact">
+            <!-- Card: Datos del pedido -->
+            <div class="contab-info-card-compact contab-card-datos">
+                <div class="contab-card-title-compact">Datos del pedido</div>
+                <div class="contab-info-row-compact"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row-compact"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row-compact">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row-compact"><span>Encargado</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row-compact"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            
+            <!-- Card: Estado de pago -->
+            <div class="contab-info-card-compact contab-card-estado">
+                <div class="contab-card-title-compact">Estado de pago</div>
+                <div class="contab-info-row-compact">
+                    <span>Estado</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Pedido real</span>
+                    <div class="doc-actions">${pedidoRealContent}</div>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Doc. pago</span>
+                    <div class="doc-actions">${documentoPagoContent}</div>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Factura</span>
+                    <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura</span>'}</div>
+                </div>
+            </div>
+            
+            <!-- Card: Artículos (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-articulos" id="articulos-card-${pedido.id}">
+                <div class="contab-card-title-compact">
+                    <span>Artículos (${items.length})</span>
+                    <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
+                </div>
+                <div class="pedido-items-list-compact">
+                    ${itemsHtml}
+                </div>
+                ${items.length > 3 ? `
+                    <button class="expand-arrow" type="button" onclick="toggleExpandArticulos('${pedido.id}')" title="Expandir para ver todos los artículos">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
+            </div>
+            
+            <!-- Card: Comentarios (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-comentarios">
+                <div class="contab-card-title-compact">
+                    <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
+                </div>
+                <div class="comentarios-input-wrapper">
+                    <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
+                    <div class="comentarios-buttons-row">
+                        <button class="btn-ver-comentarios" type="button" onclick="togglePedidoSection('${notasSectionId}', this)" id="btn-ver-comentarios-${pedido.id}" data-open-label="Ocultar Comentarios" data-close-label="Ver Comentarios">
+                            Ver Comentarios
+                        </button>
+                        <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedido('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
+                    </div>
+                </div>
+                <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
+                    <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
+    
+    return card;
+}
+
+// Función para expandir/colapsar artículos
+window.toggleExpandArticulos = function(pedidoId) {
+    const articulosCard = document.getElementById(`articulos-card-${pedidoId}`);
+    if (articulosCard) {
+        articulosCard.classList.toggle('expanded');
+    }
+};
 
 // ========== EVENT LISTENERS ==========
 
@@ -3823,7 +4035,7 @@ function setupTecnicoEventListeners() {
     });
     
     document.getElementById('historico-cargar-mas-btn')?.addEventListener('click', () => {
-        cargarMasPedidosHistoricosEncargado();
+        cargarMasPedidosHistoricosTecnico();
     });
 
     // Botón nuevo pedido especial
