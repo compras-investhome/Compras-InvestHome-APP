@@ -108,12 +108,20 @@ async function calcularGastadoTotalCuenta(tiendaId) {
     
     for (const pedido of pedidos) {
         // Sumar todos los pedidos con estadoPago = 'Pago A cuenta'
-        if (pedido.estadoPago === 'Pago A cuenta') {
-            const totalPedido = pedido.items.reduce((total, item) => {
-                const precioItem = item.precio || 0;
-                const cantidad = item.cantidad || 0;
-                return total + (precioItem * cantidad);
-            }, 0);
+        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado') {
+            // Usar precioReal si está disponible (precio que escribe la tienda)
+            // Si no existe, calcular el total de los items como fallback
+            let totalPedido = 0;
+            if (pedido.precioReal !== null && pedido.precioReal !== undefined) {
+                totalPedido = Number(pedido.precioReal) || 0;
+            } else {
+                // Fallback: calcular total de items
+                totalPedido = pedido.items.reduce((total, item) => {
+                    const precioItem = item.precio || 0;
+                    const cantidad = item.cantidad || 0;
+                    return total + (precioItem * cantidad);
+                }, 0);
+            }
             gastado += totalPedido;
         }
     }
@@ -1450,6 +1458,8 @@ window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
 function recargarPestañasTiendaRelevantes() {
     // Actualizar todos los badges primero
     actualizarTodosLosBadges();
+    // Actualizar badge de cuenta
+    actualizarBadgeCuenta();
     
     // Recargar todas las pestañas principales que pueden verse afectadas
     loadPedidosSeleccionarPago();
@@ -1553,6 +1563,10 @@ window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, sele
                 await showAlert(mensaje, 'Éxito');
                 // Recargar todas las pestañas relevantes para que el pedido se mueva
                 recargarPestañasTiendaRelevantes();
+                // Actualizar badge de cuenta si el estado es "Pago A cuenta"
+                if (nuevoEstado === 'Pago A cuenta') {
+                    await actualizarBadgeCuenta();
+                }
                 
                 // Disparar evento personalizado para que contabilidad se recargue si está abierta
                 if (nuevoEstado === 'Pendiente de pago') {
@@ -1654,6 +1668,10 @@ window.guardarPrecioRealTienda = async function(pedidoId, inputId) {
         if ((estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') && tienePedidoReal) {
             await showAlert('Precio real guardado. El pedido se ha movido a la pestaña correspondiente.', 'Éxito');
             recargarPestañasTiendaRelevantes();
+            // Actualizar badge de cuenta si el estado es "Pago A cuenta"
+            if (estadoPago === 'Pago A cuenta') {
+                await actualizarBadgeCuenta();
+            }
             
             // Si el estado es "Pendiente de pago", disparar evento para recargar contabilidad
             if (estadoPago === 'Pendiente de pago') {
@@ -2366,28 +2384,8 @@ async function initTienda() {
             nombreElement.textContent = `Gestión - ${currentTienda.nombre}`;
         }
         
-        // Calcular gastado de cuenta (suma de todos los pedidos con estadoPago = 'Pago A cuenta')
-        const gastado = await calcularGastadoTotalCuenta(currentTienda.id);
-        
-        const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
-        if (cuentaBadge) {
-            if (!currentTienda.tieneCuenta) {
-                cuentaBadge.textContent = 'Sin Cuenta';
-                cuentaBadge.style.backgroundColor = '#ef4444';
-                cuentaBadge.style.color = 'white';
-            } else if (!currentTienda.limiteCuenta) {
-                // Cuenta sin límite: mostrar solo el gastado
-                cuentaBadge.textContent = `${gastado.toFixed(2)}€ gastado`;
-                cuentaBadge.style.backgroundColor = '#10b981';
-                cuentaBadge.style.color = 'white';
-            } else {
-                // Cuenta con límite: mostrar gastado VS límite
-                const limite = Number(currentTienda.limiteCuenta) || 0;
-                cuentaBadge.textContent = `${gastado.toFixed(2)}€ / ${limite.toFixed(2)}€`;
-                cuentaBadge.style.backgroundColor = '#f59e0b';
-                cuentaBadge.style.color = 'white';
-            }
-        }
+        // Actualizar badge de cuenta
+        await actualizarBadgeCuenta();
     }
 
     // Mostrar vista inicial de Gestión primero
@@ -2409,6 +2407,34 @@ async function initTienda() {
             }
         });
     });
+}
+
+// Función para actualizar el badge de cuenta en el header
+async function actualizarBadgeCuenta() {
+    if (!currentTienda) return;
+    
+    // Calcular gastado de cuenta (suma de todos los pedidos con estadoPago = 'Pago A cuenta')
+    const gastado = await calcularGastadoTotalCuenta(currentTienda.id);
+    
+    const cuentaBadge = document.getElementById('gestion-tienda-cuenta-badge');
+    if (cuentaBadge) {
+        if (!currentTienda.tieneCuenta) {
+            cuentaBadge.textContent = 'Sin Cuenta';
+            cuentaBadge.style.backgroundColor = '#ef4444';
+            cuentaBadge.style.color = 'white';
+        } else if (!currentTienda.limiteCuenta) {
+            // Cuenta sin límite: mostrar solo el gastado
+            cuentaBadge.textContent = `${gastado.toFixed(2)}€ gastado`;
+            cuentaBadge.style.backgroundColor = '#10b981';
+            cuentaBadge.style.color = 'white';
+        } else {
+            // Cuenta con límite: mostrar gastado VS límite
+            const limite = Number(currentTienda.limiteCuenta) || 0;
+            cuentaBadge.textContent = `${gastado.toFixed(2)}€ / ${limite.toFixed(2)}€`;
+            cuentaBadge.style.backgroundColor = '#f59e0b';
+            cuentaBadge.style.color = 'white';
+        }
+    }
 }
 
 // Función para actualizar todos los badges de las pestañas
