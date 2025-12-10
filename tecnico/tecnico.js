@@ -3471,15 +3471,6 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
         pedidosList.innerHTML = '';
         
-        // Agregar botón Volver
-        const btnVolver = document.createElement('button');
-        btnVolver.className = 'btn-volver-historico';
-        btnVolver.innerHTML = '← Volver a obras';
-        btnVolver.addEventListener('click', () => {
-            loadHistoricoTecnico();
-        });
-        pedidosList.appendChild(btnVolver);
-        
         // Cargar primeros 5 pedidos
         cargarMasPedidosHistoricosTecnico();
     } catch (error) {
@@ -4030,6 +4021,10 @@ function setupTecnicoEventListeners() {
     });
     
     // Botones de histórico
+    document.getElementById('historico-volver-obras')?.addEventListener('click', () => {
+        loadHistoricoTecnico();
+    });
+    
     document.getElementById('historico-cargar-mas-btn')?.addEventListener('click', () => {
         cargarMasPedidosHistoricosTecnico();
     });
