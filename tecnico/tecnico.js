@@ -1822,19 +1822,19 @@ async function createPedidoTecnicoCard(pedido) {
         }).join('')
         : '<p class="cascade-empty">No hay artículos en este pedido</p>';
     
-    const pedidoRealLink = pedido.pedidoSistemaPDF ? escapeHtml(pedido.pedidoSistemaPDF) : null;
+    const pedidoRealLink = pedido.pedidoSistemaPDF ? pedido.pedidoSistemaPDF : null;
     const pedidoRealContent = pedidoRealLink
         ? `<a href="${pedidoRealLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>`
         : '<span class="doc-placeholder">Sin documento</span>';
     
-    const facturaLink = pedido.albaran ? escapeHtml(pedido.albaran) : null;
+    const facturaLink = pedido.albaran ? pedido.albaran : null;
     const facturaContent = facturaLink
         ? `<a href="${facturaLink}" target="_blank" rel="noopener" class="doc-link">📄 Ver factura</a>`
         : '<span class="doc-placeholder">Sin factura</span>';
     
     const tienePago = Boolean(pedido.transferenciaPDF);
     const documentoPagoContent = tienePago
-        ? `<a href="${escapeHtml(pedido.transferenciaPDF)}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
+        ? `<a href="${pedido.transferenciaPDF}" target="_blank" rel="noopener" class="doc-link">📄 Ver pago</a>`
         : '<span class="doc-placeholder">Sin documento</span>';
     
     const itemsSectionId = `pedido-items-tec-${pedido.id}`;
