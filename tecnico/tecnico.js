@@ -33,6 +33,138 @@ let pedidosCursoFiltros = {
 };
 let previousAdminSubView = null;
 
+// ========== SISTEMA DE CACHE OPTIMIZADO ==========
+// Cache en memoria del módulo técnico para reducir llamadas a Firebase
+const tecnicoCache = {
+    pedidos: { data: null, timestamp: 0 },
+    pedidosEspeciales: { data: null, timestamp: 0 },
+    obras: { data: null, timestamp: 0 },
+    tiendas: { data: null, timestamp: 0 },
+    categorias: { data: null, timestamp: 0 }
+};
+
+// TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
+const CACHE_TTL = {
+    obras: 9 * 60 * 60 * 1000,           // 9 horas - casi estáticas
+    tiendas: 9 * 60 * 60 * 1000,         // 9 horas - casi estáticas
+    categorias: 9 * 60 * 60 * 1000,      // 9 horas - casi estáticas
+    pedidos: 3 * 60 * 60 * 1000,         // 3 horas - dinámicos pero con invalidación manual
+    pedidosEspeciales: 3 * 60 * 60 * 1000 // 3 horas - dinámicos pero con invalidación manual
+};
+
+// Verificar si el cache es válido para una colección
+function isCacheValid(collectionName) {
+    const cache = tecnicoCache[collectionName];
+    if (!cache || !cache.data) return false;
+    
+    const ttl = CACHE_TTL[collectionName] || CACHE_TTL.pedidos;
+    const age = Date.now() - cache.timestamp;
+    return age < ttl;
+}
+
+// Invalidar cache de una colección específica (invalidación granular)
+function invalidateCache(collectionName) {
+    if (tecnicoCache[collectionName]) {
+        tecnicoCache[collectionName].timestamp = 0;
+        tecnicoCache[collectionName].data = null;
+    }
+}
+
+// Invalidar cache de pedidos
+function invalidatePedidosCache() {
+    invalidateCache('pedidos');
+}
+
+// Invalidar cache de pedidos especiales
+function invalidatePedidosEspecialesCache() {
+    invalidateCache('pedidosEspeciales');
+}
+
+// Función helper para obtener pedidos con cache
+async function getPedidosCached() {
+    if (isCacheValid('pedidos')) {
+        return tecnicoCache.pedidos.data;
+    }
+    
+    const pedidos = await db.getAll('pedidos');
+    tecnicoCache.pedidos.data = pedidos;
+    tecnicoCache.pedidos.timestamp = Date.now();
+    return pedidos;
+}
+
+// Función helper para obtener pedidos especiales con cache
+async function getPedidosEspecialesCached() {
+    if (isCacheValid('pedidosEspeciales')) {
+        return tecnicoCache.pedidosEspeciales.data;
+    }
+    
+    const pedidosEspeciales = await db.getAll('pedidosEspeciales');
+    tecnicoCache.pedidosEspeciales.data = pedidosEspeciales;
+    tecnicoCache.pedidosEspeciales.timestamp = Date.now();
+    return pedidosEspeciales;
+}
+
+// Función helper para obtener obras con cache
+async function getObrasCached() {
+    if (isCacheValid('obras')) {
+        return tecnicoCache.obras.data;
+    }
+    
+    const obras = await db.getAllObras();
+    tecnicoCache.obras.data = obras;
+    tecnicoCache.obras.timestamp = Date.now();
+    return obras;
+}
+
+// Función helper para obtener tiendas con cache
+async function getTiendasCached() {
+    if (isCacheValid('tiendas')) {
+        return tecnicoCache.tiendas.data;
+    }
+    
+    const tiendas = await db.getAll('tiendas');
+    tecnicoCache.tiendas.data = tiendas;
+    tecnicoCache.tiendas.timestamp = Date.now();
+    return tiendas;
+}
+
+// Precargar tiendas y obras necesarias para un array de pedidos
+// Evita múltiples llamadas individuales db.get() dentro de loops
+async function preloadPedidoRelatedData(pedidos) {
+    const tiendaIds = new Set();
+    const obraIds = new Set();
+    
+    // Extraer IDs únicos
+    pedidos.forEach(pedido => {
+        if (pedido.tiendaId) tiendaIds.add(pedido.tiendaId);
+        if (pedido.obraId) obraIds.add(pedido.obraId);
+    });
+    
+    // Precargar todas las tiendas necesarias
+    const tiendasCache = new Map();
+    if (tiendaIds.size > 0) {
+        const todasTiendas = await getTiendasCached();
+        todasTiendas.forEach(tienda => {
+            if (tiendaIds.has(tienda.id)) {
+                tiendasCache.set(tienda.id, tienda);
+            }
+        });
+    }
+    
+    // Precargar todas las obras necesarias
+    const obrasCache = new Map();
+    if (obraIds.size > 0) {
+        const todasObras = await getObrasCached();
+        todasObras.forEach(obra => {
+            if (obraIds.has(obra.id)) {
+                obrasCache.set(obra.id, obra);
+            }
+        });
+    }
+    
+    return { tiendasCache, obrasCache };
+}
+
 // Funciones de utilidad para popups
 function showAlert(message, title = 'Información') {
     return new Promise((resolve) => {
@@ -293,11 +425,9 @@ function isPedidoEspecial(pedido) {
 
 async function getObrasCatalog(pedidosReferencia = []) {
     let obras = [];
-    if (typeof db.getAllObras === 'function') {
-        const result = await db.getAllObras();
-        if (Array.isArray(result)) {
-            obras = result;
-        }
+    const result = await getObrasCached();
+    if (Array.isArray(result)) {
+        obras = result;
     }
     
     const obraMap = new Map();
@@ -453,7 +583,7 @@ function showView(viewName) {
 // ========== CARGA DE TIENDAS ==========
 
 async function loadTiendasAdminView() {
-    let tiendas = await db.getAll('tiendas');
+    let tiendas = await getTiendasCached();
     
     // Filtrar solo tiendas activas
     tiendas = tiendas.filter(t => t.activa !== false);
@@ -1541,6 +1671,8 @@ async function finalizarPedidoAdmin() {
             };
             
             const pedidoId = await db.add('pedidos', pedido);
+            // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+            invalidatePedidosCache();
             pedidosCreados.push({ id: pedidoId, tienda: tienda.nombre });
         } catch (error) {
             console.error('Error al crear pedido:', error);
@@ -1582,7 +1714,7 @@ async function loadMisPedidos() {
         return;
     }
     
-    const todosPedidos = await db.getAll('pedidos');
+    const todosPedidos = await getPedidosCached();
     let pedidosFiltrados = todosPedidos.filter(p => {
         return p.estado !== 'Completado' && !(p.esPedidoEspecial === true);
     });
@@ -1609,6 +1741,9 @@ async function loadMisPedidos() {
     
     const obras = await getObrasCatalog(pedidosFiltrados);
     
+    // Optimización: precargar todas las tiendas y obras necesarias de una vez
+    const precargados = await preloadPedidoRelatedData(pedidosFiltrados);
+    
     let totalCount = 0;
     for (const obra of obras) {
         const obraId = obra.id || 'sin-obra';
@@ -1624,8 +1759,9 @@ async function loadMisPedidos() {
             defaultOpen: pedidosObra.length > 0
         });
         
+        // Usar datos precargados para evitar llamadas individuales
         for (const pedido of pedidosObra) {
-            const card = await createPedidoTecnicoCard(pedido);
+            const card = await createPedidoTecnicoCard(pedido, precargados);
             content.appendChild(card);
         }
         
@@ -1707,7 +1843,7 @@ function aplicarFiltrosPedidos(pedidos) {
 }
 
 async function populatePedidosFilters() {
-    const todosPedidos = await db.getAll('pedidos');
+    const todosPedidos = await getPedidosCached();
     const pedidosNoCompletados = todosPedidos.filter(p => p.estado !== 'Completado');
     
     const obras = await getObrasCatalog(pedidosNoCompletados);
@@ -1721,7 +1857,9 @@ async function populatePedidosFilters() {
     }
     
     const tiendasIds = [...new Set(pedidosNoCompletados.map(p => p.tiendaId).filter(Boolean))];
-    const tiendas = await Promise.all(tiendasIds.map(id => db.get('tiendas', id)));
+    // Optimización: usar cache de tiendas en lugar de llamadas individuales
+    const todasTiendas = await getTiendasCached();
+    const tiendas = todasTiendas.filter(t => tiendasIds.includes(t.id));
     const selectTienda = document.getElementById('filter-tienda');
     if (selectTienda) {
         const tiendasOptions = tiendas
@@ -1869,25 +2007,36 @@ window.descargarDocumento = function(dataURL, nombreArchivo = 'documento') {
     }
 };
 
-async function createPedidoTecnicoCard(pedido) {
+async function createPedidoTecnicoCard(pedido, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
     // Verificar que no sea un pedido especial (no tienen tiendaId válido)
     if (isPedidoEspecial(pedido)) {
         // Si es pedido especial, usar la función para pedidos especiales
-        return await createPedidoEspecialTecnicoCard(pedido);
+        return await createPedidoEspecialTecnicoCard(pedido, precargados);
     }
     
     // Validar que tiendaId sea válido antes de hacer la consulta
     const tiendaId = pedido?.tiendaId;
     if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
         // Si no tiene tiendaId válido, tratarlo como pedido especial
-        return await createPedidoEspecialTecnicoCard(pedido);
+        return await createPedidoEspecialTecnicoCard(pedido, precargados);
     }
     
-    const tienda = await db.get('tiendas', tiendaId);
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    // Optimización: usar datos precargados si están disponibles, sino cargar individualmente
+    let tienda, obraInfo;
+    if (precargados?.tiendasCache && tiendaId) {
+        tienda = precargados.tiendasCache.get(tiendaId) || await db.get('tiendas', tiendaId);
+    } else {
+        tienda = await db.get('tiendas', tiendaId);
+    }
+    
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    }
     
     let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
@@ -2094,11 +2243,17 @@ async function createPedidoTecnicoCard(pedido) {
 }
 
 // Función para crear card de pedido especial para técnico
-async function createPedidoEspecialTecnicoCard(pedido) {
+async function createPedidoEspecialTecnicoCard(pedido, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    // Optimización: usar datos precargados si están disponibles
+    let obraInfo;
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    }
     
     let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
@@ -3021,6 +3176,8 @@ window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
             timestamp: new Date().toISOString()
         });
         await db.update('pedidos', { id: pedidoId, notas });
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
         input.value = '';
         const listEl = document.getElementById(listId);
         const countEl = document.getElementById(countId);
@@ -3082,6 +3239,8 @@ window.eliminarArticuloEspecial = async function(pedidoId, index) {
         
         pedido.articulos.splice(index, 1);
         await db.update('pedidos', pedido);
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
         await showAlert('Artículo eliminado correctamente', 'Éxito');
         loadPedidosEspecialesTecnico();
     } catch (error) {
@@ -3103,6 +3262,8 @@ window.anularPedidoEspecial = async function(pedidoId) {
         
         pedido.estado = 'Anulado';
         await db.update('pedidos', pedido);
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
         await showAlert('Pedido anulado correctamente', 'Éxito');
         loadPedidosEspecialesTecnico();
     } catch (error) {
@@ -3148,8 +3309,8 @@ async function loadPedidosEnCursoTecnico() {
     }
     
     try {
-        const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosCached();
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         
         // Filtrar pedidos normales en curso (no completados, no cerrados, no finalizados)
@@ -3260,7 +3421,7 @@ async function loadPedidosEnCursoTecnico() {
         
         if (obrasAsignadas.length > 0) {
             // Obtener solo las obras asignadas al usuario
-            const todasObras = await db.getAllObras();
+            const todasObras = await getObrasCached();
             obrasConPedidos = todasObras.filter(obra => 
                 obrasAsignadas.includes(obra.id) && pedidosPorObra.has(obra.id)
             );
@@ -3282,7 +3443,7 @@ async function loadPedidosEnCursoTecnico() {
             }
         } else {
             // Si no tiene obras asignadas, mostrar solo sus propios pedidos agrupados por obra
-            const todasObras = await db.getAllObras();
+            const todasObras = await getObrasCached();
             const obrasIdsConPedidos = Array.from(pedidosPorObra.keys()).filter(id => id !== 'sin-obra');
             obrasConPedidos = todasObras.filter(obra => 
                 obrasIdsConPedidos.includes(obra.id)
@@ -3384,8 +3545,8 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
     }
     
     try {
-        const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosCached();
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         
         // Filtrar pedidos normales en curso de esta obra
@@ -3503,6 +3664,9 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
         pedidosList.innerHTML = '';
         
+        // Optimización: precargar datos relacionados una sola vez
+        pedidosCursoPaginationState.precargados = await preloadPedidoRelatedData(todosEnCurso);
+        
         // Cargar primeros 5 pedidos
         cargarMasPedidosCursoTecnico();
     } catch (error) {
@@ -3524,13 +3688,14 @@ async function cargarMasPedidosCursoTecnico() {
     const endIndex = Math.min(currentIndex + itemsPerPage, pedidos.length);
     const pedidosACargar = pedidos.slice(currentIndex, endIndex);
     
-    // Crear cards para los pedidos a cargar
+    // Crear cards para los pedidos a cargar (usar datos precargados si están disponibles)
+    const precargados = pedidosCursoPaginationState.precargados || null;
     for (const pedido of pedidosACargar) {
         // Determinar si es pedido especial y crear la card apropiada
         const esEspecial = isPedidoEspecial(pedido);
         const card = esEspecial 
-            ? await createPedidoEspecialTecnicoCard(pedido)
-            : await createPedidoTecnicoCard(pedido);
+            ? await createPedidoEspecialTecnicoCard(pedido, precargados)
+            : await createPedidoTecnicoCard(pedido, precargados);
         pedidosList.appendChild(card);
     }
     
@@ -3700,8 +3865,8 @@ async function loadHistoricoTecnico() {
     };
     
     try {
-        const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosCached();
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         // Filtrar pedidos normales completados
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         const pedidosHistoricos = todosPedidos.filter(p => {
@@ -3830,7 +3995,7 @@ async function loadHistoricoTecnico() {
             }
         } else {
             // Si no tiene obras asignadas, mostrar solo sus propios pedidos agrupados por obra
-            const todasObras = await db.getAllObras();
+            const todasObras = await getObrasCached();
             const obrasIdsConPedidos = Array.from(pedidosPorObra.keys()).filter(id => id !== 'sin-obra');
             obrasConPedidos = todasObras.filter(obra => 
                 obrasIdsConPedidos.includes(obra.id)
@@ -3931,8 +4096,8 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
     }
     
     try {
-        const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosCached();
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         
         // Filtrar pedidos normales históricos de esta obra
@@ -4045,6 +4210,9 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
         pedidosList.innerHTML = '';
         
+        // Optimización: precargar datos relacionados una sola vez
+        historicoPaginationState.precargados = await preloadPedidoRelatedData(todosHistoricos);
+        
         // Cargar primeros 5 pedidos
         cargarMasPedidosHistoricosTecnico();
     } catch (error) {
@@ -4066,12 +4234,14 @@ async function cargarMasPedidosHistoricosTecnico() {
     const pedidosACargar = pedidos.slice(currentIndex, endIndex);
     
     // Crear cards para los pedidos a cargar usando la misma card que contabilidad
+    // Optimización: usar datos precargados si están disponibles
+    const precargados = historicoPaginationState.precargados || null;
     for (const pedido of pedidosACargar) {
         // Determinar si es pedido especial y crear la card apropiada
         const esEspecial = isPedidoEspecial(pedido);
         const card = esEspecial 
-            ? await createPedidoEspecialTecnicoCard(pedido)
-            : await createPedidoContabilidadCardTecnico(pedido, true);
+            ? await createPedidoEspecialTecnicoCard(pedido, precargados)
+            : await createPedidoContabilidadCardTecnico(pedido, true, precargados);
         pedidosList.appendChild(card);
     }
     
@@ -4086,13 +4256,23 @@ async function cargarMasPedidosHistoricosTecnico() {
     }
 }
 
-async function createPedidoTiendaCardTecnico(pedido) {
+async function createPedidoTiendaCardTecnico(pedido, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    // Obtener información de obra y tienda
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
-    const tiendaInfo = pedido.tiendaId ? await db.get('tiendas', pedido.tiendaId) : null;
+    // Optimización: usar datos precargados si están disponibles, sino cargar individualmente
+    let obraInfo, tiendaInfo;
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    }
+    
+    if (precargados?.tiendasCache && pedido.tiendaId) {
+        tiendaInfo = precargados.tiendasCache.get(pedido.tiendaId) || null;
+    } else {
+        tiendaInfo = pedido.tiendaId ? await db.get('tiendas', pedido.tiendaId) : null;
+    }
     
     // Formatear fecha
     let fechaObj;
@@ -4193,19 +4373,30 @@ async function createPedidoTiendaCardTecnico(pedido) {
 }
 
 // Función para crear card de pedido con el mismo diseño que contabilidad (para histórico)
-async function createPedidoContabilidadCardTecnico(pedido, isPagado = false) {
+async function createPedidoContabilidadCardTecnico(pedido, isPagado = false, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
-    
+
     // Validar que tiendaId sea válido antes de hacer la consulta
     const tiendaId = pedido?.tiendaId;
     if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
         // Si no tiene tiendaId válido, es un pedido especial, usar la función apropiada
-        return await createPedidoEspecialTecnicoCard(pedido);
+        return await createPedidoEspecialTecnicoCard(pedido, precargados);
     }
     
-    const tienda = await db.get('tiendas', tiendaId);
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    // Optimización: usar datos precargados si están disponibles, sino cargar individualmente
+    let tienda, obraInfo;
+    if (precargados?.tiendasCache && tiendaId) {
+        tienda = precargados.tiendasCache.get(tiendaId) || await db.get('tiendas', tiendaId);
+    } else {
+        tienda = await db.get('tiendas', tiendaId);
+    }
+    
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    }
     
     let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {

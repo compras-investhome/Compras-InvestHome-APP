@@ -23,6 +23,150 @@ let editingTiendaId = null;
 let previousAdminSubView = 'admin-tienda';
 let obrasAsignadasUsuario = []; // Array de IDs de obras asignadas al usuario actual
 
+// ========== SISTEMA DE CACHE OPTIMIZADO ==========
+// Cache en memoria del módulo admin para reducir llamadas a Firebase
+const adminCache = {
+    pedidos: { data: null, timestamp: 0 },
+    pedidosEspeciales: { data: null, timestamp: 0 },
+    obras: { data: null, timestamp: 0 },
+    tiendas: { data: null, timestamp: 0 },
+    categorias: { data: null, timestamp: 0 }
+};
+
+// TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
+const CACHE_TTL = {
+    obras: 9 * 60 * 60 * 1000,           // 9 horas - casi estáticas
+    tiendas: 9 * 60 * 60 * 1000,         // 9 horas - casi estáticas
+    categorias: 9 * 60 * 60 * 1000,      // 9 horas - casi estáticas
+    pedidos: 3 * 60 * 60 * 1000,         // 3 horas - dinámicos pero con invalidación manual
+    pedidosEspeciales: 3 * 60 * 60 * 1000 // 3 horas - dinámicos pero con invalidación manual
+};
+
+// Verificar si el cache es válido para una colección
+function isCacheValid(collectionName) {
+    const cache = adminCache[collectionName];
+    if (!cache || !cache.data) return false;
+    
+    const ttl = CACHE_TTL[collectionName] || CACHE_TTL.pedidos;
+    const age = Date.now() - cache.timestamp;
+    return age < ttl;
+}
+
+// Invalidar cache de una colección específica (invalidación granular)
+function invalidateCache(collectionName) {
+    if (adminCache[collectionName]) {
+        adminCache[collectionName].timestamp = 0;
+        adminCache[collectionName].data = null;
+    }
+}
+
+// Invalidar cache de pedidos
+function invalidatePedidosCache() {
+    invalidateCache('pedidos');
+}
+
+// Invalidar cache de pedidos especiales
+function invalidatePedidosEspecialesCache() {
+    invalidateCache('pedidosEspeciales');
+}
+
+// Función helper para obtener pedidos con cache
+async function getPedidosCached() {
+    if (isCacheValid('pedidos')) {
+        return adminCache.pedidos.data;
+    }
+    
+    const pedidos = await db.getAll('pedidos');
+    adminCache.pedidos.data = pedidos;
+    adminCache.pedidos.timestamp = Date.now();
+    return pedidos;
+}
+
+// Función helper para obtener pedidos especiales con cache
+async function getPedidosEspecialesCached() {
+    if (isCacheValid('pedidosEspeciales')) {
+        return adminCache.pedidosEspeciales.data;
+    }
+    
+    const pedidosEspeciales = await db.getAll('pedidosEspeciales');
+    adminCache.pedidosEspeciales.data = pedidosEspeciales;
+    adminCache.pedidosEspeciales.timestamp = Date.now();
+    return pedidosEspeciales;
+}
+
+// Función helper para obtener obras con cache
+async function getObrasCached() {
+    if (isCacheValid('obras')) {
+        return adminCache.obras.data;
+    }
+    
+    const obras = await db.getAllObras();
+    adminCache.obras.data = obras;
+    adminCache.obras.timestamp = Date.now();
+    return obras;
+}
+
+// Función helper para obtener tiendas con cache
+async function getTiendasCached() {
+    if (isCacheValid('tiendas')) {
+        return adminCache.tiendas.data;
+    }
+    
+    const tiendas = await db.getAll('tiendas');
+    adminCache.tiendas.data = tiendas;
+    adminCache.tiendas.timestamp = Date.now();
+    return tiendas;
+}
+
+// Función helper para obtener categorías con cache
+async function getCategoriasCached() {
+    if (isCacheValid('categorias')) {
+        return adminCache.categorias.data;
+    }
+    
+    const categorias = await db.getAll('categorias');
+    adminCache.categorias.data = categorias;
+    adminCache.categorias.timestamp = Date.now();
+    return categorias;
+}
+
+// Precargar tiendas y obras necesarias para un array de pedidos
+// Evita múltiples llamadas individuales db.get() dentro de loops
+async function preloadPedidoRelatedData(pedidos) {
+    const tiendaIds = new Set();
+    const obraIds = new Set();
+    
+    // Extraer IDs únicos
+    pedidos.forEach(pedido => {
+        if (pedido.tiendaId) tiendaIds.add(pedido.tiendaId);
+        if (pedido.obraId) obraIds.add(pedido.obraId);
+    });
+    
+    // Precargar todas las tiendas necesarias
+    const tiendasCache = new Map();
+    if (tiendaIds.size > 0) {
+        const todasTiendas = await getTiendasCached();
+        todasTiendas.forEach(tienda => {
+            if (tiendaIds.has(tienda.id)) {
+                tiendasCache.set(tienda.id, tienda);
+            }
+        });
+    }
+    
+    // Precargar todas las obras necesarias
+    const obrasCache = new Map();
+    if (obraIds.size > 0) {
+        const todasObras = await getObrasCached();
+        todasObras.forEach(obra => {
+            if (obraIds.has(obra.id)) {
+                obrasCache.set(obra.id, obra);
+            }
+        });
+    }
+    
+    return { tiendasCache, obrasCache };
+}
+
 // Funciones de utilidad para popups
 function showAlert(message, title = 'Información') {
     return new Promise((resolve) => {
@@ -419,7 +563,7 @@ function showAdminView(viewName) {
 // ========== FUNCIONES PARA VISTA DE TIENDA EN ADMIN ==========
 
 async function loadTiendasAdminView() {
-    let tiendas = await db.getAll('tiendas');
+    let tiendas = await getTiendasCached();
     
     // Filtrar solo tiendas activas
     tiendas = tiendas.filter(t => t.activa !== false);
@@ -1268,7 +1412,7 @@ async function finalizarPedidoAdmin() {
     }
     
     // Pedir selección de obra
-    const obras = await db.getAll('obras');
+    const obras = await getObrasCached();
     if (obras.length === 0) {
         await showAlert('No hay obras disponibles. Por favor, crea una obra primero.', 'Error');
         return;
@@ -2193,9 +2337,13 @@ async function guardarPedidoEspecial() {
             }
             
             await db.update('pedidosEspeciales', { id: pedidoId, ...pedidoActualizado });
+            // Invalidar cache de pedidos especiales
+            invalidatePedidosEspecialesCache();
             await showAlert('Pedido especial actualizado correctamente', 'Éxito');
         } else {
             await db.add('pedidosEspeciales', pedidoEspecial);
+            // Invalidar cache de pedidos especiales
+            invalidatePedidosEspecialesCache();
             await showAlert('Pedido especial creado exitosamente', 'Éxito');
         }
         
@@ -2473,7 +2621,7 @@ async function loadCuentasAdmin() {
     };
     
     try {
-        const tiendas = await db.getAll('tiendas');
+        const tiendas = await getTiendasCached();
         // Filtrar tiendas con cuenta (igual que contabilidad)
         const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta);
         
@@ -2625,7 +2773,7 @@ async function loadPedidosCuentaPorTienda(tiendaId) {
     
     try {
         // Obtener pedidos de la tienda (igual que contabilidad)
-        const todosPedidos = await db.getAll('pedidos');
+        const todosPedidos = await getPedidosCached();
         const pedidosTienda = todosPedidos.filter(p => 
             p.tiendaId === tiendaId &&
             p.estadoPago === 'Pago A cuenta' && 
@@ -2896,6 +3044,8 @@ window.guardarNotaPedidoAdmin = async function(pedidoId, inputId, listId, countI
             timestamp: new Date().toISOString()
         });
         await db.update('pedidos', { id: pedidoId, notas });
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
         input.value = '';
         const listEl = document.getElementById(listId);
         const countEl = document.getElementById(countId);
@@ -2936,7 +3086,7 @@ async function loadHistoricoAdmin() {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         
         // Filtrar pedidos normales completados (con transferenciaPDF y albaran)
         const pedidosHistoricos = todosPedidos.filter(p => {
@@ -3091,7 +3241,7 @@ async function loadPedidosHistoricosPorObra(obraId, obraNombre) {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         
         // Filtrar pedidos normales históricos de esta obra
         const pedidosHistoricos = todosPedidos.filter(p => {
@@ -3312,7 +3462,7 @@ async function loadNuevoEspeciales() {
     isLoadingNuevoEspeciales = true;
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos nuevos (estado: Pendiente o sin estado específico, excluyendo Cerrado)
         // "En Espera" se muestra en la pestaña correspondiente según su estado base
         const pedidosNuevos = todosPedidos.filter(p => {
@@ -3361,7 +3511,7 @@ async function loadSinTransporteEspeciales() {
     if (!container) return;
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos sin transporte (excluyendo Cerrado)
         // "En Espera" se muestra en la pestaña correspondiente según su estado base
         const pedidosSinTransporte = todosPedidos.filter(p => {
@@ -3408,7 +3558,7 @@ async function loadConTransporteEspeciales() {
     if (!container) return;
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos con transporte (excluyendo Cerrado)
         // "En Espera" se muestra en la pestaña correspondiente según su estado base
         const pedidosConTransporte = todosPedidos.filter(p => {
@@ -3455,7 +3605,7 @@ async function loadOnlineEspeciales() {
     if (!container) return;
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos online (excluyendo Cerrado)
         // "En Espera" se muestra en la pestaña correspondiente según su estado base
         const pedidosOnline = todosPedidos.filter(p => {
@@ -3502,7 +3652,7 @@ async function loadGestionandoEspeciales() {
     if (!container) return;
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos gestionando (excluyendo Cerrado)
         // "En Espera" se muestra en la pestaña correspondiente según su estado base
         const pedidosGestionando = todosPedidos.filter(p => {
@@ -3571,7 +3721,7 @@ async function loadCerradosEspeciales() {
     };
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos cerrados
         const pedidosCerrados = todosPedidos.filter(p => 
             p.estado === 'Cerrado'
@@ -3709,7 +3859,7 @@ async function loadPedidosCerradosPorObra(obraId, obraNombre) {
     }
     
     try {
-        const todosPedidos = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosEspecialesCached();
         // Filtrar pedidos cerrados de esta obra
         const pedidosCerrados = todosPedidos.filter(p => 
             p.estado === 'Cerrado' && (obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId)
@@ -3921,7 +4071,7 @@ async function createPedidoEspecialAdminCard(pedido) {
     const estadoPagoSelectId = `pedido-estado-pago-select-${pedido.id}`;
     
     // Cargar tiendas para el desplegable
-    const tiendas = await db.getAll('tiendas');
+    const tiendas = await getTiendasCached();
     const tiendasOptions = tiendas
         .filter(t => t.activa !== false)
         .map(t => `<option value="${t.id}" ${pedido.tiendaId === t.id ? 'selected' : ''} class="tienda-asignada">${escapeHtml(t.nombre || 'Tienda sin nombre')}</option>`)
@@ -4345,7 +4495,9 @@ window.duplicarArticuloPedido = async function(pedidoId, articuloIndex) {
         
         articulos.push(articuloDuplicado);
         await db.update('pedidosEspeciales', { id: pedidoId, articulos });
-        
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
+
         // Recargar la card
         await recargarCardPedidoEspecial(pedidoId);
     } catch (error) {
@@ -4385,7 +4537,9 @@ window.editarCantidadArticuloPedido = async function(pedidoId, articuloIndex, ca
         
         articulos[articuloIndex].cantidad = cantidad;
         await db.update('pedidosEspeciales', { id: pedidoId, articulos });
-        
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
+
         // Recargar la card
         await recargarCardPedidoEspecial(pedidoId);
     } catch (error) {
@@ -4418,7 +4572,9 @@ window.eliminarArticuloPedido = async function(pedidoId, articuloIndex) {
         
         articulos.splice(articuloIndex, 1);
         await db.update('pedidosEspeciales', { id: pedidoId, articulos });
-        
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
+
         // Recargar la card
         await recargarCardPedidoEspecial(pedidoId);
     } catch (error) {
@@ -4509,9 +4665,13 @@ window.asignarTiendaPedidoEspecial = async function(pedidoId, tiendaId) {
         
         // Crear el pedido normal en la colección 'pedidos'
         await db.add('pedidos', pedidoNormal);
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
         
         // Eliminar el pedido especial
         await db.delete('pedidosEspeciales', pedidoId);
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
         
         await showAlert('Pedido especial convertido en pedido normal y asignado a la tienda correctamente', 'Éxito');
         
@@ -4530,6 +4690,8 @@ window.eliminarPedidoEspecial = async function(pedidoId) {
     
     try {
         await db.delete('pedidosEspeciales', pedidoId);
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
         await showAlert('Pedido eliminado correctamente', 'Éxito');
         await loadPedidosEspecialesAdmin();
     } catch (error) {
@@ -4624,7 +4786,9 @@ window.cambiarEstadoPagoPedidoEspecial = async function(pedidoId, nuevoEstadoPag
         
         pedido.estadoPago = nuevoEstadoPago;
         await db.update('pedidosEspeciales', pedido);
-        
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
+
         // Recargar la vista
         await loadPedidosEspecialesAdmin();
     } catch (error) {
@@ -4755,7 +4919,9 @@ window.cambiarEstadoPedidoEspecial = async function(pedidoId, nuevoEstado) {
         }
         
         await db.update('pedidosEspeciales', pedido);
-        
+        // Invalidar cache de pedidos especiales
+        invalidatePedidosEspecialesCache();
+
         // Si el nuevo estado es "En Espera", no cambiar de pestaña, solo actualizar la vista actual
         if (nuevoEstado === 'En Espera') {
             // Recargar solo la pestaña actual
@@ -5338,7 +5504,7 @@ async function cargarTiendasDisponibles(tiendaIdActual = null) {
         .map(u => u.tiendaId));
     
     // Obtener todas las tiendas
-    const todasLasTiendas = await db.getAll('tiendas');
+    const todasLasTiendas = await getTiendasCached();
     
     // Filtrar tiendas disponibles (no enlazadas o la tienda actual si se está editando)
     const tiendasDisponibles = todasLasTiendas.filter(tienda => 
@@ -5678,7 +5844,7 @@ async function procesarYSubirArticulos(file, tiendaId) {
         progressBar.style.width = '30%';
         
         // Obtener o crear categoría "General" para la tienda
-        const categorias = await db.getAll('categorias');
+        const categorias = await getCategoriasCached();
         let categoriaGeneral = categorias.find(c => c.tiendaId === tiendaId && c.nombre === 'General');
         
         if (!categoriaGeneral) {
