@@ -334,6 +334,8 @@ async function loadPedidosContabilidad() {
     
     // Filtrar pedidos normales pendientes de pago
     const pedidosPendientes = todosPedidos.filter(pedido => {
+        // Excluir pedidos especiales (los manejaremos por separado)
+        if (isPedidoEspecial(pedido)) return false;
         if (pedido.estado === 'Completado') return false;
         if (pedido.estadoPago !== 'Pendiente de pago') return false;
         if (!pedido.pedidoSistemaPDF) return false;
@@ -341,23 +343,38 @@ async function loadPedidosContabilidad() {
         return true;
     });
     
-    // Filtrar pedidos especiales pendientes de pago con documento adjunto
+    // Filtrar pedidos especiales pendientes de pago con documento adjunto de la colección pedidosEspeciales
     const pedidosEspecialesPendientes = todosPedidosEspeciales.filter(pedido => {
         const estadoPago = pedido.estadoPago || 'Pendiente de pago';
-        if (estadoPago === 'Sin Asignar' || !estadoPago) {
-            // Tratar como pendiente si no tiene estado
-        } else if (estadoPago !== 'Pendiente de pago') {
+        // Debe tener estado "Pendiente de pago" o "Sin Asignar" (que se trata como pendiente)
+        if (estadoPago !== 'Sin Asignar' && estadoPago !== 'Pendiente de pago' && estadoPago) {
             return false;
         }
-        // Debe tener documento adjunto
-        if (!pedido.documentoPago) return false;
+        // Debe tener documento de pago adjunto (campo 'documento')
+        if (!pedido.documento) return false;
         // No debe estar pagado ya
         if (pedido.estadoPago === 'Pagado') return false;
         return true;
     });
     
-    // Combinar ambos tipos de pedidos
-    const todosPendientes = [...pedidosPendientes, ...pedidosEspecialesPendientes];
+    // También buscar pedidos especiales que puedan estar en la colección 'pedidos'
+    const pedidosEspecialesEnPedidos = todosPedidos.filter(pedido => {
+        // Solo pedidos especiales
+        if (!isPedidoEspecial(pedido)) return false;
+        const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+        // Debe tener estado "Pendiente de pago" o "Sin Asignar"
+        if (estadoPago !== 'Sin Asignar' && estadoPago !== 'Pendiente de pago' && estadoPago) {
+            return false;
+        }
+        // Debe tener documento de pago adjunto (campo 'documento')
+        if (!pedido.documento) return false;
+        // No debe estar pagado ya
+        if (pedido.estadoPago === 'Pagado') return false;
+        return true;
+    });
+    
+    // Combinar ambos tipos de pedidos (normales y especiales de ambas colecciones)
+    const todosPendientes = [...pedidosPendientes, ...pedidosEspecialesPendientes, ...pedidosEspecialesEnPedidos];
     
     // Ordenar de más nuevo a más viejo
     todosPendientes.sort((a, b) => {

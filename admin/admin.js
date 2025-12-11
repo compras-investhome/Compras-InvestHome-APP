@@ -3737,21 +3737,21 @@ async function createPedidoEspecialAdminCard(pedido) {
     const documentoContent = tieneDocumento
         ? `
             <div class="doc-actions-with-buttons">
-                <a href="#" onclick="verDocumentoPedidoEspecial('${pedido.id}'); return false;" class="doc-link">📄 Ver</a>
-                <button class="btn-doc-action btn-doc-editar" onclick="editarDocumentoPedidoEspecial('${pedido.id}')" title="Editar documento" aria-label="Editar">
+                <a href="#" onclick="verDocumentoPedidoEspecial('${escapeHtml(pedido.id || '')}'); return false;" class="doc-link">📄 Ver</a>
+                <button class="btn-doc-action btn-doc-editar" onclick="editarDocumentoPedidoEspecial('${escapeHtml(pedido.id || '')}')" title="Editar documento" aria-label="Editar">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11.5 2.5a2.121 2.121 0 0 1 3 3L6.5 13.5H2.5v-4L11.5 2.5z"/>
                     </svg>
                 </button>
-                <button class="btn-doc-action btn-doc-eliminar" onclick="eliminarDocumentoPedidoEspecial('${pedido.id}')" title="Eliminar documento" aria-label="Eliminar">
+                <button class="btn-doc-action btn-doc-eliminar" onclick="eliminarDocumentoPedidoEspecial('${escapeHtml(pedido.id || '')}')" title="Eliminar documento" aria-label="Eliminar">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 4h10M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1v1m2 0v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4h10z"/>
                     </svg>
                 </button>
             </div>
         `
-        : `<button class="btn-adjuntar-documento" onclick="adjuntarDocumentoPedidoEspecial('${pedido.id}', '${documentoInputId}')" type="button">Sin documento adjunto</button>
-           <input type="file" id="${documentoInputId}" accept="application/pdf,image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleDocumentoPedidoEspecialChange('${pedido.id}', this)">`;
+        : `<button class="btn-adjuntar-documento" onclick="adjuntarDocumentoPedidoEspecial('${escapeHtml(pedido.id || '')}', '${documentoInputId}')" type="button">Sin documento adjunto</button>
+           <input type="file" id="${documentoInputId}" accept="application/pdf,image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleDocumentoPedidoEspecialChange('${escapeHtml(pedido.id || '')}', this)">`;
     
     const notasSectionId = `pedido-notas-especial-admin-${pedido.id}`;
     const notasListId = `pedido-notas-list-especial-admin-${pedido.id}`;
@@ -3779,7 +3779,7 @@ async function createPedidoEspecialAdminCard(pedido) {
             <div class="pedido-header-actions">
                 <div class="pedido-estado-select-wrapper">
                     <label for="${estadoSelectId}" style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.5rem;">Estado:</label>
-                    <select id="${estadoSelectId}" class="pedido-estado-select ${estadoEnvioClass}" onchange="cambiarEstadoPedidoEspecial('${pedido.id}', this.value)">
+                    <select id="${estadoSelectId}" class="pedido-estado-select ${estadoEnvioClass}" onchange="cambiarEstadoPedidoEspecial('${escapeHtml(pedido.id || '')}', this.value)">
                         <option value="Nuevo" ${estadoEnvio === 'Nuevo' ? 'selected' : ''} class="estado-envio-nuevo">Nuevo</option>
                         <option value="Gestionando" ${estadoEnvio === 'Gestionando' ? 'selected' : ''} class="estado-envio-gestionando">Gestionando</option>
                         <option value="Sin Transporte" ${estadoEnvio === 'Sin Transporte' ? 'selected' : ''} class="estado-envio-sin-transporte">Sin Transporte</option>
@@ -3791,17 +3791,17 @@ async function createPedidoEspecialAdminCard(pedido) {
                 </div>
                 <div class="pedido-tienda-select-wrapper">
                     <label for="${tiendaSelectId}" style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.5rem;">${pedido.tiendaId ? 'Asignado a:' : 'Asignar a:'}</label>
-                    <select id="${tiendaSelectId}" class="pedido-tienda-select ${pedido.tiendaId ? 'tienda-asignada' : 'tienda-sin-asignar'}" ${pedido.tiendaId ? 'disabled' : ''} onchange="asignarTiendaPedidoEspecial('${pedido.id}', this.value)">
+                    <select id="${tiendaSelectId}" class="pedido-tienda-select ${pedido.tiendaId ? 'tienda-asignada' : 'tienda-sin-asignar'}" ${pedido.tiendaId ? 'disabled' : ''} onchange="asignarTiendaPedidoEspecial('${escapeHtml(pedido.id || '')}', this.value)">
                         ${!pedido.tiendaId ? '<option value="" selected class="tienda-sin-asignar">-- Sin asignar --</option>' : ''}
                         ${tiendasOptions}
                     </select>
                 </div>
-                <button class="btn-editar-pedido" onclick="editarPedidoEspecial('${pedido.id}')" title="Editar pedido" aria-label="Editar pedido">
+                <button class="btn-editar-pedido" onclick="editarPedidoEspecial('${escapeHtml(pedido.id || '')}')" title="Editar pedido" aria-label="Editar pedido">
                     <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11.5 2.5a2.121 2.121 0 0 1 3 3L6.5 13.5H2.5v-4L11.5 2.5z"/>
                     </svg>
                 </button>
-                <button class="btn-eliminar-pedido" onclick="eliminarPedidoEspecial('${pedido.id}')" title="Eliminar pedido" aria-label="Eliminar pedido">
+                <button class="btn-eliminar-pedido" onclick="eliminarPedidoEspecial('${escapeHtml(pedido.id || '')}')" title="Eliminar pedido" aria-label="Eliminar pedido">
                     <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 4h10M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1v1m2 0v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4h10z"/>
                     </svg>
