@@ -2416,7 +2416,7 @@ async function createTiendaCardCuentas(tienda, pedidosCount) {
                       typeof tienda.logo === 'string' && 
                       tienda.logo.trim() !== '' && 
                       tienda.logo !== 'null' && 
-                      tienda.logo !== 'undefined' &&
+                      tienda.logo !== 'undefined' && 
                       (tienda.logo.startsWith('data:image/') || tienda.logo.startsWith('http'));
     
     if (tieneLogo) {
@@ -2431,50 +2431,50 @@ async function createTiendaCardCuentas(tienda, pedidosCount) {
     // Calcular gastado de cuenta (igual que contabilidad)
     const gastado = await calcularGastadoCuenta(tienda.id);
     let cuentaInfoHtml = '';
-    
-    if (tienda.limiteCuenta) {
-        // Tiene cuenta con límite
-        const limite = Number(tienda.limiteCuenta) || 0;
-        const porcentaje = limite > 0 ? (gastado / limite) * 100 : 0;
-        const disponible = Math.max(0, limite - gastado);
-        const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
         
-        cuentaInfoHtml = `
-            <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
-                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Estado de Cuenta</div>
-                <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
-                    <strong>${gastado.toFixed(2)}€</strong> gastado / <strong>${limite.toFixed(2)}€</strong> límite
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                    Disponible: ${disponible.toFixed(2)}€
-                </div>
-                <div style="height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 0.25rem;">
-                    <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra}; transition: width 0.3s;"></div>
-                </div>
+        if (tienda.limiteCuenta) {
+            // Tiene cuenta con límite
+            const limite = Number(tienda.limiteCuenta) || 0;
+            const porcentaje = limite > 0 ? (gastado / limite) * 100 : 0;
+            const disponible = Math.max(0, limite - gastado);
+            const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
+            
+            cuentaInfoHtml = `
+                <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Estado de Cuenta</div>
+                    <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+                        <strong>${gastado.toFixed(2)}€</strong> gastado / <strong>${limite.toFixed(2)}€</strong> límite
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        Disponible: ${disponible.toFixed(2)}€
+                    </div>
+                    <div style="height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 0.25rem;">
+                        <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra}; transition: width 0.3s;"></div>
+                    </div>
                 <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">
-                    ${porcentaje.toFixed(1)}% utilizado
-                </div>
+                        ${porcentaje.toFixed(1)}% utilizado
+                    </div>
                 <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;">
                     <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} pendiente${pedidosCount !== 1 ? 's' : ''}
+                    </div>
                 </div>
-            </div>
-        `;
-    } else {
-        // Cuenta sin límite
-        cuentaInfoHtml = `
-            <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: #d1fae5; border-radius: 8px; border: 1px solid #10b981;">
-                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #065f46;">Estado de Cuenta</div>
+            `;
+        } else {
+            // Cuenta sin límite
+            cuentaInfoHtml = `
+                <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: #d1fae5; border-radius: 8px; border: 1px solid #10b981;">
+                    <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #065f46;">Estado de Cuenta</div>
                 <div style="font-size: 0.875rem; color: #065f46;">
-                    <strong>${gastado.toFixed(2)}€</strong> gastado
-                </div>
+                        <strong>${gastado.toFixed(2)}€</strong> gastado
+                    </div>
                 <div style="font-size: 0.75rem; color: #065f46; margin-top: 0.25rem; font-weight: 600;">
-                    Cuenta sin límite
-                </div>
+                        Cuenta sin límite
+                    </div>
                 <div style="font-size: 0.75rem; color: #065f46; margin-top: 0.5rem; text-align: center;">
                     <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} pendiente${pedidosCount !== 1 ? 's' : ''}
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
     }
     
     // Construir el HTML de la card
@@ -2525,7 +2525,7 @@ async function loadPedidosCuentaPorTienda(tiendaId) {
         const todosPedidos = await db.getAll('pedidos');
         const pedidosTienda = todosPedidos.filter(p => 
             p.tiendaId === tiendaId &&
-            p.estadoPago === 'Pago A cuenta' &&
+            p.estadoPago === 'Pago A cuenta' && 
             p.estado !== 'Completado' &&
             p.pedidoSistemaPDF &&
             !p.transferenciaPDF
@@ -3733,10 +3733,11 @@ async function createPedidoEspecialAdminCard(pedido) {
         : '<p class="cascade-empty">No hay artículos en este pedido</p>';
     
     const documentoInputId = `pedido-documento-file-${pedido.id}`;
-    const documentoContent = pedido.documento
+    const tieneDocumento = Boolean(pedido.documento);
+    const documentoContent = tieneDocumento
         ? `
             <div class="doc-actions-with-buttons">
-                <a href="${escapeHtml(pedido.documento)}" target="_blank" rel="noopener" class="doc-link">📄 Ver documento</a>
+                <a href="#" onclick="verDocumentoPedidoEspecial('${pedido.id}'); return false;" class="doc-link">📄 Ver</a>
                 <button class="btn-doc-action btn-doc-editar" onclick="editarDocumentoPedidoEspecial('${pedido.id}')" title="Editar documento" aria-label="Editar">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11.5 2.5a2.121 2.121 0 0 1 3 3L6.5 13.5H2.5v-4L11.5 2.5z"/>
@@ -4478,6 +4479,23 @@ window.cambiarEstadoPagoPedidoEspecial = async function(pedidoId, nuevoEstadoPag
 };
 
 // Función para eliminar documento de pago
+// Función para ver documento de pedido especial
+window.verDocumentoPedidoEspecial = async function(pedidoId) {
+    try {
+        const pedido = await db.get('pedidosEspeciales', pedidoId);
+        if (!pedido || !pedido.documento) {
+            await showAlert('No se encontró el documento', 'Error');
+            return;
+        }
+        
+        const nombreArchivo = pedido.documentoNombre || 'documento.pdf';
+        descargarDocumento(pedido.documento, nombreArchivo);
+    } catch (error) {
+        console.error('Error al abrir documento:', error);
+        await showAlert('Error al abrir el documento: ' + error.message, 'Error');
+    }
+};
+
 window.eliminarDocumentoPedidoEspecial = async function(pedidoId) {
     const confirmar = await showConfirm('¿Desea eliminar el documento de pago adjunto?', 'Eliminar documento');
     if (!confirmar) return;
