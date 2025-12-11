@@ -23,6 +23,22 @@ class Database {
     constructor() {
         this.db = null;
         this.initialized = false;
+        
+        // Sistema de cache en memoria
+        this.cache = {
+            productos: new Map(), // Map<id, {data, timestamp}>
+            tiendas: new Map(),
+            categorias: new Map(),
+            subcategorias: new Map(),
+            obras: new Map()
+        };
+        
+        // TTL del cache (5 minutos)
+        this.cacheTTL = 5 * 60 * 1000;
+        
+        // Cache de getAll para evitar múltiples llamadas
+        this.getAllCache = new Map(); // Map<storeName, {data, timestamp}>
+        this.getAllCacheTTL = 2 * 60 * 1000; // 2 minutos para getAll
     }
 
     async init() {
@@ -246,25 +262,98 @@ class Database {
         }
         
         const docRef = await addDoc(collection(this.db, storeName), docData);
+        
+        // Invalidar cache de getAll para esta colección
+        this.getAllCache.delete(storeName);
+        
         console.log(`[DB] Creado ${storeName} con ID: ${docRef.id}`);
         return docRef.id;
     }
 
     async get(storeName, id) {
+        // Verificar cache primero
+        const cacheKey = `${storeName}_${id}`;
+        const cacheStore = this.cache[storeName];
+        
+        if (cacheStore && cacheStore.has(id)) {
+            const cached = cacheStore.get(id);
+            const now = Date.now();
+            // Si el cache es válido, retornar
+            if (now - cached.timestamp < this.cacheTTL) {
+                return cached.data;
+            }
+            // Cache expirado, eliminar
+            cacheStore.delete(id);
+        }
+        
+        // No está en cache o expirado, consultar base de datos
         const docRef = doc(this.db, storeName, id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-            return { id: docSnap.id, ...docSnap.data() };
+            const data = { id: docSnap.id, ...docSnap.data() };
+            
+            // Guardar en cache
+            if (cacheStore) {
+                cacheStore.set(id, {
+                    data: data,
+                    timestamp: Date.now()
+                });
+            }
+            
+            return data;
         }
+        
+        // No encontrado, guardar null en cache para evitar consultas repetidas
+        if (cacheStore) {
+            cacheStore.set(id, {
+                data: null,
+                timestamp: Date.now()
+            });
+        }
+        
         return null;
     }
 
-    async getAll(storeName) {
+    async getAll(storeName, useCache = true) {
+        // Verificar cache de getAll
+        if (useCache && this.getAllCache.has(storeName)) {
+            const cached = this.getAllCache.get(storeName);
+            const now = Date.now();
+            if (now - cached.timestamp < this.getAllCacheTTL) {
+                return cached.data;
+            }
+            // Cache expirado
+            this.getAllCache.delete(storeName);
+        }
+        
+        // Consultar base de datos
         const querySnapshot = await getDocs(collection(this.db, storeName));
-        return querySnapshot.docs.map(doc => ({
+        const data = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         }));
+        
+        // Guardar en cache de getAll
+        if (useCache) {
+            this.getAllCache.set(storeName, {
+                data: data,
+                timestamp: Date.now()
+            });
+            
+            // También actualizar cache individual para productos, tiendas, etc.
+            if (this.cache[storeName]) {
+                data.forEach(item => {
+                    if (item.id) {
+                        this.cache[storeName].set(item.id, {
+                            data: item,
+                            timestamp: Date.now()
+                        });
+                    }
+                });
+            }
+        }
+        
+        return data;
     }
 
     async update(storeName, data) {
@@ -295,6 +384,11 @@ class Database {
             updatedAt: serverTimestamp()
         });
         
+        // Invalidar cache del documento actualizado
+        this.invalidateCache(storeName, id);
+        // También invalidar cache de getAll para esta colección
+        this.getAllCache.delete(storeName);
+        
         console.log(`[DB] Actualizado ${storeName} con ID: ${id}`);
         return id;
     }
@@ -302,6 +396,34 @@ class Database {
     async delete(storeName, id) {
         const docRef = doc(this.db, storeName, id);
         await deleteDoc(docRef);
+        // Invalidar cache
+        this.invalidateCache(storeName, id);
+        this.getAllCache.delete(storeName);
+    }
+    
+    // Método para invalidar cache
+    invalidateCache(storeName, id = null) {
+        if (id) {
+            // Invalidar un documento específico
+            const cacheStore = this.cache[storeName];
+            if (cacheStore) {
+                cacheStore.delete(id);
+            }
+        } else {
+            // Invalidar toda la colección
+            const cacheStore = this.cache[storeName];
+            if (cacheStore) {
+                cacheStore.clear();
+            }
+        }
+    }
+    
+    // Método para limpiar todo el cache (útil para debugging)
+    clearAllCache() {
+        Object.keys(this.cache).forEach(key => {
+            this.cache[key].clear();
+        });
+        this.getAllCache.clear();
     }
 
     // Métodos específicos
@@ -457,6 +579,10 @@ class Database {
     }
 
     async searchProductos(queryText) {
+        // NOTA: Este método usa getAll() que ahora está optimizado con cache.
+        // Para mejoras futuras, se podría implementar búsqueda con queries de Firestore
+        // usando índices compuestos, pero requiere cambios en la estructura de datos.
+        // El cache reduce significativamente las llamadas repetidas.
         const allProductos = await this.getAll('productos');
         const normalizedQuery = this.normalizeText(queryText);
         

@@ -506,8 +506,25 @@ async function loadTiendasAdminView() {
             productosUnicos.push(producto);
         }
         
+        // Optimización: Cargar todas las tiendas necesarias en batch antes de crear las cards
+        const tiendasIds = [...new Set(productosUnicos.map(p => p.tiendaId).filter(Boolean))];
+        const tiendasMap = new Map();
+        if (tiendasIds.length > 0) {
+            // Cargar todas las tiendas en paralelo (el cache las optimizará automáticamente)
+            const tiendasPromises = tiendasIds.map(tiendaId => 
+                db.get('tiendas', tiendaId).then(tienda => ({ tiendaId, tienda }))
+            );
+            const tiendasResults = await Promise.all(tiendasPromises);
+            tiendasResults.forEach(({ tiendaId, tienda }) => {
+                if (tienda) {
+                    tiendasMap.set(tiendaId, tienda);
+                }
+            });
+        }
+        
+        // Crear cards con las tiendas ya cargadas
         for (const producto of productosUnicos) {
-            const card = await createProductoCardAdmin(producto);
+            const card = await createProductoCardAdmin(producto, tiendasMap.get(producto.tiendaId));
             container.appendChild(card);
             
             // Agregar event listener al botón "Añadir"
@@ -902,7 +919,7 @@ async function cargarProductosPaginados(container, id, esSubCategoria) {
     }
 }
 
-async function createProductoCardAdmin(producto) {
+async function createProductoCardAdmin(producto, tiendaPrecargada = null) {
     const card = document.createElement('div');
     card.className = 'producto-card-admin';
     card.dataset.productoId = producto.id;
@@ -912,13 +929,18 @@ async function createProductoCardAdmin(producto) {
     
     let vendidoPor = '';
     if (searchResultsAdmin.length > 0 && producto.tiendaId) {
-        try {
-            const tienda = await db.get('tiendas', producto.tiendaId);
-            if (tienda) {
-                vendidoPor = `<div class="producto-vendido-por">Vendido por: <strong>${escapeHtml(tienda.nombre)}</strong></div>`;
+        // Si la tienda ya fue precargada, usarla directamente (optimización batch loading)
+        let tienda = tiendaPrecargada;
+        if (!tienda) {
+            try {
+                // Si no está precargada, usar cache (que ya está optimizado en db.get())
+                tienda = await db.get('tiendas', producto.tiendaId);
+            } catch (error) {
+                console.error('Error al obtener tienda:', error);
             }
-        } catch (error) {
-            console.error('Error al obtener tienda:', error);
+        }
+        if (tienda) {
+            vendidoPor = `<div class="producto-vendido-por">Vendido por: <strong>${escapeHtml(tienda.nombre)}</strong></div>`;
         }
     }
     
@@ -1027,6 +1049,7 @@ function getCantidadEnCarritoAdmin(productoId) {
 }
 
 async function addToCartAdmin(productoId, cantidad = 1) {
+    // El cache ya está implementado en db.get(), así que esta llamada será optimizada automáticamente
     const producto = await db.get('productos', productoId);
     if (!producto) {
         await showAlert('Error: Producto no encontrado', 'Error');
@@ -1279,7 +1302,7 @@ function incrementCarritoItem(productoId) {
     if (item) {
         item.cantidad++;
     } else {
-        // Si no existe, intentar añadirlo
+        // Si no existe, intentar añadirlo (el cache ya está implementado en db.get())
         db.get('productos', productoId).then(producto => {
             if (producto) {
                 carritoAdmin.push({
@@ -1302,7 +1325,7 @@ function incrementCarritoItemAdmin(productoId) {
     if (item) {
         item.cantidad++;
     } else {
-        // Si no existe, intentar añadirlo
+        // Si no existe, intentar añadirlo (el cache ya está implementado en db.get())
         db.get('productos', productoId).then(producto => {
             if (producto) {
                 carritoAdmin.push({
