@@ -2588,10 +2588,10 @@ async function createPedidoCuentaCardAdmin(pedido) {
             if (ean) refEanParts.push(ean);
             const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
             return `
-                <div class="pedido-item" style="display: flex; align-items: center; gap: 1rem;">
+                <div class="pedido-item">
                     ${fotoHtml}
                     ${fotoPlaceholder}
-                    <div class="pedido-item-info" style="flex: 1;">
+                    <div class="pedido-item-info">
                         <p class="pedido-item-name">${nombre}</p>
                         ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
                         <div class="pedido-item-meta">
