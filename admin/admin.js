@@ -769,7 +769,9 @@ async function createTiendaCardAdmin(tienda) {
 
 async function loadCategoriasAdmin(tiendaId) {
     const categorias = await db.getCategoriasByTienda(tiendaId);
-    const tienda = await db.get('tiendas', tiendaId);
+    // Optimización: usar cache de tiendas en lugar de llamada individual
+    const todasTiendas = await getTiendasCached();
+    const tienda = todasTiendas.find(t => t.id === tiendaId);
     
     // Crear vista de categorías dinámicamente
     const mainContent = document.querySelector('#view-admin-tienda .main-content');
@@ -1032,8 +1034,9 @@ async function createProductoCardAdmin(producto, tiendaPrecargada = null) {
         let tienda = tiendaPrecargada;
         if (!tienda) {
             try {
-                // Si no está precargada, usar cache (que ya está optimizado en db.get())
-                tienda = await db.get('tiendas', producto.tiendaId);
+                // Optimización: usar cache de tiendas en lugar de llamada individual
+                const todasTiendas = await getTiendasCached();
+                tienda = todasTiendas.find(t => t.id === producto.tiendaId) || null;
             } catch (error) {
                 console.error('Error al obtener tienda:', error);
             }
@@ -1255,11 +1258,15 @@ async function loadCarritoAdmin() {
         
         if (!itemsPorTienda[tiendaId]) {
             try {
-                const tienda = await db.get('tiendas', tiendaId);
-                itemsPorTienda[tiendaId] = {
-                    tienda: tienda,
-                    items: []
-                };
+                // Optimización: usar cache de tiendas en lugar de llamada individual
+                const todasTiendas = await getTiendasCached();
+                const tienda = todasTiendas.find(t => t.id === tiendaId);
+                if (tienda) {
+                    itemsPorTienda[tiendaId] = {
+                        tienda: tienda,
+                        items: []
+                    };
+                }
             } catch (error) {
                 console.error('Error al obtener tienda:', error);
                 continue;
@@ -1436,8 +1443,10 @@ async function finalizarPedidoAdmin() {
     // Mostrar prompt con selector de obra
     const obraId = await showPrompt('Selecciona la obra para el pedido', obraSelectHtml);
     if (!obraId) return;
-    
-    const obra = await db.get('obras', obraId);
+
+    // Optimización: usar cache de obras en lugar de llamada individual
+    const todasObras = await getObrasCached();
+    const obra = todasObras.find(o => o.id === obraId);
     if (!obra) {
         await showAlert('Obra no encontrada', 'Error');
         return;
@@ -1456,9 +1465,17 @@ async function finalizarPedidoAdmin() {
     }
     
     const pedidosCreados = [];
+    // Optimización: precargar todas las tiendas necesarias una sola vez
+    const todasTiendas = await getTiendasCached();
+    const tiendasMap = new Map(todasTiendas.map(t => [t.id, t]));
+    
     for (const [tiendaId, items] of Object.entries(itemsPorTienda)) {
         try {
-            const tienda = await db.get('tiendas', tiendaId);
+            const tienda = tiendasMap.get(tiendaId);
+            if (!tienda) {
+                console.error(`Tienda ${tiendaId} no encontrada`);
+                continue;
+            }
             
             let estadoPago = null;
             if (!tienda.servicios?.cuenta) {
@@ -2229,8 +2246,9 @@ async function guardarPedidoEspecial() {
         return;
     }
     
-    // Obtener información de la obra
-    const obra = await db.get('obras', obraId);
+    // Optimización: usar cache de obras en lugar de llamada individual
+    const todasObras = await getObrasCached();
+    const obra = todasObras.find(o => o.id === obraId);
     if (!obra) {
         await showAlert('Obra no encontrada', 'Error');
         return;
@@ -2636,7 +2654,7 @@ async function loadCuentasAdmin() {
         tiendasList.className = 'tiendas-grid';
         
         // Obtener todos los pedidos para contar pendientes (igual que contabilidad)
-        const todosPedidos = await db.getAll('pedidos');
+        const todosPedidos = await getPedidosCached();
         const pedidosCuentaGlobal = todosPedidos.filter(p => 
             p.estadoPago === 'Pago A cuenta' &&
             p.estado !== 'Completado' &&
@@ -2756,8 +2774,9 @@ async function loadPedidosCuentaPorTienda(tiendaId) {
     
     if (!tiendasView || !pedidosView || !pedidosList) return;
     
-    // Obtener información de la tienda
-    const tienda = await db.get('tiendas', tiendaId);
+    // Optimización: usar cache de tiendas en lugar de llamada individual
+    const todasTiendas = await getTiendasCached();
+    const tienda = todasTiendas.find(t => t.id === tiendaId);
     const tiendaNombre = tienda?.nombre || 'Tienda desconocida';
     
     // Mostrar vista de pedidos, ocultar vista de tiendas
@@ -2810,7 +2829,7 @@ async function loadPedidosCuentaPorTienda(tiendaId) {
 }
 
 // Función para crear card de pedido en vista de cuentas admin (sin botones de adjuntar/eliminar documento)
-async function createPedidoCuentaCardAdmin(pedido) {
+async function createPedidoCuentaCardAdmin(pedido, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
@@ -2827,8 +2846,21 @@ async function createPedidoCuentaCardAdmin(pedido) {
         return await createPedidoEspecialAdminCard(pedido);
     }
     
-    const tienda = await db.get('tiendas', tiendaId);
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    // Optimización: usar datos precargados si están disponibles, sino cargar individualmente
+    let tienda, obraInfo;
+    if (precargados?.tiendasCache && tiendaId) {
+        tienda = precargados.tiendasCache.get(tiendaId) || null;
+    } else {
+        // Optimización: usar cache de tiendas
+        const todasTiendas = await getTiendasCached();
+        tienda = todasTiendas.find(t => t.id === tiendaId) || null;
+    }
+    
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? (await getObrasCached()).find(o => o.id === pedido.obraId) || null : null;
+    }
     
     let fechaObj;
     if (pedido.fecha && pedido.fecha.toDate) {
@@ -3297,6 +3329,9 @@ async function loadPedidosHistoricosPorObra(obraId, obraNombre) {
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
         pedidosList.innerHTML = '';
         
+        // Optimización: precargar datos relacionados una sola vez y guardarlos en el estado
+        historicoPaginationState.precargados = await preloadPedidoRelatedData(todosHistoricos);
+        
         // Cargar primeros 5 pedidos
         cargarMasPedidosHistoricos();
     } catch (error) {
@@ -3319,11 +3354,13 @@ async function cargarMasPedidosHistoricos() {
     const pedidosACargar = pedidos.slice(currentIndex, endIndex);
     
     // Crear cards para los pedidos a cargar (usar diseño compacto igual que cuentas)
+    // Optimización: usar datos precargados si están disponibles
+    const precargados = historicoPaginationState.precargados || null;
     for (const pedido of pedidosACargar) {
         // Si es pedido especial, usar la card especial; si no, la card normal
         const card = isPedidoEspecial(pedido) 
-            ? await createPedidoEspecialAdminCard(pedido)
-            : await createPedidoCuentaCardAdmin(pedido);
+            ? await createPedidoEspecialAdminCard(pedido, precargados)
+            : await createPedidoCuentaCardAdmin(pedido, precargados);
         pedidosList.appendChild(card);
     }
     
@@ -3339,13 +3376,23 @@ async function cargarMasPedidosHistoricos() {
 }
 
 // Función para crear card de pedido a tienda (no especial)
-async function createPedidoTiendaCard(pedido) {
+async function createPedidoTiendaCard(pedido, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    // Obtener información de obra y tienda
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
-    const tiendaInfo = pedido.tiendaId ? await db.get('tiendas', pedido.tiendaId) : null;
+    // Optimización: usar datos precargados si están disponibles, sino cargar individualmente
+    let obraInfo, tiendaInfo;
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? (await getObrasCached()).find(o => o.id === pedido.obraId) || null : null;
+    }
+    
+    if (precargados?.tiendasCache && pedido.tiendaId) {
+        tiendaInfo = precargados.tiendasCache.get(pedido.tiendaId) || null;
+    } else {
+        tiendaInfo = pedido.tiendaId ? (await getTiendasCached()).find(t => t.id === pedido.tiendaId) || null : null;
+    }
     
     // Formatear fecha
     let fechaObj;
@@ -3491,9 +3538,12 @@ async function loadNuevoEspeciales() {
             return fechaB - fechaA;
         });
         
+        // Optimización: precargar todas las obras necesarias antes de crear cards
+        const precargados = await preloadPedidoRelatedData(pedidosNuevos);
+        
         // Crear cards para cada pedido
         for (const pedido of pedidosNuevos) {
-            const card = await createPedidoEspecialAdminCard(pedido);
+            const card = await createPedidoEspecialAdminCard(pedido, precargados);
             container.appendChild(card);
         }
     } catch (error) {
@@ -3540,9 +3590,12 @@ async function loadSinTransporteEspeciales() {
             return fechaB - fechaA;
         });
         
+        // Optimización: precargar todas las obras necesarias antes de crear cards
+        const precargados = await preloadPedidoRelatedData(pedidosSinTransporte);
+        
         // Crear cards para cada pedido
         for (const pedido of pedidosSinTransporte) {
-            const card = await createPedidoEspecialAdminCard(pedido);
+            const card = await createPedidoEspecialAdminCard(pedido, precargados);
             container.appendChild(card);
         }
     } catch (error) {
@@ -3587,9 +3640,12 @@ async function loadConTransporteEspeciales() {
             return fechaB - fechaA;
         });
         
+        // Optimización: precargar todas las obras necesarias antes de crear cards
+        const precargados = await preloadPedidoRelatedData(pedidosConTransporte);
+        
         // Crear cards para cada pedido
         for (const pedido of pedidosConTransporte) {
-            const card = await createPedidoEspecialAdminCard(pedido);
+            const card = await createPedidoEspecialAdminCard(pedido, precargados);
             container.appendChild(card);
         }
     } catch (error) {
@@ -3634,9 +3690,12 @@ async function loadOnlineEspeciales() {
             return fechaB - fechaA;
         });
         
+        // Optimización: precargar todas las obras necesarias antes de crear cards
+        const precargados = await preloadPedidoRelatedData(pedidosOnline);
+        
         // Crear cards para cada pedido
         for (const pedido of pedidosOnline) {
-            const card = await createPedidoEspecialAdminCard(pedido);
+            const card = await createPedidoEspecialAdminCard(pedido, precargados);
             container.appendChild(card);
         }
     } catch (error) {
@@ -3681,9 +3740,12 @@ async function loadGestionandoEspeciales() {
             return fechaB - fechaA;
         });
         
+        // Optimización: precargar todas las obras necesarias antes de crear cards
+        const precargados = await preloadPedidoRelatedData(pedidosGestionando);
+        
         // Crear cards para cada pedido
         for (const pedido of pedidosGestionando) {
-            const card = await createPedidoEspecialAdminCard(pedido);
+            const card = await createPedidoEspecialAdminCard(pedido, precargados);
             container.appendChild(card);
         }
     } catch (error) {
@@ -3887,6 +3949,9 @@ async function loadPedidosCerradosPorObra(obraId, obraNombre) {
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
         pedidosList.innerHTML = '';
         
+        // Optimización: precargar datos relacionados una sola vez y guardarlos en el estado
+        cerradosPaginationState.precargados = await preloadPedidoRelatedData(pedidosCerrados);
+        
         // Cargar primeros 5 pedidos
         cargarMasPedidosCerrados();
     } catch (error) {
@@ -3909,8 +3974,10 @@ async function cargarMasPedidosCerrados() {
     const pedidosACargar = pedidos.slice(currentIndex, endIndex);
     
     // Crear cards para los pedidos a cargar
+    // Optimización: usar datos precargados si están disponibles
+    const precargados = cerradosPaginationState.precargados || null;
     for (const pedido of pedidosACargar) {
-        const card = await createPedidoEspecialAdminCard(pedido);
+        const card = await createPedidoEspecialAdminCard(pedido, precargados);
         pedidosList.appendChild(card);
     }
     
@@ -3926,12 +3993,17 @@ async function cargarMasPedidosCerrados() {
 }
 
 // Función para crear card de pedido especial en admin
-async function createPedidoEspecialAdminCard(pedido) {
+async function createPedidoEspecialAdminCard(pedido, precargados = null) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    // Obtener información de obra si existe
-    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    // Optimización: usar datos precargados si están disponibles, sino cargar individualmente
+    let obraInfo;
+    if (precargados?.obrasCache && pedido.obraId) {
+        obraInfo = precargados.obrasCache.get(pedido.obraId) || null;
+    } else {
+        obraInfo = pedido.obraId ? (await getObrasCached()).find(o => o.id === pedido.obraId) || null : null;
+    }
     
     // Formatear fecha
     let fechaObj;
@@ -4976,20 +5048,24 @@ async function loadUsuarios(tipo) {
     }
 }
 
-async function createUsuarioCard(usuario) {
+async function createUsuarioCard(usuario, tiendasMap = null, obrasMap = null) {
     const card = document.createElement('div');
     card.className = 'usuario-card';
+    
+    // Optimización: usar datos precargados si están disponibles, sino cargar
+    if (!tiendasMap || !obrasMap) {
+        const todasTiendas = await getTiendasCached();
+        const todasObras = await getObrasCached();
+        tiendasMap = new Map(todasTiendas.map(t => [t.id, t]));
+        obrasMap = new Map(todasObras.map(o => [o.id, o]));
+    }
     
     // Obtener nombre de tienda si tiene tiendaId
     let tiendaNombre = '';
     if (usuario.tiendaId) {
-        try {
-            const tienda = await db.get('tiendas', usuario.tiendaId);
-            if (tienda) {
-                tiendaNombre = tienda.nombre;
-            }
-        } catch (error) {
-            console.error('Error al obtener tienda:', error);
+        const tienda = tiendasMap.get(usuario.tiendaId);
+        if (tienda) {
+            tiendaNombre = tienda.nombre;
         }
     }
     
@@ -4998,13 +5074,9 @@ async function createUsuarioCard(usuario) {
     if ((usuario.tipo === 'Técnico' || usuario.tipo === 'Encargado') && usuario.obrasAsignadas && usuario.obrasAsignadas.length > 0) {
         const obrasNombres = [];
         for (const obraId of usuario.obrasAsignadas) {
-            try {
-                const obra = await db.get('obras', obraId);
-                if (obra) {
-                    obrasNombres.push(obra.nombreComercial || obra.nombre || 'Sin nombre');
-                }
-            } catch (error) {
-                console.error('Error al obtener obra:', error);
+            const obra = obrasMap.get(obraId);
+            if (obra) {
+                obrasNombres.push(obra.nombreComercial || obra.nombre || 'Sin nombre');
             }
         }
         if (obrasNombres.length > 0) {
@@ -5068,6 +5140,7 @@ async function createUsuarioCard(usuario) {
 }
 
 window.editarUsuario = async function(usuarioId) {
+    // Usar db.get() directamente para usuarios ya que no hay cache implementado
     const usuario = await db.get('usuarios', usuarioId);
     if (!usuario) return;
 
@@ -5186,7 +5259,9 @@ function createObraCard(obra) {
 }
 
 window.editarObra = async function(obraId) {
-    const obra = await db.get('obras', obraId);
+    // Optimización: usar cache de obras en lugar de llamada individual
+    const todasObras = await getObrasCached();
+    const obra = todasObras.find(o => o.id === obraId);
     if (!obra) return;
 
     editingObraId = obraId;
@@ -5340,7 +5415,9 @@ window.subirArticulosTienda = async function(tiendaId) {
 }
 
 window.editarTienda = async function(tiendaId) {
-    const tienda = await db.get('tiendas', tiendaId);
+    // Optimización: usar cache de tiendas en lugar de llamada individual
+    const todasTiendas = await getTiendasCached();
+    const tienda = todasTiendas.find(t => t.id === tiendaId);
     if (!tienda) return;
 
     editingTiendaId = tiendaId;
@@ -5460,7 +5537,9 @@ async function guardarTienda() {
         if (logoFileInput.files.length > 0) {
             logo = await fileToBase64(logoFileInput.files[0]);
         } else if (editingTiendaId) {
-            const tiendaExistente = await db.get('tiendas', editingTiendaId);
+            // Optimización: usar cache de tiendas en lugar de llamada individual
+            const todasTiendas = await getTiendasCached();
+            const tiendaExistente = todasTiendas.find(t => t.id === editingTiendaId);
             logo = tiendaExistente?.logo || null;
         }
 
@@ -5554,20 +5633,20 @@ async function renderizarObrasAsignadas() {
     
     obrasList.innerHTML = '';
     
+    // Optimización: precargar todas las obras necesarias una sola vez
+    const todasObras = await getObrasCached();
+    const obrasMap = new Map(todasObras.map(o => [o.id, o]));
+    
     for (const obraId of obrasAsignadasUsuario) {
-        try {
-            const obra = await db.get('obras', obraId);
-            if (obra) {
-                const obraItem = document.createElement('div');
-                obraItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--card-bg); border-radius: 4px; margin-bottom: 0.5rem; border: 1px solid var(--border-color);';
-                obraItem.innerHTML = `
-                    <span>${escapeHtml(obra.nombreComercial || obra.nombre || 'Sin nombre')}</span>
-                    <button type="button" class="btn-icon danger" onclick="eliminarObraDeUsuario('${obraId}')" title="Eliminar">✕</button>
-                `;
-                obrasList.appendChild(obraItem);
-            }
-        } catch (error) {
-            console.error('Error al cargar obra:', error);
+        const obra = obrasMap.get(obraId);
+        if (obra) {
+            const obraItem = document.createElement('div');
+            obraItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--card-bg); border-radius: 4px; margin-bottom: 0.5rem; border: 1px solid var(--border-color);';
+            obraItem.innerHTML = `
+                <span>${escapeHtml(obra.nombreComercial || obra.nombre || 'Sin nombre')}</span>
+                <button type="button" class="btn-icon danger" onclick="eliminarObraDeUsuario('${obraId}')" title="Eliminar">✕</button>
+            `;
+            obrasList.appendChild(obraItem);
         }
     }
 }
