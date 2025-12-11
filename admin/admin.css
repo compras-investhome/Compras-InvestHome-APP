@@ -3464,6 +3464,10 @@
     transition: max-height 0.2s ease;
 }
 
+.contab-info-grid-compact > .contab-info-card-compact.contab-card-articulos.expanded {
+    max-height: none;
+}
+
 .contab-card-articulos .contab-card-title-compact {
     flex-shrink: 0;
     margin-bottom: 0.5rem;
@@ -3474,7 +3478,12 @@
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
+    max-height: 150px;
     padding-right: 0.25rem;
+}
+
+.contab-card-articulos.expanded .pedido-items-list-compact {
+    max-height: none;
 }
 
 /* Scrollbar personalizada para la lista de artículos */

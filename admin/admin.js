@@ -2487,15 +2487,8 @@ async function loadPedidosCuentaPorTienda(tiendaId) {
         tiendaNombreElement.textContent = tiendaNombre;
     }
     
-    // Botón Volver
+    // Limpiar lista de pedidos (el botón volver ya existe en el HTML)
     pedidosList.innerHTML = '';
-    const btnVolver = document.createElement('button');
-    btnVolver.className = 'btn-volver-cuentas';
-    btnVolver.innerHTML = '← Volver a tiendas';
-    btnVolver.addEventListener('click', () => {
-        loadCuentasAdmin();
-    });
-    pedidosList.appendChild(btnVolver);
     
     try {
         // Obtener pedidos de la tienda (igual que contabilidad)
@@ -2658,7 +2651,7 @@ async function createPedidoCuentaCardAdmin(pedido) {
                 <div class="contab-card-title-compact">Estado de pago</div>
                 <div class="contab-info-row-compact">
                     <span>Estado</span>
-                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                    <span class="estado-pago-pill-small ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
                 </div>
                 <div class="contab-info-row-compact">
                     <span>Pedido real</span>
