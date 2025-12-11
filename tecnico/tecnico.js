@@ -9,6 +9,14 @@ let currentTienda = null;
 let currentCategoria = null;
 let carritoAdmin = [];
 let searchResultsAdmin = [];
+// Estado de paginación para búsqueda
+let searchPaginationState = {
+    query: '',
+    productos: [],
+    currentIndex: 0,
+    itemsPerPage: 5,
+    hasMore: false
+};
 let pedidosFiltros = {
     obra: '',
     tienda: '',
@@ -537,6 +545,29 @@ async function loadTiendasAdminView() {
                 });
             }
         }
+        
+        // Agregar botón "Cargar más" si hay más resultados
+        const existingBtn = container.querySelector('.btn-cargar-mas-busqueda');
+        if (existingBtn) {
+            existingBtn.remove();
+        }
+        
+        if (searchPaginationState.hasMore) {
+            const btnCargarMas = document.createElement('button');
+            btnCargarMas.className = 'btn btn-primary btn-cargar-mas-busqueda';
+            btnCargarMas.textContent = 'Cargar más resultados';
+            btnCargarMas.style.marginTop = '1rem';
+            btnCargarMas.style.width = '100%';
+            btnCargarMas.addEventListener('click', async () => {
+                btnCargarMas.disabled = true;
+                btnCargarMas.textContent = 'Cargando...';
+                await cargarMasResultadosBusqueda();
+                loadTiendasAdminView(); // Recargar vista para mostrar nuevos resultados
+                btnCargarMas.disabled = false;
+                btnCargarMas.textContent = 'Cargar más resultados';
+            });
+            container.appendChild(btnCargarMas);
+        }
     } else {
         container.innerHTML = '';
         container.className = 'tiendas-grid';
@@ -726,7 +757,8 @@ let productosPaginacion = {
     hasMore: false,
     categoriaId: null,
     subCategoriaId: null,
-    soloSinSubCategoria: true
+    soloSinSubCategoria: true,
+    lastDoc: null // Para paginación con cursor de Firestore
 };
 
 async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
@@ -764,6 +796,7 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = subCategoriaId;
         productosPaginacion.offset = 0;
+        productosPaginacion.lastDoc = null; // Resetear cursor
         await cargarProductosPaginados(productosList, subCategoriaId, true);
     } else {
         // Vista de categoría: mostrar subcategorías + productos sin subcategoría
@@ -823,6 +856,7 @@ async function loadProductosAdmin(categoriaId, subCategoriaId = null) {
         productosPaginacion.categoriaId = categoriaId;
         productosPaginacion.subCategoriaId = null;
         productosPaginacion.offset = 0;
+        productosPaginacion.lastDoc = null; // Resetear cursor
         productosPaginacion.soloSinSubCategoria = tieneSubcategorias; // Solo filtrar si hay subcategorías
         
         // Cargar productos (siempre, incluso si no hay subcategorías)
@@ -835,14 +869,14 @@ async function cargarProductosPaginados(container, id, esSubCategoria) {
     
     try {
         if (esSubCategoria) {
-            resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset);
+            resultado = await db.getProductosBySubCategoriaPaginated(id, 5, productosPaginacion.offset, productosPaginacion.lastDoc);
         } else {
             // Si hay subcategorías, solo mostrar productos sin subcategoría
             // Si NO hay subcategorías, mostrar TODOS los productos
             const soloSinSubCategoria = productosPaginacion.soloSinSubCategoria !== undefined 
                 ? productosPaginacion.soloSinSubCategoria 
                 : true;
-            resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset, soloSinSubCategoria);
+            resultado = await db.getProductosByCategoriaPaginated(id, 5, productosPaginacion.offset, soloSinSubCategoria, productosPaginacion.lastDoc);
         }
     } catch (error) {
         console.error('Error al cargar productos:', error);
@@ -895,6 +929,10 @@ async function cargarProductosPaginados(container, id, esSubCategoria) {
     
     productosPaginacion.hasMore = resultado.hasMore;
     productosPaginacion.offset += resultado.productos.length;
+    // Guardar último documento para paginación con cursor (si está disponible)
+    if (resultado.lastDoc) {
+        productosPaginacion.lastDoc = resultado.lastDoc;
+    }
     
     // Agregar botón "Cargar más" si hay más productos
     const existingBtn = container.querySelector('.btn-cargar-mas-productos');
@@ -1037,8 +1075,44 @@ window.collapseProductoCard = function(productoId) {
 // ========== BÚSQUEDA ==========
 
 async function performSearchAdmin(query) {
-    searchResultsAdmin = await db.searchProductos(query);
+    // Resetear paginación para nueva búsqueda
+    searchPaginationState = {
+        query: query,
+        productos: [],
+        currentIndex: 0,
+        itemsPerPage: 5,
+        hasMore: false
+    };
+    
+    // Cargar primeros 5 resultados
+    await cargarMasResultadosBusqueda();
     loadTiendasAdminView();
+}
+
+// Función para cargar más resultados de búsqueda (paginación)
+async function cargarMasResultadosBusqueda() {
+    const { query, currentIndex, itemsPerPage } = searchPaginationState;
+    
+    if (!query || query.length < 2) {
+        searchResultsAdmin = [];
+        return;
+    }
+    
+    try {
+        const resultado = await db.searchProductos(query, itemsPerPage, currentIndex);
+        
+        // Agregar a los resultados acumulados
+        searchPaginationState.productos.push(...resultado.productos);
+        searchPaginationState.currentIndex += resultado.productos.length;
+        searchPaginationState.hasMore = resultado.hasMore;
+        
+        // Actualizar searchResultsAdmin para compatibilidad
+        searchResultsAdmin = searchPaginationState.productos;
+    } catch (error) {
+        console.error('Error al cargar resultados de búsqueda:', error);
+        searchResultsAdmin = [];
+        searchPaginationState.hasMore = false;
+    }
 }
 
 // ========== CARRITO ==========

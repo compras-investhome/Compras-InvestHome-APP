@@ -451,24 +451,85 @@ class Database {
         }));
     }
 
-    async getProductosByCategoriaPaginated(categoriaId, productosLimit = 5, offset = 0, soloSinSubCategoria = true) {
+    async getProductosByCategoriaPaginated(categoriaId, productosLimit = 5, offset = 0, soloSinSubCategoria = true, lastDoc = null) {
         let querySnapshot;
+        
+        // OPTIMIZACIÓN: Si no necesitamos filtrar por subcategoría, usar paginación real con cursor
+        if (!soloSinSubCategoria && lastDoc) {
+            // Paginación con cursor (más eficiente)
+            try {
+                const q = query(
+                    collection(this.db, 'productos'),
+                    where('categoriaId', '==', categoriaId),
+                    orderBy('nombre'),
+                    startAfter(lastDoc),
+                    limit(productosLimit + 1) // +1 para saber si hay más
+                );
+                querySnapshot = await getDocs(q);
+                
+                const productos = querySnapshot.docs.slice(0, productosLimit).map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                const hasMore = querySnapshot.docs.length > productosLimit;
+                const newLastDoc = querySnapshot.docs[productosLimit - 1] || null;
+                
+                return {
+                    productos,
+                    hasMore,
+                    total: productos.length, // Aproximado
+                    lastDoc: newLastDoc
+                };
+            } catch (error) {
+                // Si falla, continuar con método alternativo
+                console.warn('Error en paginación con cursor:', error);
+            }
+        }
+        
+        // OPTIMIZACIÓN: Cargar solo lo necesario con limit() en lugar de todos los productos
+        // Para soloSinSubCategoria necesitamos cargar más y filtrar, pero limitamos la carga
+        const loadLimit = soloSinSubCategoria 
+            ? Math.max(productosLimit * 3, offset + productosLimit + 10) // Cargar más para tener suficientes después de filtrar
+            : (lastDoc ? productosLimit + 1 : offset + productosLimit + 1);
         
         try {
             // Intentar con orderBy primero
-            const q = query(
-                collection(this.db, 'productos'),
-                where('categoriaId', '==', categoriaId),
-                orderBy('nombre')
-            );
+            let q;
+            if (lastDoc && !soloSinSubCategoria) {
+                q = query(
+                    collection(this.db, 'productos'),
+                    where('categoriaId', '==', categoriaId),
+                    orderBy('nombre'),
+                    startAfter(lastDoc),
+                    limit(loadLimit)
+                );
+            } else {
+                q = query(
+                    collection(this.db, 'productos'),
+                    where('categoriaId', '==', categoriaId),
+                    orderBy('nombre'),
+                    limit(loadLimit)
+                );
+            }
             querySnapshot = await getDocs(q);
         } catch (error) {
             // Si falla (por ejemplo, si no hay índice), intentar sin orderBy
-            // No mostrar warning ya que el sistema maneja esto correctamente
-            const q = query(
-                collection(this.db, 'productos'),
-                where('categoriaId', '==', categoriaId)
-            );
+            let q;
+            if (lastDoc && !soloSinSubCategoria) {
+                q = query(
+                    collection(this.db, 'productos'),
+                    where('categoriaId', '==', categoriaId),
+                    startAfter(lastDoc),
+                    limit(loadLimit)
+                );
+            } else {
+                q = query(
+                    collection(this.db, 'productos'),
+                    where('categoriaId', '==', categoriaId),
+                    limit(loadLimit)
+                );
+            }
             querySnapshot = await getDocs(q);
         }
         
@@ -490,32 +551,73 @@ class Database {
         
         // Aplicar paginación
         const productos = productosFiltrados.slice(offset, offset + productosLimit);
-        const hasMore = offset + productosLimit < productosFiltrados.length;
+        const hasMore = querySnapshot.docs.length >= loadLimit || 
+                       productosFiltrados.length > offset + productosLimit;
+        
+        // Obtener último documento para paginación con cursor (si es posible)
+        const lastDocument = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
         
         return {
             productos,
             hasMore,
-            total: productosFiltrados.length
+            total: productosFiltrados.length,
+            lastDoc: lastDocument
         };
     }
 
-    async getProductosBySubCategoriaPaginated(subCategoriaId, productosLimit = 5, offset = 0) {
+    async getProductosBySubCategoriaPaginated(subCategoriaId, productosLimit = 5, offset = 0, lastDoc = null) {
         let querySnapshot;
+        
+        // OPTIMIZACIÓN: Usar paginación real con cursor cuando sea posible
+        if (lastDoc) {
+            try {
+                const q = query(
+                    collection(this.db, 'productos'),
+                    where('subCategoriaId', '==', subCategoriaId),
+                    orderBy('nombre'),
+                    startAfter(lastDoc),
+                    limit(productosLimit + 1) // +1 para saber si hay más
+                );
+                querySnapshot = await getDocs(q);
+                
+                const productos = querySnapshot.docs.slice(0, productosLimit).map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                const hasMore = querySnapshot.docs.length > productosLimit;
+                const newLastDoc = querySnapshot.docs[productosLimit - 1] || null;
+                
+                return {
+                    productos,
+                    hasMore,
+                    total: productos.length, // Aproximado
+                    lastDoc: newLastDoc
+                };
+            } catch (error) {
+                // Si falla, continuar con método alternativo
+                console.warn('Error en paginación con cursor:', error);
+            }
+        }
+        
+        // OPTIMIZACIÓN: Cargar solo lo necesario con limit() en lugar de todos los productos
+        const loadLimit = offset + productosLimit + 1; // +1 para saber si hay más
         
         try {
             // Intentar con orderBy primero
             const q = query(
                 collection(this.db, 'productos'),
                 where('subCategoriaId', '==', subCategoriaId),
-                orderBy('nombre')
+                orderBy('nombre'),
+                limit(loadLimit)
             );
             querySnapshot = await getDocs(q);
         } catch (error) {
             // Si falla (por ejemplo, si no hay índice), intentar sin orderBy
-            // No mostrar warning ya que el sistema maneja esto correctamente
             const q = query(
                 collection(this.db, 'productos'),
-                where('subCategoriaId', '==', subCategoriaId)
+                where('subCategoriaId', '==', subCategoriaId),
+                limit(loadLimit)
             );
             querySnapshot = await getDocs(q);
         }
@@ -534,12 +636,17 @@ class Database {
         
         // Aplicar paginación
         const productos = todosProductos.slice(offset, offset + productosLimit);
-        const hasMore = offset + productosLimit < todosProductos.length;
+        const hasMore = querySnapshot.docs.length >= loadLimit || 
+                       todosProductos.length > offset + productosLimit;
+        
+        // Obtener último documento para paginación con cursor
+        const lastDocument = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
         
         return {
             productos,
             hasMore,
-            total: todosProductos.length
+            total: todosProductos.length,
+            lastDoc: lastDocument
         };
     }
 
@@ -578,25 +685,88 @@ class Database {
             .replace(/[\u0300-\u036f]/g, '');
     }
 
-    async searchProductos(queryText) {
-        // NOTA: Este método usa getAll() que ahora está optimizado con cache.
-        // Para mejoras futuras, se podría implementar búsqueda con queries de Firestore
-        // usando índices compuestos, pero requiere cambios en la estructura de datos.
-        // El cache reduce significativamente las llamadas repetidas.
-        const allProductos = await this.getAll('productos');
-        const normalizedQuery = this.normalizeText(queryText);
+    async searchProductos(queryText, limit = 5, offset = 0) {
+        const normalizedQuery = this.normalizeText(queryText).trim();
         
-        const resultados = allProductos.filter(producto => {
-            const designacion = this.normalizeText(producto.designacion || '');
-            const descripcion = this.normalizeText(producto.descripcion || '');
-            const referencia = this.normalizeText(producto.referencia || '');
-            const ean = String(producto.ean || '').toLowerCase();
-            
-            return designacion.includes(normalizedQuery) ||
-                   descripcion.includes(normalizedQuery) ||
-                   referencia.includes(normalizedQuery) ||
-                   ean.includes(normalizedQuery);
-        });
+        // Validación mínima
+        if (normalizedQuery.length < 2) {
+            return { productos: [], hasMore: false, total: 0 };
+        }
+        
+        const resultados = new Map(); // Evitar duplicados
+        
+        // NIVEL 1: Búsqueda exacta por REFERENCIA (muy eficiente)
+        // Si el texto es solo letras/números, intentar búsqueda exacta por referencia
+        if (/^[a-zA-Z0-9]+$/.test(normalizedQuery)) {
+            try {
+                const q = query(
+                    collection(this.db, 'productos'),
+                    where('referencia', '==', normalizedQuery),
+                    limit(5)
+                );
+                const snapshot = await getDocs(q);
+                snapshot.docs.forEach(doc => {
+                    resultados.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+            } catch (error) {
+                console.warn('Búsqueda por referencia falló:', error);
+                // Si falla, continuar al siguiente nivel
+            }
+        }
+        
+        // NIVEL 2: Búsqueda exacta por EAN (muy eficiente)
+        // Si el texto es solo números y no encontramos por referencia, buscar por EAN
+        if (resultados.size === 0 && /^\d+$/.test(normalizedQuery)) {
+            try {
+                const q = query(
+                    collection(this.db, 'productos'),
+                    where('ean', '==', normalizedQuery),
+                    limit(5)
+                );
+                const snapshot = await getDocs(q);
+                snapshot.docs.forEach(doc => {
+                    resultados.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+            } catch (error) {
+                console.warn('Búsqueda por EAN falló:', error);
+                // Si falla, continuar al siguiente nivel
+            }
+        }
+        
+        // NIVEL 3: Búsqueda por prefijo de nombre (eficiente)
+        // Solo si no encontramos resultados en los niveles anteriores
+        if (resultados.size === 0) {
+            try {
+                // Convertir primera letra a mayúscula para búsqueda
+                const queryUpper = normalizedQuery.charAt(0).toUpperCase() + normalizedQuery.slice(1);
+                // Calcular el siguiente carácter para el rango
+                const queryEnd = queryUpper.slice(0, -1) + 
+                               String.fromCharCode(queryUpper.charCodeAt(queryUpper.length - 1) + 1);
+                
+                // Cargar un poco más de lo necesario para saber si hay más resultados
+                const loadLimit = limit + offset + 1; // +1 para saber si hay más
+                
+                const q = query(
+                    collection(this.db, 'productos'),
+                    where('nombre', '>=', queryUpper),
+                    where('nombre', '<', queryEnd),
+                    orderBy('nombre'),
+                    limit(loadLimit)
+                );
+                const snapshot = await getDocs(q);
+                snapshot.docs.forEach(doc => {
+                    resultados.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+            } catch (error) {
+                // Si falla (falta índice), simplemente retornar vacío
+                // Firestore mostrará un enlace para crear el índice si es necesario
+                console.warn('Búsqueda por prefijo falló (puede necesitar índice):', error);
+                // NO hacer fallback costoso, simplemente retornar vacío
+            }
+        }
+        
+        // Aplicar paginación y eliminar duplicados
+        const productosArray = Array.from(resultados.values());
         
         // Eliminar duplicados basándose en ID, referencia+tiendaId, o EAN+tiendaId
         const productosUnicos = [];
@@ -604,8 +774,8 @@ class Database {
         const referenciasVistas = new Set();
         const eansVistos = new Set();
         
-        for (const producto of resultados) {
-            // Primero verificar por ID
+        for (const producto of productosArray) {
+            // Verificar por ID
             if (idsVistos.has(producto.id)) {
                 continue;
             }
@@ -635,7 +805,16 @@ class Database {
             productosUnicos.push(producto);
         }
         
-        return productosUnicos;
+        // Aplicar paginación
+        const productosPaginados = productosUnicos.slice(offset, offset + limit);
+        // hasMore es true si cargamos más de lo necesario (limit + offset + 1) o si hay más después de la paginación
+        const hasMore = productosUnicos.length > offset + limit;
+        
+        return {
+            productos: productosPaginados,
+            hasMore: hasMore,
+            total: productosUnicos.length
+        };
     }
 
     async getPedidosByUser(userId, obraId) {
