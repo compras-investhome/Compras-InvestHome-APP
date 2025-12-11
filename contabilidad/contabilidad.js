@@ -173,12 +173,17 @@ function buildObraMapsLink(obraInfo, obraNombre) {
 }
 
 function isPedidoEspecial(pedido) {
-    return Boolean(
-        pedido?.esPedidoEspecial ||
-        pedido?.pedidoEspecial ||
-        pedido?.tipo === 'Especial' ||
-        pedido?.tipoPedido === 'Especial'
-    );
+    // Verificar flags explícitos
+    if (pedido?.esPedidoEspecial || pedido?.pedidoEspecial || 
+        pedido?.tipo === 'Especial' || pedido?.tipoPedido === 'Especial') {
+        return true;
+    }
+    // Si no tiene tiendaId válido, es un pedido especial
+    const tiendaId = pedido?.tiendaId;
+    if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        return true;
+    }
+    return false;
 }
 
 async function getObrasCatalog(pedidosReferencia = []) {
@@ -397,11 +402,22 @@ async function loadPedidosContabilidad() {
     
     // Mostrar pedidos directamente sin agrupar por obras
     for (const pedido of todosPendientes) {
-        // Si es pedido especial, usar la card especial; si no, la card normal
-        const card = isPedidoEspecial(pedido) 
-            ? await createPedidoEspecialContabilidadCard(pedido)
-            : await createPedidoContabilidadCard(pedido);
-        container.appendChild(card);
+        try {
+            // Si es pedido especial, usar la card especial; si no, la card normal
+            const card = isPedidoEspecial(pedido) 
+                ? await createPedidoEspecialContabilidadCard(pedido)
+                : await createPedidoContabilidadCard(pedido);
+            container.appendChild(card);
+        } catch (error) {
+            console.error('Error al crear card de pedido:', error, pedido);
+            // Si hay un error, intentar crear como pedido especial como fallback
+            try {
+                const card = await createPedidoEspecialContabilidadCard(pedido);
+                container.appendChild(card);
+            } catch (fallbackError) {
+                console.error('Error al crear card de pedido especial como fallback:', fallbackError);
+            }
+        }
     }
     
     updateContabilidadTabBadge('pendientes', todosPendientes.length);
@@ -1204,7 +1220,29 @@ async function createPedidoContabilidadCard(pedido, isPagado = false) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    const tienda = await db.get('tiendas', pedido.tiendaId);
+    // Verificar que no sea un pedido especial (no tienen tiendaId válido)
+    if (isPedidoEspecial(pedido)) {
+        // Si es pedido especial, usar la función para pedidos especiales
+        return await createPedidoEspecialContabilidadCard(pedido);
+    }
+    
+    // Validar que tiendaId sea válido antes de hacer la consulta
+    const tiendaId = pedido?.tiendaId;
+    // Verificar que tiendaId exista y sea un string no vacío
+    if (!tiendaId || 
+        (typeof tiendaId !== 'string') || 
+        (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        // Si no tiene tiendaId válido, tratarlo como pedido especial
+        return await createPedidoEspecialContabilidadCard(pedido);
+    }
+    
+    // Asegurarse de que tiendaId sea un string válido antes de la consulta
+    const tiendaIdValidado = String(tiendaId).trim();
+    if (!tiendaIdValidado) {
+        return await createPedidoEspecialContabilidadCard(pedido);
+    }
+    
+    const tienda = await db.get('tiendas', tiendaIdValidado);
     const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
     let fechaObj;
