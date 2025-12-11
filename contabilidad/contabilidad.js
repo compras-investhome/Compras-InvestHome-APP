@@ -425,13 +425,28 @@ async function loadPedidosContabilidad() {
 
 async function loadPedidosPagadosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
-    const pedidosPagados = todosPedidos.filter(p => {
-        if (isPedidoEspecial(p)) {
-            return p.estadoPago === 'Pagado' && p.documentoPago;
-        } else {
-            return p.transferenciaPDF && p.albaran;
-        }
+    const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+    
+    // Filtrar pedidos normales pagados
+    const pedidosNormalesPagados = todosPedidos.filter(p => {
+        // Excluir pedidos especiales (los manejaremos por separado)
+        if (isPedidoEspecial(p)) return false;
+        return p.transferenciaPDF && p.albaran;
     });
+    
+    // Filtrar pedidos especiales pagados
+    const pedidosEspecialesPagados = todosPedidosEspeciales.filter(p => {
+        return p.estadoPago === 'Pagado' && p.documento;
+    });
+    
+    // También buscar pedidos especiales pagados que puedan estar en la colección 'pedidos'
+    const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+        if (!isPedidoEspecial(p)) return false;
+        return p.estadoPago === 'Pagado' && p.documento;
+    });
+    
+    // Combinar todos los pedidos pagados
+    const pedidosPagados = [...pedidosNormalesPagados, ...pedidosEspecialesPagados, ...pedidosEspecialesEnPedidos];
     const container = document.getElementById('historico-contabilidad-list');
     const emptyState = document.getElementById('historico-contabilidad-empty');
     container.innerHTML = '';
@@ -518,11 +533,19 @@ async function loadPedidosObraHistorico(obraId) {
     const pedidosObraEspeciales = todosPedidosEspeciales.filter(p => {
         const pObraId = p.obraId || 'sin-obra';
         if (pObraId !== obraId) return false;
-        return p.estadoPago === 'Pagado' && p.documentoPago;
+        return p.estadoPago === 'Pagado' && p.documento;
     });
     
-    // Combinar ambos tipos
-    const pedidosObra = [...pedidosObraNormales, ...pedidosObraEspeciales];
+    // También buscar pedidos especiales pagados que puedan estar en la colección 'pedidos'
+    const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+        if (!isPedidoEspecial(p)) return false;
+        const pObraId = p.obraId || 'sin-obra';
+        if (pObraId !== obraId) return false;
+        return p.estadoPago === 'Pagado' && p.documento;
+    });
+    
+    // Combinar ambos tipos (normales y especiales de ambas colecciones)
+    const pedidosObra = [...pedidosObraNormales, ...pedidosObraEspeciales, ...pedidosEspecialesEnPedidos];
     
     pedidosObra.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
@@ -1582,7 +1605,7 @@ async function createPedidoEspecialContabilidadCard(pedido) {
                 ${puedeConfirmarPago && tieneDocumentoPago && estadoPago === 'Pendiente de pago' ? `
                 <div class="contab-info-row-compact contab-confirmar-pago-row">
                     <span></span>
-                    <button class="btn btn-primary btn-sm btn-confirmar-pago-full" type="button" onclick="confirmarPagoPedidoEspecial('${pedido.id}')">
+                    <button class="btn btn-primary btn-sm btn-confirmar-pago-full" type="button" onclick="confirmarPagoPedidoEspecial('${pedido.id}')" style="font-size: 0.6rem; padding: 0.25rem 0.5rem; transform: scale(0.6); transform-origin: left center;">
                         ✓ Confirmar Pago
                     </button>
                 </div>

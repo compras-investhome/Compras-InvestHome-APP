@@ -280,12 +280,17 @@ function buildObraMapsLink(obraInfo, obraNombre) {
 }
 
 function isPedidoEspecial(pedido) {
-    return Boolean(
-        pedido?.esPedidoEspecial ||
-        pedido?.pedidoEspecial ||
-        pedido?.tipo === 'Especial' ||
-        pedido?.tipoPedido === 'Especial'
-    );
+    // Verificar flags explícitos
+    if (pedido?.esPedidoEspecial || pedido?.pedidoEspecial || 
+        pedido?.tipo === 'Especial' || pedido?.tipoPedido === 'Especial') {
+        return true;
+    }
+    // Si no tiene tiendaId válido, es un pedido especial
+    const tiendaId = pedido?.tiendaId;
+    if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        return true;
+    }
+    return false;
 }
 
 async function getObrasCatalog(pedidosReferencia = []) {
@@ -2563,7 +2568,20 @@ async function createPedidoCuentaCardAdmin(pedido) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    const tienda = await db.get('tiendas', pedido.tiendaId);
+    // Verificar que no sea un pedido especial (no tienen tiendaId válido)
+    if (isPedidoEspecial(pedido)) {
+        // Si es pedido especial, usar la función para pedidos especiales
+        return await createPedidoEspecialAdminCard(pedido);
+    }
+    
+    // Validar que tiendaId sea válido antes de hacer la consulta
+    const tiendaId = pedido?.tiendaId;
+    if (!tiendaId || (typeof tiendaId !== 'string') || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        // Si no tiene tiendaId válido, tratarlo como pedido especial
+        return await createPedidoEspecialAdminCard(pedido);
+    }
+    
+    const tienda = await db.get('tiendas', tiendaId);
     const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
     let fechaObj;
@@ -2820,9 +2838,11 @@ async function loadHistoricoAdmin() {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
-        // Filtrar solo pedidos a tienda (no especiales) que estén completados (con transferenciaPDF y albaran)
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        
+        // Filtrar pedidos normales completados (con transferenciaPDF y albaran)
         const pedidosHistoricos = todosPedidos.filter(p => {
-            // Excluir pedidos especiales
+            // Excluir pedidos especiales (los manejaremos por separado)
             if (isPedidoEspecial(p)) {
                 return false;
             }
@@ -2830,7 +2850,21 @@ async function loadHistoricoAdmin() {
             return p.transferenciaPDF && p.albaran;
         });
         
-        if (pedidosHistoricos.length === 0) {
+        // Filtrar pedidos especiales pagados
+        const pedidosEspecialesHistoricos = todosPedidosEspeciales.filter(p => {
+            return p.estadoPago === 'Pagado' && p.documento;
+        });
+        
+        // También buscar pedidos especiales pagados que puedan estar en la colección 'pedidos'
+        const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+            if (!isPedidoEspecial(p)) return false;
+            return p.estadoPago === 'Pagado' && p.documento;
+        });
+        
+        // Combinar todos los pedidos históricos
+        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos, ...pedidosEspecialesEnPedidos];
+        
+        if (todosHistoricos.length === 0) {
             obrasList.innerHTML = '';
             if (obrasEmpty) obrasEmpty.style.display = 'block';
             return;
@@ -2843,7 +2877,7 @@ async function loadHistoricoAdmin() {
         
         // Agrupar pedidos por obra
         const pedidosPorObra = new Map();
-        for (const pedido of pedidosHistoricos) {
+        for (const pedido of todosHistoricos) {
             const obraId = pedido.obraId || 'sin-obra';
             if (!pedidosPorObra.has(obraId)) {
                 pedidosPorObra.set(obraId, []);
@@ -2959,9 +2993,11 @@ async function loadPedidosHistoricosPorObra(obraId, obraNombre) {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
-        // Filtrar pedidos históricos (a tienda, no especiales) de esta obra
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        
+        // Filtrar pedidos normales históricos de esta obra
         const pedidosHistoricos = todosPedidos.filter(p => {
-            // Excluir pedidos especiales
+            // Excluir pedidos especiales (los manejaremos por separado)
             if (isPedidoEspecial(p)) {
                 return false;
             }
@@ -2973,8 +3009,26 @@ async function loadPedidosHistoricosPorObra(obraId, obraNombre) {
             return obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId;
         });
         
+        // Filtrar pedidos especiales pagados de esta obra
+        const pedidosEspecialesHistoricos = todosPedidosEspeciales.filter(p => {
+            const pObraId = p.obraId || 'sin-obra';
+            if (pObraId !== obraId) return false;
+            return p.estadoPago === 'Pagado' && p.documento;
+        });
+        
+        // También buscar pedidos especiales pagados que puedan estar en la colección 'pedidos'
+        const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+            if (!isPedidoEspecial(p)) return false;
+            const pObraId = p.obraId || 'sin-obra';
+            if (pObraId !== obraId) return false;
+            return p.estadoPago === 'Pagado' && p.documento;
+        });
+        
+        // Combinar todos los pedidos históricos
+        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos, ...pedidosEspecialesEnPedidos];
+        
         // Ordenar por fecha (más recientes primero)
-        pedidosHistoricos.sort((a, b) => {
+        todosHistoricos.sort((a, b) => {
             const fechaA = a.fechaCreacion || a.fecha ? new Date(a.fechaCreacion || a.fecha) : new Date(0);
             const fechaB = b.fechaCreacion || b.fecha ? new Date(b.fechaCreacion || b.fecha) : new Date(0);
             return fechaB - fechaA;
@@ -2982,10 +3036,10 @@ async function loadPedidosHistoricosPorObra(obraId, obraNombre) {
         
         // Guardar estado de paginación
         historicoPaginationState.obraId = obraId;
-        historicoPaginationState.pedidos = pedidosHistoricos;
+        historicoPaginationState.pedidos = todosHistoricos;
         historicoPaginationState.currentIndex = 0;
         
-        if (pedidosHistoricos.length === 0) {
+        if (todosHistoricos.length === 0) {
             pedidosList.innerHTML = '';
             if (pedidosEmpty) pedidosEmpty.style.display = 'block';
             if (cargarMasWrapper) cargarMasWrapper.style.display = 'none';
@@ -3018,7 +3072,10 @@ async function cargarMasPedidosHistoricos() {
     
     // Crear cards para los pedidos a cargar (usar diseño compacto igual que cuentas)
     for (const pedido of pedidosACargar) {
-        const card = await createPedidoCuentaCardAdmin(pedido);
+        // Si es pedido especial, usar la card especial; si no, la card normal
+        const card = isPedidoEspecial(pedido) 
+            ? await createPedidoEspecialAdminCard(pedido)
+            : await createPedidoCuentaCardAdmin(pedido);
         pedidosList.appendChild(card);
     }
     
