@@ -270,12 +270,17 @@ function buildObraMapsLink(obraInfo, obraNombre) {
 }
 
 function isPedidoEspecial(pedido) {
-    return Boolean(
-        pedido?.esPedidoEspecial ||
-        pedido?.pedidoEspecial ||
-        pedido?.tipo === 'Especial' ||
-        pedido?.tipoPedido === 'Especial'
-    );
+    // Verificar flags explícitos
+    if (pedido?.esPedidoEspecial || pedido?.pedidoEspecial || 
+        pedido?.tipo === 'Especial' || pedido?.tipoPedido === 'Especial') {
+        return true;
+    }
+    // Si no tiene tiendaId válido, es un pedido especial
+    const tiendaId = pedido?.tiendaId;
+    if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        return true;
+    }
+    return false;
 }
 
 async function getObrasCatalog(pedidosReferencia = []) {
@@ -1771,7 +1776,20 @@ async function createPedidoTecnicoCard(pedido) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    const tienda = await db.get('tiendas', pedido.tiendaId);
+    // Verificar que no sea un pedido especial (no tienen tiendaId válido)
+    if (isPedidoEspecial(pedido)) {
+        // Si es pedido especial, usar la función para pedidos especiales
+        return await createPedidoEspecialTecnicoCard(pedido);
+    }
+    
+    // Validar que tiendaId sea válido antes de hacer la consulta
+    const tiendaId = pedido?.tiendaId;
+    if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        // Si no tiene tiendaId válido, tratarlo como pedido especial
+        return await createPedidoEspecialTecnicoCard(pedido);
+    }
+    
+    const tienda = await db.get('tiendas', tiendaId);
     const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
     let fechaObj;
@@ -3036,6 +3054,7 @@ async function loadPedidosEnCursoTecnico() {
         });
         
         // Filtrar pedidos especiales en curso (no pagados)
+        // Primero de la colección pedidosEspeciales
         const pedidosEspecialesEnCurso = todosPedidosEspeciales.filter(p => {
             // Excluir pedidos especiales pagados
             if (p.estadoPago === 'Pagado') {
@@ -3063,8 +3082,36 @@ async function loadPedidosEnCursoTecnico() {
             }
         });
         
-        // Combinar ambos tipos de pedidos
-        const todosEnCurso = [...pedidosEnCurso, ...pedidosEspecialesEnCurso];
+        // También buscar pedidos especiales que puedan estar en la colección 'pedidos'
+        const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+            // Solo pedidos especiales
+            if (!isPedidoEspecial(p)) {
+                return false;
+            }
+            // Excluir pedidos especiales pagados
+            if (p.estadoPago === 'Pagado') {
+                return false;
+            }
+            // Excluir pedidos cerrados
+            if (p.estado === 'Cerrado' || p.estado === 'Finalizado') {
+                return false;
+            }
+            // Excluir pedidos completados
+            if (p.transferenciaPDF && p.albaran) {
+                return false;
+            }
+            // Filtrar por usuario o por obras asignadas
+            if (p.userId === currentUser.id) {
+                return true;
+            }
+            if (p.obraId && obrasAsignadas.includes(p.obraId)) {
+                return true;
+            }
+            return false;
+        });
+        
+        // Combinar ambos tipos de pedidos (normales y especiales de ambas colecciones)
+        const todosEnCurso = [...pedidosEnCurso, ...pedidosEspecialesEnCurso, ...pedidosEspecialesEnPedidos];
         
         if (todosEnCurso.length === 0) {
             obrasList.innerHTML = '';
@@ -3246,6 +3293,7 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
         });
         
         // Filtrar pedidos especiales en curso de esta obra (no pagados)
+        // Primero de la colección pedidosEspeciales
         const pedidosEspecialesEnCurso = todosPedidosEspeciales.filter(p => {
             // Excluir pedidos especiales pagados
             if (p.estadoPago === 'Pagado') {
@@ -3276,8 +3324,39 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
             }
         });
         
-        // Combinar ambos tipos de pedidos
-        const todosEnCurso = [...pedidosEnCurso, ...pedidosEspecialesEnCurso];
+        // También buscar pedidos especiales que puedan estar en la colección 'pedidos'
+        const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+            // Solo pedidos especiales
+            if (!isPedidoEspecial(p)) {
+                return false;
+            }
+            // Excluir pedidos especiales pagados
+            if (p.estadoPago === 'Pagado') {
+                return false;
+            }
+            // Excluir pedidos cerrados
+            if (p.estado === 'Cerrado' || p.estado === 'Finalizado') {
+                return false;
+            }
+            // Excluir pedidos completados
+            if (p.transferenciaPDF && p.albaran) {
+                return false;
+            }
+            // Filtrar por obra
+            const obraMatch = obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId;
+            if (!obraMatch) return false;
+            // Filtrar por usuario o por obras asignadas
+            if (p.userId === currentUser.id) {
+                return true;
+            }
+            if (p.obraId && obrasAsignadas.includes(p.obraId)) {
+                return true;
+            }
+            return false;
+        });
+        
+        // Combinar ambos tipos de pedidos (normales y especiales de ambas colecciones)
+        const todosEnCurso = [...pedidosEnCurso, ...pedidosEspecialesEnCurso, ...pedidosEspecialesEnPedidos];
         
         // Ordenar por fecha (más recientes primero)
         todosEnCurso.sort((a, b) => {
@@ -3932,7 +4011,14 @@ async function createPedidoContabilidadCardTecnico(pedido, isPagado = false) {
     const card = document.createElement('div');
     card.className = 'pedido-gestion-card contab-pedido-card';
     
-    const tienda = await db.get('tiendas', pedido.tiendaId);
+    // Validar que tiendaId sea válido antes de hacer la consulta
+    const tiendaId = pedido?.tiendaId;
+    if (!tiendaId || (typeof tiendaId === 'string' && tiendaId.trim() === '')) {
+        // Si no tiene tiendaId válido, es un pedido especial, usar la función apropiada
+        return await createPedidoEspecialTecnicoCard(pedido);
+    }
+    
+    const tienda = await db.get('tiendas', tiendaId);
     const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
     let fechaObj;
