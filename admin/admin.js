@@ -196,6 +196,36 @@ function escapeHtml(value = '') {
         .replace(/'/g, '&#39;');
 }
 
+// Función para descargar o abrir documento desde data URL
+window.descargarDocumento = function(dataURL, nombreArchivo = 'documento') {
+    if (!dataURL) return;
+    
+    try {
+        // Convertir data URL a Blob
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        const u8arr = new Uint8Array(bstr.length);
+        for (let i = 0; i < bstr.length; i++) {
+            u8arr[i] = bstr.charCodeAt(i);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobURL = URL.createObjectURL(blob);
+        
+        // Crear enlace temporal para descargar/abrir
+        const link = document.createElement('a');
+        link.href = blobURL;
+        link.target = '_blank';
+        link.click();
+        
+        // Limpiar después de un momento
+        setTimeout(() => URL.revokeObjectURL(blobURL), 100);
+    } catch (error) {
+        console.error('Error al abrir documento:', error);
+        alert('Error al abrir el documento');
+    }
+};
+
 function getEstadoPagoPillClass(estado) {
     const normalized = (estado || '').toLowerCase();
     if (normalized.includes('cuenta')) {
