@@ -3016,9 +3016,9 @@ async function cargarMasPedidosHistoricos() {
     const endIndex = Math.min(currentIndex + itemsPerPage, pedidos.length);
     const pedidosACargar = pedidos.slice(currentIndex, endIndex);
     
-    // Crear cards para los pedidos a cargar
+    // Crear cards para los pedidos a cargar (usar diseño compacto igual que cuentas)
     for (const pedido of pedidosACargar) {
-        const card = await createPedidoTiendaCard(pedido);
+        const card = await createPedidoCuentaCardAdmin(pedido);
         pedidosList.appendChild(card);
     }
     
