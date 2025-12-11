@@ -8,6 +8,149 @@ let currentTienda = null;
 
 const PAGO_ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
 
+// ========== SISTEMA DE CACHE OPTIMIZADO ==========
+// Cache en memoria del módulo tienda para reducir llamadas a Firebase
+const tiendaCache = {
+    pedidosByTienda: new Map(), // Map<tiendaId, {data, timestamp}>
+    obras: { data: null, timestamp: 0 },
+    solicitudesModificacion: new Map(), // Map<tiendaId, {data, timestamp}>
+    solicitudesAnulacion: new Map() // Map<tiendaId, {data, timestamp}>
+};
+
+// TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
+const CACHE_TTL = {
+    obras: 9 * 60 * 60 * 1000,           // 9 horas - casi estáticas
+    pedidosByTienda: 3 * 60 * 60 * 1000, // 3 horas - dinámicos pero con invalidación manual
+    solicitudes: 1 * 60 * 60 * 1000      // 1 hora - más dinámicos
+};
+
+// Verificar si el cache es válido para una colección
+function isCacheValid(collectionName, key = null) {
+    if (collectionName === 'pedidosByTienda' || collectionName === 'solicitudesModificacion' || collectionName === 'solicitudesAnulacion') {
+        const cacheMap = tiendaCache[collectionName];
+        if (!cacheMap || !key) return false;
+        const cached = cacheMap.get(key);
+        if (!cached || !cached.data) return false;
+        
+        const ttl = CACHE_TTL[collectionName === 'pedidosByTienda' ? 'pedidosByTienda' : 'solicitudes'];
+        const age = Date.now() - cached.timestamp;
+        return age < ttl;
+    } else {
+        const cache = tiendaCache[collectionName];
+        if (!cache || !cache.data) return false;
+        
+        const ttl = CACHE_TTL[collectionName] || CACHE_TTL.pedidosByTienda;
+        const age = Date.now() - cache.timestamp;
+        return age < ttl;
+    }
+}
+
+// Invalidar cache de pedidos por tienda
+function invalidatePedidosByTiendaCache(tiendaId) {
+    if (tiendaCache.pedidosByTienda.has(tiendaId)) {
+        tiendaCache.pedidosByTienda.delete(tiendaId);
+    }
+    // También invalidar cache de solicitudes de esa tienda
+    if (tiendaCache.solicitudesModificacion.has(tiendaId)) {
+        tiendaCache.solicitudesModificacion.delete(tiendaId);
+    }
+    if (tiendaCache.solicitudesAnulacion.has(tiendaId)) {
+        tiendaCache.solicitudesAnulacion.delete(tiendaId);
+    }
+}
+
+// Invalidar todo el cache de pedidos (útil cuando no sabemos la tienda)
+function invalidateAllPedidosCache() {
+    tiendaCache.pedidosByTienda.clear();
+    tiendaCache.solicitudesModificacion.clear();
+    tiendaCache.solicitudesAnulacion.clear();
+}
+
+// Función helper para obtener pedidos de una tienda con cache
+async function getPedidosByTiendaCached(tiendaId) {
+    if (isCacheValid('pedidosByTienda', tiendaId)) {
+        return tiendaCache.pedidosByTienda.get(tiendaId).data;
+    }
+    
+    const pedidos = await db.getPedidosByTienda(tiendaId);
+    tiendaCache.pedidosByTienda.set(tiendaId, {
+        data: pedidos,
+        timestamp: Date.now()
+    });
+    return pedidos;
+}
+
+// Función helper para obtener obras con cache
+async function getObrasCached() {
+    if (isCacheValid('obras')) {
+        return tiendaCache.obras.data;
+    }
+    
+    const obras = await db.getAllObras();
+    tiendaCache.obras.data = obras;
+    tiendaCache.obras.timestamp = Date.now();
+    return obras;
+}
+
+// Función helper para obtener solicitudes de modificación con cache
+async function getSolicitudesModificacionByTiendaCached(tiendaId) {
+    if (isCacheValid('solicitudesModificacion', tiendaId)) {
+        return tiendaCache.solicitudesModificacion.get(tiendaId).data;
+    }
+    
+    const solicitudes = await db.getSolicitudesModificacionByTienda(tiendaId);
+    tiendaCache.solicitudesModificacion.set(tiendaId, {
+        data: solicitudes,
+        timestamp: Date.now()
+    });
+    return solicitudes;
+}
+
+// Función helper para obtener solicitudes de anulación con cache
+async function getSolicitudesAnulacionByTiendaCached(tiendaId) {
+    if (isCacheValid('solicitudesAnulacion', tiendaId)) {
+        return tiendaCache.solicitudesAnulacion.get(tiendaId).data;
+    }
+    
+    const solicitudes = await db.getSolicitudesAnulacionByTienda(tiendaId);
+    tiendaCache.solicitudesAnulacion.set(tiendaId, {
+        data: solicitudes,
+        timestamp: Date.now()
+    });
+    return solicitudes;
+}
+
+// Precargar tiendas y obras necesarias para un array de pedidos
+// Evita múltiples llamadas individuales db.get() dentro de loops
+async function preloadPedidoRelatedData(pedidos) {
+    const tiendaIds = new Set();
+    const obraIds = new Set();
+    
+    // Extraer IDs únicos
+    pedidos.forEach(pedido => {
+        if (pedido.tiendaId) tiendaIds.add(pedido.tiendaId);
+        if (pedido.obraId) obraIds.add(pedido.obraId);
+    });
+    
+    // Precargar todas las tiendas necesarias
+    const tiendasCache = new Map();
+    // Para tiendas, solo cacheamos lo que ya tenemos en currentTienda si aplica
+    // Las tiendas se obtienen con db.get() cuando es necesario
+    
+    // Precargar todas las obras necesarias
+    const obrasCache = new Map();
+    if (obraIds.size > 0) {
+        const todasObras = await getObrasCached();
+        todasObras.forEach(obra => {
+            if (obraIds.has(obra.id)) {
+                obrasCache.set(obra.id, obra);
+            }
+        });
+    }
+    
+    return { tiendasCache, obrasCache };
+}
+
 // Funciones de utilidad para popups
 function showAlert(message, title = 'Información') {
     return new Promise((resolve) => {
@@ -103,7 +246,7 @@ function showPrompt(message, defaultValue = '', title = 'Ingresar') {
 
 // Calcular gastado total de cuenta (suma de todos los pedidos con estadoPago = 'Pago A cuenta')
 async function calcularGastadoTotalCuenta(tiendaId) {
-    const pedidos = await db.getPedidosByTienda(tiendaId);
+    const pedidos = await getPedidosByTiendaCached(tiendaId);
     let gastado = 0;
     
     for (const pedido of pedidos) {
@@ -204,11 +347,9 @@ function isPedidoEspecial(pedido) {
 
 async function getObrasCatalog(pedidosReferencia = []) {
     let obras = [];
-    if (typeof db.getAllObras === 'function') {
-        const result = await db.getAllObras();
-        if (Array.isArray(result)) {
-            obras = result;
-        }
+    const result = await getObrasCached();
+    if (Array.isArray(result)) {
+        obras = result;
     }
     
     const obraMap = new Map();
@@ -310,7 +451,7 @@ async function loadPedidosSeleccionarPago() {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const pedidos = await db.getPedidosByTienda(tiendaId);
+    const pedidos = await getPedidosByTiendaCached(tiendaId);
     
     // Pedidos que están en "Seleccionar Pago":
     // El pedido permanece aquí hasta que se cumplan las TRES condiciones simultáneamente:
@@ -368,8 +509,8 @@ async function loadModificacionPedidoTienda() {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const solicitudesModificacion = await db.getSolicitudesModificacionByTienda(tiendaId);
-    const solicitudesAnulacion = await db.getSolicitudesAnulacionByTienda(tiendaId);
+    const solicitudesModificacion = await getSolicitudesModificacionByTiendaCached(tiendaId);
+    const solicitudesAnulacion = await getSolicitudesAnulacionByTiendaCached(tiendaId);
     
     // Combinar ambas listas y marcar el tipo
     const todasLasSolicitudes = [
@@ -451,7 +592,7 @@ async function loadPedidosPagadosTienda(estadoLogistico) {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const pedidos = await db.getPedidosByTienda(tiendaId);
+    const pedidos = await getPedidosByTiendaCached(tiendaId);
     
     // Pedidos con estadoPago = "Pagado" (tiene transferenciaPDF)
     // EXCLUIR pedidos que tengan factura adjuntada Y estado entregado
@@ -763,9 +904,11 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         pedido.transferenciaPDF = transferenciaPDF;
         pedido.estadoPago = 'Pagado';
         await db.update('pedidos', pedido);
-        
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosByTiendaCache(tiendaId);
+
         // No necesitamos calcular gastado en tienda (eso es para contabilidad)
-        
+
         await showAlert('PDF del pago adjuntado correctamente. El pedido se ha marcado como pagado.', 'Éxito');
         
         // Recargar pestañas relevantes
@@ -876,8 +1019,10 @@ window.removePedidoPaymentDocument = async function(pedidoId) {
         }
         
         await db.update('pedidos', pedido);
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosByTiendaCache(pedido.tiendaId);
         await showAlert('Documento eliminado correctamente', 'Éxito');
-        
+
         // Recargar pestañas relevantes
         loadPedidosSeleccionarPago();
         loadPedidosPendientesPago();
@@ -1668,7 +1813,9 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
         }
         
         await db.update('pedidos', pedido);
-        
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosByTiendaCache(pedido.tiendaId);
+
         // NO recargar pestañas automáticamente aquí
         // El pedido solo se moverá cuando se adjunte el pedido real
         // Solo recargar la pestaña actual para actualizar el select
@@ -1776,9 +1923,11 @@ window.uploadPedidoRealTienda = async function(pedidoId, input) {
             try {
                 const base64 = e.target.result;
                 pedido.pedidoSistemaPDF = base64;
-                await db.update('pedidos', pedido);
-                
-                const estadoPago = pedido.estadoPago || 'Sin Asignar';
+        await db.update('pedidos', pedido);
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosByTiendaCache(pedido.tiendaId);
+
+        const estadoPago = pedido.estadoPago || 'Sin Asignar';
                 
                 // Solo mover el pedido si tiene estado "Pendiente de pago" o "Pago A cuenta"
                 // Y tiene el pedido real adjunto Y tiene precio real asignado (incluyendo 0)
@@ -1835,7 +1984,9 @@ window.guardarPrecioRealTienda = async function(pedidoId, inputId) {
         
         pedido.precioReal = precioReal;
         await db.update('pedidos', pedido);
-        
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosByTiendaCache(pedido.tiendaId);
+
         const estadoPago = pedido.estadoPago || 'Sin Asignar';
         const tienePedidoReal = Boolean(pedido.pedidoSistemaPDF);
         
@@ -2071,7 +2222,11 @@ window.crearPedidoDesdeItemTienda = async function(pedidoId, itemIndex) {
         };
         
         const nuevoPedidoId = await db.add('pedidos', nuevoPedido);
-        
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        if (currentTienda) {
+            invalidatePedidosByTiendaCache(currentTienda.id);
+        }
+
         recargarPestañasTiendaRelevantes();
         await showAlert(`Nuevo pedido creado (#${nuevoPedidoId}) con el artículo seleccionado`, 'Éxito');
     } catch (error) {
@@ -2135,14 +2290,18 @@ window.aceptarSolicitudModificacion = async function(solicitudId) {
         if (solicitud.cantidadSolicitada === 0) {
             pedido.items.splice(solicitud.itemIndex, 1);
             if (pedido.items.length === 0) {
-                await db.delete('pedidos', solicitud.pedidoId);
+            await db.delete('pedidos', solicitud.pedidoId);
             } else {
                 await db.update('pedidos', pedido);
             }
         } else {
             await db.update('pedidos', pedido);
         }
-        
+        // Invalidar cache de pedidos y solicitudes para que se vean los cambios inmediatamente
+        if (currentTienda) {
+            invalidatePedidosByTiendaCache(currentTienda.id);
+        }
+
         // Marcar solicitud como aceptada
         solicitud.estado = 'Aceptada';
         await db.update('solicitudesModificacion', solicitud);
@@ -2235,8 +2394,12 @@ window.aceptarSolicitudAnulacion = async function(solicitudId) {
                 await db.update('pedidos', pedido);
                 await showAlert('Artículo anulado correctamente', 'Éxito');
             }
+            // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+            if (currentTienda) {
+                invalidatePedidosByTiendaCache(currentTienda.id);
+            }
         }
-        
+
         // Marcar solicitud como aceptada
         solicitud.estado = 'Aceptada';
         await db.update('solicitudesAnulacion', solicitud);
@@ -2609,8 +2772,8 @@ async function actualizarTodosLosBadges() {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const pedidos = await db.getPedidosByTienda(tiendaId);
-    const solicitudesModificacion = await db.getSolicitudesModificacionByTienda(tiendaId);
+    const pedidos = await getPedidosByTiendaCached(tiendaId);
+    const solicitudesModificacion = await getSolicitudesModificacionByTiendaCached(tiendaId);
     
     // 1. Seleccionar Pago
     const pedidosSeleccionar = pedidos.filter(p => {

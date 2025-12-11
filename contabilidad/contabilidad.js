@@ -15,6 +15,126 @@ const contabilidadTabBadgeMap = {
 
 const PAGO_ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
 
+// ========== SISTEMA DE CACHE OPTIMIZADO ==========
+// Cache en memoria del módulo contabilidad para reducir llamadas a Firebase
+const contabilidadCache = {
+    pedidos: { data: null, timestamp: 0 },
+    pedidosEspeciales: { data: null, timestamp: 0 },
+    obras: { data: null, timestamp: 0 },
+    tiendas: { data: null, timestamp: 0 },
+    categorias: { data: null, timestamp: 0 }
+};
+
+// TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
+const CACHE_TTL = {
+    obras: 9 * 60 * 60 * 1000,           // 9 horas - casi estáticas
+    tiendas: 9 * 60 * 60 * 1000,         // 9 horas - casi estáticas
+    categorias: 9 * 60 * 60 * 1000,      // 9 horas - casi estáticas
+    pedidos: 3 * 60 * 60 * 1000,         // 3 horas - dinámicos pero con invalidación manual
+    pedidosEspeciales: 3 * 60 * 60 * 1000 // 3 horas - dinámicos pero con invalidación manual
+};
+
+// Verificar si el cache es válido para una colección
+function isCacheValid(collectionName) {
+    const cache = contabilidadCache[collectionName];
+    if (!cache || !cache.data) return false;
+    
+    const ttl = CACHE_TTL[collectionName] || CACHE_TTL.pedidos;
+    const age = Date.now() - cache.timestamp;
+    return age < ttl;
+}
+
+// Invalidar cache de una colección específica (invalidación granular)
+function invalidateCache(collectionName) {
+    if (contabilidadCache[collectionName]) {
+        contabilidadCache[collectionName].timestamp = 0;
+        contabilidadCache[collectionName].data = null;
+    }
+}
+
+// Invalidar cache de pedidos
+function invalidatePedidosCache() {
+    invalidateCache('pedidos');
+}
+
+// Invalidar cache de pedidos especiales
+function invalidatePedidosEspecialesCache() {
+    invalidateCache('pedidosEspeciales');
+}
+
+// Función helper para obtener pedidos con cache (retorna EXACTAMENTE lo mismo que db.getAll('pedidos'))
+async function getPedidosCached() {
+    if (isCacheValid('pedidos')) {
+        return contabilidadCache.pedidos.data;
+    }
+    
+    const pedidos = await db.getAll('pedidos');
+    contabilidadCache.pedidos.data = pedidos;
+    contabilidadCache.pedidos.timestamp = Date.now();
+    return pedidos;
+}
+
+// Función helper para obtener pedidos especiales con cache (retorna EXACTAMENTE lo mismo que db.getAll('pedidosEspeciales'))
+async function getPedidosEspecialesCached() {
+    if (isCacheValid('pedidosEspeciales')) {
+        return contabilidadCache.pedidosEspeciales.data;
+    }
+    
+    const pedidosEspeciales = await db.getAll('pedidosEspeciales');
+    contabilidadCache.pedidosEspeciales.data = pedidosEspeciales;
+    contabilidadCache.pedidosEspeciales.timestamp = Date.now();
+    return pedidosEspeciales;
+}
+
+// Función helper para obtener tiendas con cache (retorna EXACTAMENTE lo mismo que db.getAll('tiendas'))
+async function getTiendasCached() {
+    if (isCacheValid('tiendas')) {
+        return contabilidadCache.tiendas.data;
+    }
+    
+    const tiendas = await db.getAll('tiendas');
+    contabilidadCache.tiendas.data = tiendas;
+    contabilidadCache.tiendas.timestamp = Date.now();
+    return tiendas;
+}
+
+// Precargar tiendas y obras necesarias para un array de pedidos
+// Evita múltiples llamadas individuales db.get() dentro de loops
+async function preloadPedidoRelatedData(pedidos) {
+    const tiendaIds = new Set();
+    const obraIds = new Set();
+    
+    // Extraer IDs únicos
+    pedidos.forEach(pedido => {
+        if (pedido.tiendaId) tiendaIds.add(pedido.tiendaId);
+        if (pedido.obraId) obraIds.add(pedido.obraId);
+    });
+    
+    // Precargar todas las tiendas necesarias
+    const tiendasCache = new Map();
+    if (tiendaIds.size > 0) {
+        const todasTiendas = await getTiendasCached();
+        todasTiendas.forEach(tienda => {
+            if (tiendaIds.has(tienda.id)) {
+                tiendasCache.set(tienda.id, tienda);
+            }
+        });
+    }
+    
+    // Precargar todas las obras necesarias
+    const obrasCache = new Map();
+    if (obraIds.size > 0) {
+        const todasObras = await db.getAllObras();
+        todasObras.forEach(obra => {
+            if (obraIds.has(obra.id)) {
+                obrasCache.set(obra.id, obra);
+            }
+        });
+    }
+    
+    return { tiendasCache, obrasCache };
+}
+
 // Funciones de utilidad para popups
 function showAlert(message, title = 'Información') {
     return new Promise((resolve) => {
@@ -334,8 +454,8 @@ function switchTabContabilidad(tab) {
 
 // Funciones de carga de datos
 async function loadPedidosContabilidad() {
-    const todosPedidos = await db.getAll('pedidos');
-    const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+    const todosPedidos = await getPedidosCached();
+    const todosPedidosEspeciales = await getPedidosEspecialesCached();
     
     // Filtrar pedidos normales pendientes de pago
     const pedidosPendientes = todosPedidos.filter(pedido => {
@@ -424,8 +544,8 @@ async function loadPedidosContabilidad() {
 }
 
 async function loadPedidosPagadosContabilidad() {
-    const todosPedidos = await db.getAll('pedidos');
-    const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+    const todosPedidos = await getPedidosCached();
+    const todosPedidosEspeciales = await getPedidosEspecialesCached();
     
     // Filtrar pedidos normales pagados
     const pedidosNormalesPagados = todosPedidos.filter(p => {
@@ -518,8 +638,8 @@ async function loadPedidosObraHistorico(obraId) {
     container.appendChild(btnVolver);
     
     // Obtener pedidos normales de la obra
-    const todosPedidos = await db.getAll('pedidos');
-    const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+    const todosPedidos = await getPedidosCached();
+    const todosPedidosEspeciales = await getPedidosEspecialesCached();
     
     const pedidosObraNormales = todosPedidos.filter(p => {
         const pObraId = p.obraId || 'sin-obra';
@@ -571,7 +691,7 @@ async function loadPedidosObraHistorico(obraId) {
 }
 
 async function loadCuentasContabilidad() {
-    const tiendas = await db.getAll('tiendas');
+    const tiendas = await getTiendasCached();
     const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta);
     
     const container = document.getElementById('cuentas-contabilidad-list');
@@ -587,9 +707,9 @@ async function loadCuentasContabilidad() {
     }
     
     emptyState.style.display = 'none';
-    
-    const todosPedidos = await db.getAll('pedidos');
-    const pedidosCuentaGlobal = todosPedidos.filter(p => 
+
+    const todosPedidos = await getPedidosCached();
+    const pedidosCuentaGlobal = todosPedidos.filter(p =>
         p.estadoPago === 'Pago A cuenta' &&
         p.estado !== 'Completado' &&
         p.pedidoSistemaPDF &&
@@ -720,7 +840,7 @@ async function loadPedidosTiendaCuenta(tiendaId) {
     container.appendChild(btnVolver);
     
     // Obtener pedidos de la tienda
-    const todosPedidos = await db.getAll('pedidos');
+    const todosPedidos = await getPedidosCached();
     const pedidosTienda = todosPedidos.filter(p => 
         p.tiendaId === tiendaId &&
         p.estadoPago === 'Pago A cuenta' &&
@@ -751,7 +871,7 @@ async function loadPedidosTiendaCuenta(tiendaId) {
 }
 
 async function loadPedidosEspecialesContabilidad() {
-    const todosPedidos = await db.getAll('pedidos');
+    const todosPedidos = await getPedidosCached();
     const pedidosEspeciales = todosPedidos.filter(p => 
         isPedidoEspecial(p) && (p.estadoPago === 'Pendiente de pago' || !p.estadoPago || p.estadoPago === 'Sin Asignar')
     );
@@ -1057,7 +1177,9 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         pedido.transferenciaPDF = transferenciaPDF;
         pedido.estadoPago = 'Pagado';
         await db.update('pedidos', pedido);
-        
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
+
         const tienda = await db.get('tiendas', tiendaId);
         if (tienda && tienda.limiteCuenta) {
             const gastado = await calcularGastadoCuenta(tiendaId);
@@ -1210,8 +1332,8 @@ window.confirmarPagoPedidoEspecial = async function(pedidoId) {
         loadPedidosPagadosContabilidad();
         
         // Actualizar badge de pendientes
-        const todosPedidos = await db.getAll('pedidos');
-        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const todosPedidos = await getPedidosCached();
+        const todosPedidosEspeciales = await getPedidosEspecialesCached();
         const pedidosPendientes = todosPedidos.filter(pedido => {
             if (pedido.estado === 'Completado') return false;
             if (pedido.estadoPago !== 'Pendiente de pago') return false;
@@ -1739,6 +1861,8 @@ window.guardarNotaPedido = async function(pedidoId, inputId, listId, countId) {
             timestamp: new Date().toISOString()
         });
         await db.update('pedidos', { id: pedidoId, notas });
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
         input.value = '';
         const listEl = document.getElementById(listId);
         const countEl = document.getElementById(countId);
@@ -1847,8 +1971,8 @@ function setupContabilidadEventListeners() {
                 loadPedidosContabilidad();
             } else {
                 // Si no, solo actualizar el badge
-                const todosPedidos = await db.getAll('pedidos');
-                const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+                const todosPedidos = await getPedidosCached();
+                const todosPedidosEspeciales = await getPedidosEspecialesCached();
                 const pedidosPendientes = todosPedidos.filter(pedido => {
                     if (pedido.estado === 'Completado') return false;
                     if (pedido.estadoPago !== 'Pendiente de pago') return false;
