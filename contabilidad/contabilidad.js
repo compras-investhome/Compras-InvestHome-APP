@@ -330,7 +330,9 @@ function switchTabContabilidad(tab) {
 // Funciones de carga de datos
 async function loadPedidosContabilidad() {
     const todosPedidos = await db.getAll('pedidos');
+    const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
     
+    // Filtrar pedidos normales pendientes de pago
     const pedidosPendientes = todosPedidos.filter(pedido => {
         if (pedido.estado === 'Completado') return false;
         if (pedido.estadoPago !== 'Pendiente de pago') return false;
@@ -339,10 +341,28 @@ async function loadPedidosContabilidad() {
         return true;
     });
     
+    // Filtrar pedidos especiales pendientes de pago con documento adjunto
+    const pedidosEspecialesPendientes = todosPedidosEspeciales.filter(pedido => {
+        const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+        if (estadoPago === 'Sin Asignar' || !estadoPago) {
+            // Tratar como pendiente si no tiene estado
+        } else if (estadoPago !== 'Pendiente de pago') {
+            return false;
+        }
+        // Debe tener documento adjunto
+        if (!pedido.documentoPago) return false;
+        // No debe estar pagado ya
+        if (pedido.estadoPago === 'Pagado') return false;
+        return true;
+    });
+    
+    // Combinar ambos tipos de pedidos
+    const todosPendientes = [...pedidosPendientes, ...pedidosEspecialesPendientes];
+    
     // Ordenar de más nuevo a más viejo
-    pedidosPendientes.sort((a, b) => {
-        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
-        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
+    todosPendientes.sort((a, b) => {
+        const fechaA = a.fecha?.toDate ? a.fecha.toDate() : (a.fecha ? new Date(a.fecha) : new Date(a.fechaCreacion || 0));
+        const fechaB = b.fecha?.toDate ? b.fecha.toDate() : (b.fecha ? new Date(b.fecha) : new Date(b.fechaCreacion || 0));
         return fechaB - fechaA;
     });
     
@@ -350,7 +370,7 @@ async function loadPedidosContabilidad() {
     const emptyState = document.getElementById('pendientes-pago-contabilidad-empty');
     container.innerHTML = '';
     
-    if (pedidosPendientes.length === 0) {
+    if (todosPendientes.length === 0) {
         emptyState.style.display = 'block';
         updateContabilidadTabBadge('pendientes', 0);
         return;
@@ -359,12 +379,15 @@ async function loadPedidosContabilidad() {
     emptyState.style.display = 'none';
     
     // Mostrar pedidos directamente sin agrupar por obras
-    for (const pedido of pedidosPendientes) {
-        const card = await createPedidoContabilidadCard(pedido);
+    for (const pedido of todosPendientes) {
+        // Si es pedido especial, usar la card especial; si no, la card normal
+        const card = isPedidoEspecial(pedido) 
+            ? await createPedidoEspecialContabilidadCard(pedido)
+            : await createPedidoContabilidadCard(pedido);
         container.appendChild(card);
     }
     
-    updateContabilidadTabBadge('pendientes', pedidosPendientes.length);
+    updateContabilidadTabBadge('pendientes', todosPendientes.length);
 }
 
 async function loadPedidosPagadosContabilidad() {
@@ -446,18 +469,27 @@ async function loadPedidosObraHistorico(obraId) {
     });
     container.appendChild(btnVolver);
     
-    // Obtener pedidos de la obra
+    // Obtener pedidos normales de la obra
     const todosPedidos = await db.getAll('pedidos');
-    const pedidosObra = todosPedidos.filter(p => {
+    const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+    
+    const pedidosObraNormales = todosPedidos.filter(p => {
         const pObraId = p.obraId || 'sin-obra';
         if (pObraId !== obraId) return false;
-        
-        if (isPedidoEspecial(p)) {
-            return p.estadoPago === 'Pagado' && p.documentoPago;
-        } else {
-            return p.transferenciaPDF && p.albaran;
-        }
+        // Excluir pedidos especiales (ya los manejaremos por separado)
+        if (isPedidoEspecial(p)) return false;
+        return p.transferenciaPDF && p.albaran;
     });
+    
+    // Obtener pedidos especiales de la obra
+    const pedidosObraEspeciales = todosPedidosEspeciales.filter(p => {
+        const pObraId = p.obraId || 'sin-obra';
+        if (pObraId !== obraId) return false;
+        return p.estadoPago === 'Pagado' && p.documentoPago;
+    });
+    
+    // Combinar ambos tipos
+    const pedidosObra = [...pedidosObraNormales, ...pedidosObraEspeciales];
     
     pedidosObra.sort((a, b) => {
         const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
@@ -1093,7 +1125,16 @@ window.confirmarPagoPedidoEspecial = async function(pedidoId) {
     if (!confirmar) return;
     
     try {
-        const pedido = await db.get('pedidos', pedidoId);
+        // Buscar primero en pedidosEspeciales
+        let pedido = await db.get('pedidosEspeciales', pedidoId);
+        let coleccion = 'pedidosEspeciales';
+        
+        // Si no lo encuentra, buscar en pedidos
+        if (!pedido) {
+            pedido = await db.get('pedidos', pedidoId);
+            coleccion = 'pedidos';
+        }
+        
         if (!pedido) {
             await showAlert('No se pudo encontrar el pedido seleccionado', 'Error');
             return;
@@ -1106,11 +1147,34 @@ window.confirmarPagoPedidoEspecial = async function(pedidoId) {
         
         pedido.estadoPago = 'Pagado';
         
-        await db.update('pedidos', pedido);
+        await db.update(coleccion, pedido);
         await showAlert('Pago confirmado correctamente. El pedido se ha movido al histórico.', 'Éxito');
         
         reloadActiveContabilidadTab();
         loadPedidosPagadosContabilidad();
+        
+        // Actualizar badge de pendientes
+        const todosPedidos = await db.getAll('pedidos');
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        const pedidosPendientes = todosPedidos.filter(pedido => {
+            if (pedido.estado === 'Completado') return false;
+            if (pedido.estadoPago !== 'Pendiente de pago') return false;
+            if (!pedido.pedidoSistemaPDF) return false;
+            if (pedido.transferenciaPDF) return false;
+            return true;
+        });
+        const pedidosEspecialesPendientes = todosPedidosEspeciales.filter(pedido => {
+            const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+            if (estadoPago === 'Sin Asignar' || !estadoPago) {
+                // Tratar como pendiente si no tiene estado
+            } else if (estadoPago !== 'Pendiente de pago') {
+                return false;
+            }
+            if (!pedido.documentoPago) return false;
+            if (pedido.estadoPago === 'Pagado') return false;
+            return true;
+        });
+        updateContabilidadTabBadge('pendientes', pedidosPendientes.length + pedidosEspecialesPendientes.length);
     } catch (error) {
         console.error('Error al confirmar pago:', error);
         await showAlert('No se pudo confirmar el pago: ' + error.message, 'Error');
@@ -1694,6 +1758,7 @@ function setupContabilidadEventListeners() {
             } else {
                 // Si no, solo actualizar el badge
                 const todosPedidos = await db.getAll('pedidos');
+                const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
                 const pedidosPendientes = todosPedidos.filter(pedido => {
                     if (pedido.estado === 'Completado') return false;
                     if (pedido.estadoPago !== 'Pendiente de pago') return false;
@@ -1701,7 +1766,18 @@ function setupContabilidadEventListeners() {
                     if (pedido.transferenciaPDF) return false;
                     return true;
                 });
-                updateContabilidadTabBadge('pendientes', pedidosPendientes.length);
+                const pedidosEspecialesPendientes = todosPedidosEspeciales.filter(pedido => {
+                    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+                    if (estadoPago === 'Sin Asignar' || !estadoPago) {
+                        // Tratar como pendiente si no tiene estado
+                    } else if (estadoPago !== 'Pendiente de pago') {
+                        return false;
+                    }
+                    if (!pedido.documentoPago) return false;
+                    if (pedido.estadoPago === 'Pagado') return false;
+                    return true;
+                });
+                updateContabilidadTabBadge('pendientes', pedidosPendientes.length + pedidosEspecialesPendientes.length);
             }
         }
     });

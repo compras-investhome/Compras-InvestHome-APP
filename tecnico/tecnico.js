@@ -1978,6 +1978,162 @@ async function createPedidoTecnicoCard(pedido) {
     return card;
 }
 
+// Función para crear card de pedido especial para técnico
+async function createPedidoEspecialTecnicoCard(pedido) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card contab-pedido-card';
+    
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
+    
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
+    } else if (pedido.fechaCreacion) {
+        fechaObj = new Date(pedido.fechaCreacion);
+    } else {
+        fechaObj = new Date();
+    }
+    const fechaFormateada = formatDateTime(fechaObj);
+    
+    // Para pedidos especiales, no hay estadoLogistico, usamos el estado directo
+    const estadoEnvio = pedido.estado || 'Sin estado';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+    let estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    if (estadoPago === 'Sin Asignar' || !estadoPago) {
+        estadoPago = 'Pendiente de pago';
+    }
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    
+    const proveedorNombre = escapeHtml(pedido.proveedorNombre || 'Proveedor desconocido');
+    const persona = escapeHtml(pedido.persona || 'Sin especificar');
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombre || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
+    
+    // Pedidos especiales usan 'articulos' no 'items'
+    const articulos = Array.isArray(pedido.articulos) ? pedido.articulos : [];
+    let notas = [];
+    if (Array.isArray(pedido.notas)) {
+        notas = pedido.notas;
+    } else if (pedido.notas && typeof pedido.notas === 'string') {
+        notas = [{
+            id: 'nota-original',
+            usuarioId: null,
+            usuarioNombre: pedido.persona || 'Usuario',
+            usuarioTipo: 'Técnico',
+            mensaje: pedido.notas,
+            timestamp: pedido.fecha?.toDate ? pedido.fecha.toDate().toISOString() : (pedido.fecha ? new Date(pedido.fecha).toISOString() : new Date().toISOString())
+        }];
+    }
+    const totalPedido = articulos.reduce((total, articulo) => {
+        const precioItem = Number(articulo.precio) || 0;
+        const cantidadItem = Number(articulo.cantidad) || 1;
+        return total + precioItem * cantidadItem;
+    }, 0);
+    
+    const itemsHtml = articulos.length
+        ? articulos.map((articulo, index) => {
+            const nombre = escapeHtml(articulo.nombre || 'Artículo sin nombre');
+            const cantidad = Number(articulo.cantidad) || 1;
+            const precio = formatCurrency(articulo.precio || 0);
+            const subtotal = formatCurrency((articulo.precio || 0) * cantidad);
+            const fotoUrl = articulo.foto ? escapeHtml(articulo.foto) : null;
+            const placeholderId = `foto-placeholder-especial-tec-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
+            return `
+                <div class="pedido-item">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info">
+                        <p class="pedido-item-name">${nombre}</p>
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    const itemsSectionId = `pedido-items-especial-tec-${pedido.id}`;
+    const notasSectionId = `pedido-notas-especial-tec-${pedido.id}`;
+    const notasListId = `pedido-notas-list-especial-tec-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-especial-tec-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-especial-tec-${pedido.id}`;
+    
+    card.innerHTML = `
+        <div class="contab-pedido-header">
+            <div>
+                <p class="pedido-code">Pedido Especial #${escapeHtml(pedido.id)}</p>
+                <div class="contab-estado-envio">
+                    <span>Estado de envío:</span>
+                    <span class="estado-envio-pill estado-${estadoEnvioClass}">${escapeHtml(estadoEnvio)}</span>
+                </div>
+            </div>
+        </div>
+        <div class="contab-info-grid">
+            <div class="contab-info-card">
+                <div class="contab-card-title">Datos del pedido</div>
+                <div class="contab-info-row"><span>Proveedor</span><strong>${proveedorNombre}</strong></div>
+                <div class="contab-info-row"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row"><span>Encargado de la obra</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            <div class="contab-info-card">
+                <div class="contab-card-title">Estado de pago</div>
+                <div class="contab-info-row">
+                    <span>Estado</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+            </div>
+        </div>
+        <div>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar artículos" data-close-label="Ver artículos del pedido" onclick="togglePedidoSection('${itemsSectionId}', this)">
+                <span class="toggle-text">Ver artículos del pedido</span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${itemsSectionId}" class="contab-collapse" style="display: none;">
+                <div class="pedido-items-header">
+                    <p class="contab-total">Total pedido: ${formatCurrency(totalPedido)}</p>
+                </div>
+                <div class="pedido-items-list">
+                    ${itemsHtml}
+                </div>
+            </div>
+        </div>
+        <div>
+            <button class="contab-toggle" type="button" data-open-label="Ocultar comentarios" data-close-label="Ver comentarios" onclick="togglePedidoSection('${notasSectionId}', this)">
+                <span class="toggle-text">Ver comentarios <span id="${notasCountId}" class="comentarios-count">(${notas.length})</span></span>
+                <span class="chevron">▼</span>
+            </button>
+            <div id="${notasSectionId}" class="contab-collapse" style="display: none;">
+                <div id="${notasListId}" class="pedido-notas-list"></div>
+            </div>
+        </div>
+    `;
+    
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    renderPedidoNotasUI(pedido.id, notas, notasListElement, notasCountElement);
+    
+    return card;
+}
+
 // ========== PEDIDOS ESPECIALES - MODAL Y GESTIÓN ==========
 
 async function openModalPedidoEspecialAdmin(pedidoId = null) {
@@ -2852,11 +3008,12 @@ async function loadPedidosEnCursoTecnico() {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         
-        // Filtrar pedidos en curso (no completados, no cerrados, no finalizados)
+        // Filtrar pedidos normales en curso (no completados, no cerrados, no finalizados)
         const pedidosEnCurso = todosPedidos.filter(p => {
-            // Excluir pedidos especiales
+            // Excluir pedidos especiales (ya los manejaremos por separado)
             if (isPedidoEspecial(p)) {
                 return false;
             }
@@ -2878,7 +3035,38 @@ async function loadPedidosEnCursoTecnico() {
             return false;
         });
         
-        if (pedidosEnCurso.length === 0) {
+        // Filtrar pedidos especiales en curso (no pagados)
+        const pedidosEspecialesEnCurso = todosPedidosEspeciales.filter(p => {
+            // Excluir pedidos especiales pagados
+            if (p.estadoPago === 'Pagado') {
+                return false;
+            }
+            // Excluir pedidos cerrados
+            if (p.estado === 'Cerrado') {
+                return false;
+            }
+            // Filtrar por usuario o por obras asignadas
+            // Si tiene obras asignadas: pedidos de sus obras Y creados por él
+            // Si no tiene obras asignadas: solo los creados por él
+            if (obrasAsignadas.length > 0) {
+                // Debe ser creado por él Y de una de sus obras asignadas
+                if (p.userId !== currentUser.id) {
+                    return false;
+                }
+                if (p.obraId && obrasAsignadas.includes(p.obraId)) {
+                    return true;
+                }
+                return false;
+            } else {
+                // Solo los creados por él
+                return p.userId === currentUser.id;
+            }
+        });
+        
+        // Combinar ambos tipos de pedidos
+        const todosEnCurso = [...pedidosEnCurso, ...pedidosEspecialesEnCurso];
+        
+        if (todosEnCurso.length === 0) {
             obrasList.innerHTML = '';
             if (obrasEmpty) obrasEmpty.style.display = 'block';
             return;
@@ -2888,7 +3076,7 @@ async function loadPedidosEnCursoTecnico() {
         
         // Agrupar pedidos por obra
         const pedidosPorObra = new Map();
-        for (const pedido of pedidosEnCurso) {
+        for (const pedido of todosEnCurso) {
             const obraId = pedido.obraId || 'sin-obra';
             if (!pedidosPorObra.has(obraId)) {
                 pedidosPorObra.set(obraId, []);
@@ -3027,10 +3215,12 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
-        // Filtrar pedidos en curso (a tienda, no especiales) de esta obra
+        
+        // Filtrar pedidos normales en curso de esta obra
         const pedidosEnCurso = todosPedidos.filter(p => {
-            // Excluir pedidos especiales
+            // Excluir pedidos especiales (ya los manejaremos por separado)
             if (isPedidoEspecial(p)) {
                 return false;
             }
@@ -3055,8 +3245,42 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
             return false;
         });
         
+        // Filtrar pedidos especiales en curso de esta obra (no pagados)
+        const pedidosEspecialesEnCurso = todosPedidosEspeciales.filter(p => {
+            // Excluir pedidos especiales pagados
+            if (p.estadoPago === 'Pagado') {
+                return false;
+            }
+            // Excluir pedidos cerrados
+            if (p.estado === 'Cerrado') {
+                return false;
+            }
+            // Filtrar por obra
+            const obraMatch = obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId;
+            if (!obraMatch) return false;
+            // Filtrar por usuario o por obras asignadas
+            // Si tiene obras asignadas: pedidos de sus obras Y creados por él
+            // Si no tiene obras asignadas: solo los creados por él
+            if (obrasAsignadas.length > 0) {
+                // Debe ser creado por él Y de una de sus obras asignadas
+                if (p.userId !== currentUser.id) {
+                    return false;
+                }
+                if (p.obraId && obrasAsignadas.includes(p.obraId)) {
+                    return true;
+                }
+                return false;
+            } else {
+                // Solo los creados por él
+                return p.userId === currentUser.id;
+            }
+        });
+        
+        // Combinar ambos tipos de pedidos
+        const todosEnCurso = [...pedidosEnCurso, ...pedidosEspecialesEnCurso];
+        
         // Ordenar por fecha (más recientes primero)
-        pedidosEnCurso.sort((a, b) => {
+        todosEnCurso.sort((a, b) => {
             const fechaA = a.fechaCreacion || a.fecha ? new Date(a.fechaCreacion || a.fecha) : new Date(0);
             const fechaB = b.fechaCreacion || b.fecha ? new Date(b.fechaCreacion || b.fecha) : new Date(0);
             return fechaB - fechaA;
@@ -3064,10 +3288,10 @@ async function loadPedidosCursoPorObraTecnico(obraId, obraNombre) {
         
         // Guardar estado de paginación
         pedidosCursoPaginationState.obraId = obraId;
-        pedidosCursoPaginationState.pedidos = pedidosEnCurso;
+        pedidosCursoPaginationState.pedidos = todosEnCurso;
         pedidosCursoPaginationState.currentIndex = 0;
         
-        if (pedidosEnCurso.length === 0) {
+        if (todosEnCurso.length === 0) {
             pedidosList.innerHTML = '';
             if (pedidosEmpty) pedidosEmpty.style.display = 'block';
             if (cargarMasWrapper) cargarMasWrapper.style.display = 'none';
@@ -3100,7 +3324,11 @@ async function cargarMasPedidosCursoTecnico() {
     
     // Crear cards para los pedidos a cargar
     for (const pedido of pedidosACargar) {
-        const card = await createPedidoTecnicoCard(pedido);
+        // Determinar si es pedido especial y crear la card apropiada
+        const esEspecial = isPedidoEspecial(pedido);
+        const card = esEspecial 
+            ? await createPedidoEspecialTecnicoCard(pedido)
+            : await createPedidoTecnicoCard(pedido);
         pedidosList.appendChild(card);
     }
     
@@ -3271,10 +3499,11 @@ async function loadHistoricoTecnico() {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
-        // Filtrar solo pedidos a tienda (no especiales) que estén completados (con transferenciaPDF y albaran)
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
+        // Filtrar pedidos normales completados
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
         const pedidosHistoricos = todosPedidos.filter(p => {
-            // Excluir pedidos especiales
+            // Excluir pedidos especiales (ya los manejaremos por separado)
             if (isPedidoEspecial(p)) {
                 return false;
             }
@@ -3297,7 +3526,31 @@ async function loadHistoricoTecnico() {
             }
         });
         
-        if (pedidosHistoricos.length === 0) {
+        // Filtrar pedidos especiales pagados
+        const pedidosEspecialesHistoricos = todosPedidosEspeciales.filter(p => {
+            // Solo pedidos especiales pagados
+            if (p.estadoPago !== 'Pagado') {
+                return false;
+            }
+            // Solo pedidos creados por el técnico actual
+            if (p.userId !== currentUser.id) {
+                return false;
+            }
+            // Si tiene obras asignadas: solo pedidos de sus obras
+            // Si no tiene obras asignadas: todos los pedidos creados por él
+            if (obrasAsignadas.length > 0) {
+                // Solo mostrar si la obra está en sus asignadas
+                return p.obraId && obrasAsignadas.includes(p.obraId);
+            } else {
+                // Si no tiene obras asignadas, mostrar todos sus pedidos
+                return true;
+            }
+        });
+        
+        // Combinar ambos tipos de pedidos
+        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos];
+        
+        if (todosHistoricos.length === 0) {
             obrasList.innerHTML = '';
             if (obrasEmpty) obrasEmpty.style.display = 'block';
             return;
@@ -3307,7 +3560,7 @@ async function loadHistoricoTecnico() {
         
         // Agrupar pedidos por obra
         const pedidosPorObra = new Map();
-        for (const pedido of pedidosHistoricos) {
+        for (const pedido of todosHistoricos) {
             const obraId = pedido.obraId || 'sin-obra';
             if (!pedidosPorObra.has(obraId)) {
                 pedidosPorObra.set(obraId, []);
@@ -3447,10 +3700,12 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
     
     try {
         const todosPedidos = await db.getAll('pedidos');
+        const todosPedidosEspeciales = await db.getAll('pedidosEspeciales');
         const obrasAsignadas = currentUser?.obrasAsignadas || [];
-        // Filtrar pedidos históricos (a tienda, no especiales) de esta obra
+        
+        // Filtrar pedidos normales históricos de esta obra
         const pedidosHistoricos = todosPedidos.filter(p => {
-            // Excluir pedidos especiales
+            // Excluir pedidos especiales (ya los manejaremos por separado)
             if (isPedidoEspecial(p)) {
                 return false;
             }
@@ -3476,8 +3731,35 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
             }
         });
         
+        // Filtrar pedidos especiales pagados de esta obra
+        const pedidosEspecialesHistoricos = todosPedidosEspeciales.filter(p => {
+            // Solo pedidos especiales pagados
+            if (p.estadoPago !== 'Pagado') {
+                return false;
+            }
+            // Solo pedidos creados por el técnico actual
+            if (p.userId !== currentUser.id) {
+                return false;
+            }
+            // Filtrar por obra
+            const obraMatch = obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId;
+            if (!obraMatch) return false;
+            // Si tiene obras asignadas: verificar que la obra esté en sus asignadas
+            // Si no tiene obras asignadas: mostrar todos sus pedidos (sin verificar obra)
+            if (obrasAsignadas.length > 0) {
+                // Solo mostrar si la obra está en sus asignadas
+                return p.obraId && obrasAsignadas.includes(p.obraId);
+            } else {
+                // Si no tiene obras asignadas, mostrar todos sus pedidos
+                return true;
+            }
+        });
+        
+        // Combinar ambos tipos de pedidos
+        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos];
+        
         // Ordenar por fecha (más recientes primero)
-        pedidosHistoricos.sort((a, b) => {
+        todosHistoricos.sort((a, b) => {
             const fechaA = a.fechaCreacion || a.fecha ? new Date(a.fechaCreacion || a.fecha) : new Date(0);
             const fechaB = b.fechaCreacion || b.fecha ? new Date(b.fechaCreacion || b.fecha) : new Date(0);
             return fechaB - fechaA;
@@ -3485,10 +3767,10 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
         
         // Guardar estado de paginación
         historicoPaginationState.obraId = obraId;
-        historicoPaginationState.pedidos = pedidosHistoricos;
+        historicoPaginationState.pedidos = todosHistoricos;
         historicoPaginationState.currentIndex = 0;
         
-        if (pedidosHistoricos.length === 0) {
+        if (todosHistoricos.length === 0) {
             pedidosList.innerHTML = '';
             if (pedidosEmpty) pedidosEmpty.style.display = 'block';
             if (cargarMasWrapper) cargarMasWrapper.style.display = 'none';
@@ -3520,7 +3802,11 @@ async function cargarMasPedidosHistoricosTecnico() {
     
     // Crear cards para los pedidos a cargar usando la misma card que contabilidad
     for (const pedido of pedidosACargar) {
-        const card = await createPedidoContabilidadCardTecnico(pedido, true);
+        // Determinar si es pedido especial y crear la card apropiada
+        const esEspecial = isPedidoEspecial(pedido);
+        const card = esEspecial 
+            ? await createPedidoEspecialTecnicoCard(pedido)
+            : await createPedidoContabilidadCardTecnico(pedido, true);
         pedidosList.appendChild(card);
     }
     
