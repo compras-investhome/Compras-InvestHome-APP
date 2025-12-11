@@ -2341,10 +2341,8 @@ async function loadCuentasAdmin() {
     
     try {
         const tiendas = await db.getAll('tiendas');
-        // Filtrar tiendas con cuenta (servicios?.cuenta o tieneCuenta)
-        const tiendasConCuenta = tiendas.filter(t => 
-            t.servicios?.cuenta || t.tieneCuenta
-        );
+        // Filtrar tiendas con cuenta (igual que contabilidad)
+        const tiendasConCuenta = tiendas.filter(t => t.tieneCuenta);
         
         if (tiendasConCuenta.length === 0) {
             tiendasList.innerHTML = '';
@@ -2356,9 +2354,19 @@ async function loadCuentasAdmin() {
         tiendasList.innerHTML = '';
         tiendasList.className = 'tiendas-grid';
         
-        // Crear cards para cada tienda
+        // Obtener todos los pedidos para contar pendientes (igual que contabilidad)
+        const todosPedidos = await db.getAll('pedidos');
+        const pedidosCuentaGlobal = todosPedidos.filter(p => 
+            p.estadoPago === 'Pago A cuenta' &&
+            p.estado !== 'Completado' &&
+            p.pedidoSistemaPDF &&
+            !p.transferenciaPDF
+        );
+        
+        // Crear cards para cada tienda con conteo de pedidos pendientes
         for (const tienda of tiendasConCuenta) {
-            const card = await createTiendaCardCuentas(tienda);
+            const pedidosTienda = pedidosCuentaGlobal.filter(p => p.tiendaId === tienda.id);
+            const card = await createTiendaCardCuentas(tienda, pedidosTienda.length);
             tiendasList.appendChild(card);
         }
     } catch (error) {
@@ -2367,11 +2375,10 @@ async function loadCuentasAdmin() {
     }
 }
 
-// Función para crear card de tienda en vista de cuentas (similar a createTiendaCardAdmin pero sin click para categorías)
-async function createTiendaCardCuentas(tienda) {
+// Función para crear card de tienda en vista de cuentas (igual que contabilidad)
+async function createTiendaCardCuentas(tienda, pedidosCount) {
     const card = document.createElement('div');
     card.className = 'tienda-card';
-    card.style.cursor = 'pointer';
     
     // Logo (arriba)
     let imagenHtml = '';
@@ -2379,7 +2386,7 @@ async function createTiendaCardCuentas(tienda) {
                       typeof tienda.logo === 'string' && 
                       tienda.logo.trim() !== '' && 
                       tienda.logo !== 'null' && 
-                      tienda.logo !== 'undefined' && 
+                      tienda.logo !== 'undefined' &&
                       (tienda.logo.startsWith('data:image/') || tienda.logo.startsWith('http'));
     
     if (tieneLogo) {
@@ -2391,66 +2398,53 @@ async function createTiendaCardCuentas(tienda) {
         imagenHtml = `<div class="tienda-card-icon">${tienda.icono || '🏪'}</div>`;
     }
     
-    // Calcular gastado de cuenta y contar pedidos pagados con cuenta
+    // Calcular gastado de cuenta (igual que contabilidad)
+    const gastado = await calcularGastadoCuenta(tienda.id);
     let cuentaInfoHtml = '';
-    let pedidosCount = 0;
     
-    if (tienda.servicios?.cuenta || tienda.tieneCuenta) {
-        const gastado = await calcularGastadoCuenta(tienda.id);
+    if (tienda.limiteCuenta) {
+        // Tiene cuenta con límite
+        const limite = Number(tienda.limiteCuenta) || 0;
+        const porcentaje = limite > 0 ? (gastado / limite) * 100 : 0;
+        const disponible = Math.max(0, limite - gastado);
+        const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
         
-        // Contar pedidos pagados con cuenta (estadoPago === 'Pago A cuenta' y tienen transferenciaPDF)
-        const todosPedidos = await db.getPedidosByTienda(tienda.id);
-        const pedidosPagadosCuenta = todosPedidos.filter(p => 
-            p.estadoPago === 'Pago A cuenta' && 
-            p.transferenciaPDF && 
-            !p.esPedidoEspecial
-        );
-        pedidosCount = pedidosPagadosCuenta.length;
-        
-        if (tienda.limiteCuenta) {
-            // Tiene cuenta con límite
-            const limite = Number(tienda.limiteCuenta) || 0;
-            const porcentaje = limite > 0 ? (gastado / limite) * 100 : 0;
-            const disponible = Math.max(0, limite - gastado);
-            const colorBarra = porcentaje >= 100 ? '#ef4444' : porcentaje >= 80 ? '#f59e0b' : '#10b981';
-            
-            cuentaInfoHtml = `
-                <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
-                    <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Estado de Cuenta</div>
-                    <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
-                        <strong>${gastado.toFixed(2)}€</strong> gastado / <strong>${limite.toFixed(2)}€</strong> límite
-                    </div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                        Disponible: ${disponible.toFixed(2)}€
-                    </div>
-                    <div style="height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 0.25rem;">
-                        <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra}; transition: width 0.3s;"></div>
-                    </div>
-                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center; margin-bottom: 0.5rem;">
-                        ${porcentaje.toFixed(1)}% utilizado
-                    </div>
-                    <div style="font-size: 0.75rem; color: var(--primary-color); font-weight: 600; text-align: center; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
-                        ${pedidosCount} pedido${pedidosCount !== 1 ? 's' : ''} pagado${pedidosCount !== 1 ? 's' : ''}
-                    </div>
+        cuentaInfoHtml = `
+            <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Estado de Cuenta</div>
+                <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">
+                    <strong>${gastado.toFixed(2)}€</strong> gastado / <strong>${limite.toFixed(2)}€</strong> límite
                 </div>
-            `;
-        } else {
-            // Cuenta sin límite
-            cuentaInfoHtml = `
-                <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: #d1fae5; border-radius: 8px; border: 1px solid #10b981;">
-                    <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #065f46;">Estado de Cuenta</div>
-                    <div style="font-size: 0.875rem; color: #065f46; margin-bottom: 0.5rem;">
-                        <strong>${gastado.toFixed(2)}€</strong> gastado
-                    </div>
-                    <div style="font-size: 0.75rem; color: #065f46; margin-bottom: 0.5rem; font-weight: 600;">
-                        Cuenta sin límite
-                    </div>
-                    <div style="font-size: 0.75rem; color: #065f46; font-weight: 600; text-align: center; padding-top: 0.5rem; border-top: 1px solid #10b981;">
-                        ${pedidosCount} pedido${pedidosCount !== 1 ? 's' : ''} pagado${pedidosCount !== 1 ? 's' : ''}
-                    </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    Disponible: ${disponible.toFixed(2)}€
                 </div>
-            `;
-        }
+                <div style="height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 0.25rem;">
+                    <div style="height: 100%; width: ${Math.min(100, porcentaje)}%; background: ${colorBarra}; transition: width 0.3s;"></div>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">
+                    ${porcentaje.toFixed(1)}% utilizado
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;">
+                    <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} pendiente${pedidosCount !== 1 ? 's' : ''}
+                </div>
+            </div>
+        `;
+    } else {
+        // Cuenta sin límite
+        cuentaInfoHtml = `
+            <div class="tienda-cuenta-info" style="margin-top: 1rem; padding: 0.75rem; background: #d1fae5; border-radius: 8px; border: 1px solid #10b981;">
+                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: #065f46;">Estado de Cuenta</div>
+                <div style="font-size: 0.875rem; color: #065f46;">
+                    <strong>${gastado.toFixed(2)}€</strong> gastado
+                </div>
+                <div style="font-size: 0.75rem; color: #065f46; margin-top: 0.25rem; font-weight: 600;">
+                    Cuenta sin límite
+                </div>
+                <div style="font-size: 0.75rem; color: #065f46; margin-top: 0.5rem; text-align: center;">
+                    <strong>${pedidosCount}</strong> pedido${pedidosCount !== 1 ? 's' : ''} pendiente${pedidosCount !== 1 ? 's' : ''}
+                </div>
+            </div>
+        `;
     }
     
     // Construir el HTML de la card
@@ -2463,16 +2457,15 @@ async function createTiendaCardCuentas(tienda) {
         </div>
     `;
     
-    // Agregar event listener para mostrar pedidos pagados con cuenta de esta tienda
     card.addEventListener('click', () => {
-        loadPedidosCuentaPorTienda(tienda.id, tienda.nombre);
+        loadPedidosCuentaPorTienda(tienda.id);
     });
     
     return card;
 }
 
-// Función para cargar pedidos pagados con cuenta de una tienda específica con paginación
-async function loadPedidosCuentaPorTienda(tiendaId, tiendaNombre) {
+// Función para cargar pedidos pendientes de pago a cuenta de una tienda (igual que contabilidad)
+async function loadPedidosCuentaPorTienda(tiendaId) {
     const tiendasView = document.getElementById('cuentas-tiendas-view');
     const pedidosView = document.getElementById('cuentas-pedidos-view');
     const pedidosList = document.getElementById('cuentas-pedidos-list');
@@ -2482,6 +2475,10 @@ async function loadPedidosCuentaPorTienda(tiendaId, tiendaNombre) {
     
     if (!tiendasView || !pedidosView || !pedidosList) return;
     
+    // Obtener información de la tienda
+    const tienda = await db.get('tiendas', tiendaId);
+    const tiendaNombre = tienda?.nombre || 'Tienda desconocida';
+    
     // Mostrar vista de pedidos, ocultar vista de tiendas
     tiendasView.style.display = 'none';
     pedidosView.style.display = 'block';
@@ -2490,74 +2487,285 @@ async function loadPedidosCuentaPorTienda(tiendaId, tiendaNombre) {
         tiendaNombreElement.textContent = tiendaNombre;
     }
     
+    // Botón Volver
+    pedidosList.innerHTML = '';
+    const btnVolver = document.createElement('button');
+    btnVolver.className = 'btn-volver-cuentas';
+    btnVolver.innerHTML = '← Volver a tiendas';
+    btnVolver.addEventListener('click', () => {
+        loadCuentasAdmin();
+    });
+    pedidosList.appendChild(btnVolver);
+    
     try {
-        const todosPedidos = await db.getPedidosByTienda(tiendaId);
-        // Filtrar pedidos pagados con cuenta (estadoPago === 'Pago A cuenta' y tienen transferenciaPDF)
-        const pedidosPagadosCuenta = todosPedidos.filter(p => 
-            p.estadoPago === 'Pago A cuenta' && 
-            p.transferenciaPDF && 
-            !p.esPedidoEspecial
+        // Obtener pedidos de la tienda (igual que contabilidad)
+        const todosPedidos = await db.getAll('pedidos');
+        const pedidosTienda = todosPedidos.filter(p => 
+            p.tiendaId === tiendaId &&
+            p.estadoPago === 'Pago A cuenta' &&
+            p.estado !== 'Completado' &&
+            p.pedidoSistemaPDF &&
+            !p.transferenciaPDF
         );
         
-        // Ordenar por fecha (más recientes primero)
-        pedidosPagadosCuenta.sort((a, b) => {
-            const fechaA = a.fechaCreacion || a.fecha ? new Date(a.fechaCreacion || a.fecha) : new Date(0);
-            const fechaB = b.fechaCreacion || b.fecha ? new Date(b.fechaCreacion || b.fecha) : new Date(0);
+        pedidosTienda.sort((a, b) => {
+            const fechaA = a.fecha?.toDate ? a.fecha.toDate() : new Date(a.fecha || 0);
+            const fechaB = b.fecha?.toDate ? b.fecha.toDate() : new Date(b.fecha || 0);
             return fechaB - fechaA;
         });
         
-        // Guardar estado de paginación
-        cuentasPaginationState.tiendaId = tiendaId;
-        cuentasPaginationState.pedidos = pedidosPagadosCuenta;
-        cuentasPaginationState.currentIndex = 0;
-        
-        if (pedidosPagadosCuenta.length === 0) {
-            pedidosList.innerHTML = '';
+        if (pedidosTienda.length === 0) {
             if (pedidosEmpty) pedidosEmpty.style.display = 'block';
             if (cargarMasWrapper) cargarMasWrapper.style.display = 'none';
             return;
         }
         
         if (pedidosEmpty) pedidosEmpty.style.display = 'none';
-        pedidosList.innerHTML = '';
         
-        // Cargar primeros 5 pedidos
-        cargarMasPedidosCuenta();
+        // Mostrar pedidos directamente (sin paginación, igual que contabilidad)
+        for (const pedido of pedidosTienda) {
+            const card = await createPedidoCuentaCardAdmin(pedido);
+            pedidosList.appendChild(card);
+        }
+        
+        if (cargarMasWrapper) cargarMasWrapper.style.display = 'none';
     } catch (error) {
-        console.error('Error al cargar pedidos pagados con cuenta por tienda:', error);
+        console.error('Error al cargar pedidos pendientes de pago a cuenta:', error);
         pedidosList.innerHTML = '<p>Error al cargar pedidos</p>';
     }
 }
 
-// Función para cargar más pedidos de cuenta (paginación)
-async function cargarMasPedidosCuenta() {
-    const pedidosList = document.getElementById('cuentas-pedidos-list');
-    const cargarMasWrapper = document.getElementById('cuentas-cargar-mas-wrapper');
+// Función para crear card de pedido en vista de cuentas admin (sin botones de adjuntar/eliminar documento)
+async function createPedidoCuentaCardAdmin(pedido) {
+    const card = document.createElement('div');
+    card.className = 'pedido-gestion-card contab-pedido-card';
     
-    if (!pedidosList || !cargarMasWrapper) return;
+    const tienda = await db.get('tiendas', pedido.tiendaId);
+    const obraInfo = pedido.obraId ? await db.get('obras', pedido.obraId) : null;
     
-    const { pedidos, currentIndex, itemsPerPage } = cuentasPaginationState;
-    
-    // Calcular cuántos pedidos cargar
-    const endIndex = Math.min(currentIndex + itemsPerPage, pedidos.length);
-    const pedidosACargar = pedidos.slice(currentIndex, endIndex);
-    
-    // Crear cards para los pedidos a cargar
-    for (const pedido of pedidosACargar) {
-        const card = await createPedidoTiendaCard(pedido);
-        pedidosList.appendChild(card);
-    }
-    
-    // Actualizar índice
-    cuentasPaginationState.currentIndex = endIndex;
-    
-    // Mostrar/ocultar botón "Cargar más"
-    if (endIndex < pedidos.length) {
-        cargarMasWrapper.style.display = 'block';
+    let fechaObj;
+    if (pedido.fecha && pedido.fecha.toDate) {
+        fechaObj = pedido.fecha.toDate();
+    } else if (pedido.fecha) {
+        fechaObj = new Date(pedido.fecha);
     } else {
-        cargarMasWrapper.style.display = 'none';
+        fechaObj = new Date();
     }
+    const fechaFormateada = formatDateTime(fechaObj);
+    
+    const estadoEnvio = pedido.estado || 'Sin estado';
+    const estadoEnvioClass = estadoEnvio.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+    const estadoPago = pedido.estadoPago || 'Pendiente de pago';
+    const estadoPagoClass = getEstadoPagoPillClass(estadoPago);
+    
+    const tiendaNombre = escapeHtml(tienda?.nombre || 'Desconocida');
+    const persona = escapeHtml(pedido.persona || pedido.usuarioNombre || 'Sin especificar');
+    const obraNombreTexto = obraInfo?.nombreComercial || pedido.obraNombreComercial || pedido.obra || 'Obra no especificada';
+    const obraNombre = escapeHtml(obraNombreTexto);
+    const obraLink = buildObraMapsLink(obraInfo, obraNombreTexto);
+    const obraLinkHref = obraLink ? escapeHtml(obraLink) : null;
+    const encargado = escapeHtml(obraInfo?.encargado || 'No asignado');
+    const telefonoEncargado = escapeHtml(obraInfo?.telefonoEncargado || '');
+    const encargadoInfo = telefonoEncargado ? `${encargado} | ${telefonoEncargado}` : encargado;
+    
+    const items = Array.isArray(pedido.items) ? pedido.items : [];
+    const notas = Array.isArray(pedido.notas) ? pedido.notas : [];
+    const totalPedido = items.reduce((total, item) => {
+        const precioItem = Number(item.precio) || 0;
+        const cantidadItem = Number(item.cantidad) || 0;
+        return total + precioItem * cantidadItem;
+    }, 0);
+    
+    const itemsHtml = items.length
+        ? items.map((item, index) => {
+            const nombre = escapeHtml(item.nombre || item.designacion || 'Artículo sin nombre');
+            const referencia = escapeHtml(item.designacion || item.referencia || '');
+            const ean = escapeHtml(item.ean || '');
+            const cantidad = Number(item.cantidad) || 0;
+            const precio = formatCurrency(item.precio || 0);
+            const subtotal = formatCurrency((item.precio || 0) * cantidad);
+            const fotoUrl = item.foto ? escapeHtml(item.foto) : null;
+            const placeholderId = `foto-placeholder-admin-${pedido.id}-${index}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const fotoHtml = fotoUrl
+                ? `<img src="${fotoUrl}" alt="${nombre}" class="pedido-item-foto" onerror="this.style.display='none'; document.getElementById('${placeholderId}').style.display='flex';">`
+                : '';
+            const fotoPlaceholder = `<div id="${placeholderId}" class="pedido-item-foto-placeholder" style="${fotoUrl ? 'display: none;' : ''}">📦</div>`;
+            const refEanParts = [];
+            if (referencia) refEanParts.push(referencia);
+            if (ean) refEanParts.push(ean);
+            const refEanText = refEanParts.length > 0 ? refEanParts.join(' | ') : '';
+            return `
+                <div class="pedido-item" style="display: flex; align-items: center; gap: 1rem;">
+                    ${fotoHtml}
+                    ${fotoPlaceholder}
+                    <div class="pedido-item-info" style="flex: 1;">
+                        <p class="pedido-item-name">${nombre}</p>
+                        ${refEanText ? `<p class="pedido-item-ref-ean">${refEanText}</p>` : ''}
+                        <div class="pedido-item-meta">
+                            <span>Cantidad: ${cantidad}</span>
+                            <span>Precio unitario: ${precio}</span>
+                            <span>Total línea: ${subtotal}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('')
+        : '<p class="cascade-empty">No hay artículos en este pedido</p>';
+    
+    const pedidoRealContent = pedido.pedidoSistemaPDF
+        ? `<a href="#" onclick="descargarDocumento('${pedido.pedidoSistemaPDF.replace(/'/g, "\\'")}', 'pedido-real.pdf'); return false;" class="doc-link">📄 Ver documento</a>`
+        : '<span class="doc-placeholder">Sin documento</span>';
+    
+    const facturaContent = pedido.albaran
+        ? `<a href="#" onclick="descargarDocumento('${pedido.albaran.replace(/'/g, "\\'")}', 'factura.pdf'); return false;" class="doc-link">📄 Ver factura</a>`
+        : '<span class="doc-placeholder">Sin factura</span>';
+    
+    // ADMIN: Solo visualización, sin botones de adjuntar/eliminar
+    const tienePago = Boolean(pedido.transferenciaPDF);
+    const documentoPagoContent = tienePago 
+        ? `<a href="#" onclick="descargarDocumento('${pedido.transferenciaPDF.replace(/'/g, "\\'")}', 'documento-pago.pdf'); return false;" class="doc-link">📄 Ver pago</a>` 
+        : '<span class="doc-placeholder">Sin documento</span>';
+    
+    const itemsSectionId = `pedido-items-admin-${pedido.id}`;
+    const notasSectionId = `pedido-notas-admin-${pedido.id}`;
+    const notasListId = `pedido-notas-list-admin-${pedido.id}`;
+    const notasCountId = `pedido-notas-count-admin-${pedido.id}`;
+    const notaInputId = `pedido-nota-input-admin-${pedido.id}`;
+    
+    card.innerHTML = `
+        <!-- Header del pedido -->
+        <div class="contab-pedido-header-compact">
+            <p class="pedido-code">Pedido #${escapeHtml(pedido.id)}</p>
+        </div>
+        
+        <!-- Cards compactas: Datos del pedido, Estado de pago, Artículos y Comentarios -->
+        <div class="contab-info-grid-compact">
+            <!-- Card: Datos del pedido -->
+            <div class="contab-info-card-compact contab-card-datos">
+                <div class="contab-card-title-compact">Datos del pedido</div>
+                <div class="contab-info-row-compact"><span>Tienda</span><strong>${tiendaNombre}</strong></div>
+                <div class="contab-info-row-compact"><span>Pedido por</span><strong>${persona}</strong></div>
+                <div class="contab-info-row-compact">
+                    <span>Obra</span>
+                    <strong>${obraLinkHref ? `<a href="${obraLinkHref}" target="_blank" rel="noopener">${obraNombre}</a>` : obraNombre}</strong>
+                </div>
+                <div class="contab-info-row-compact"><span>Encargado</span><strong>${encargadoInfo}</strong></div>
+                <div class="contab-info-row-compact"><span>Fecha</span><strong>${escapeHtml(fechaFormateada || '')}</strong></div>
+            </div>
+            
+            <!-- Card: Estado de pago -->
+            <div class="contab-info-card-compact contab-card-estado">
+                <div class="contab-card-title-compact">Estado de pago</div>
+                <div class="contab-info-row-compact">
+                    <span>Estado</span>
+                    <span class="estado-pago-pill ${estadoPagoClass}">${escapeHtml(estadoPago)}</span>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Pedido real</span>
+                    <div class="doc-actions">${pedidoRealContent}</div>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Doc. pago</span>
+                    <div class="doc-actions">${documentoPagoContent}</div>
+                </div>
+                <div class="contab-info-row-compact">
+                    <span>Factura</span>
+                    <div class="doc-actions">${facturaContent || '<span class="doc-placeholder">Sin factura</span>'}</div>
+                </div>
+            </div>
+            
+            <!-- Card: Artículos (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-articulos" id="articulos-card-admin-${pedido.id}">
+                <div class="contab-card-title-compact">
+                    <span>Artículos (${items.length})</span>
+                    <span class="contab-total-compact" style="font-size: 0.7rem; color: var(--primary-color);">Total: ${formatCurrency(totalPedido)}</span>
+                </div>
+                <div class="pedido-items-list-compact">
+                    ${itemsHtml}
+                </div>
+                ${items.length > 3 ? `
+                    <button class="expand-arrow" type="button" onclick="toggleExpandArticulosAdmin('${pedido.id}')" title="Expandir para ver todos los artículos">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
+            </div>
+            
+            <!-- Card: Comentarios (siempre visible) -->
+            <div class="contab-info-card-compact contab-card-comentarios">
+                <div class="contab-card-title-compact">
+                    <span>Comentarios <span class="comentarios-count">(${notas.length})</span></span>
+                </div>
+                <div class="comentarios-input-wrapper">
+                    <textarea id="${notaInputId}" class="comentarios-input" placeholder="Escribe un comentario..."></textarea>
+                    <div class="comentarios-buttons-row">
+                        <button class="btn-ver-comentarios" type="button" onclick="togglePedidoSection('${notasSectionId}', this)" id="btn-ver-comentarios-admin-${pedido.id}" data-open-label="Ocultar Comentarios" data-close-label="Ver Comentarios">
+                            Ver Comentarios
+                        </button>
+                        <button class="btn btn-primary btn-xs" type="button" onclick="guardarNotaPedidoAdmin('${pedido.id}', '${notaInputId}', '${notasListId}', '${notasCountId}')">Enviar</button>
+                    </div>
+                </div>
+                <div id="${notasSectionId}" class="contab-collapse" style="display: none; margin-top: 0.5rem;">
+                    <div id="${notasListId}" class="pedido-notas-list-compact-scroll"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const notasListElement = card.querySelector(`#${notasListId}`);
+    const notasCountElement = card.querySelector(`#${notasCountId}`);
+    renderPedidoNotasUIAdmin(pedido.id, notas, notas, notasListElement, notasCountElement, false);
+    
+    return card;
 }
+
+// Función para expandir/colapsar artículos en admin
+window.toggleExpandArticulosAdmin = function(pedidoId) {
+    const articulosCard = document.getElementById(`articulos-card-admin-${pedidoId}`);
+    if (articulosCard) {
+        articulosCard.classList.toggle('expanded');
+    }
+};
+
+// Función para guardar nota de pedido en admin
+window.guardarNotaPedidoAdmin = async function(pedidoId, inputId, listId, countId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const mensaje = input.value.trim();
+    if (!mensaje) {
+        await showAlert('Por favor, escribe un comentario antes de guardar', 'Atención');
+        return;
+    }
+    if (!currentUser) {
+        await showAlert('Debes iniciar sesión para añadir comentarios', 'Error');
+        return;
+    }
+    try {
+        const pedido = await db.get('pedidos', pedidoId);
+        if (!pedido) {
+            await showAlert('No se pudo encontrar el pedido', 'Error');
+            return;
+        }
+        const notas = Array.isArray(pedido.notas) ? [...pedido.notas] : [];
+        notas.push({
+            id: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            usuarioId: currentUser.id || null,
+            usuarioNombre: currentUser.username || currentUser.nombre || 'Usuario',
+            usuarioTipo: currentUserType || currentUser?.tipo || 'Usuario',
+            mensaje,
+            timestamp: new Date().toISOString()
+        });
+        await db.update('pedidos', { id: pedidoId, notas });
+        input.value = '';
+        const listEl = document.getElementById(listId);
+        const countEl = document.getElementById(countId);
+        renderPedidoNotasUIAdmin(pedidoId, notas, notas, listEl, countEl, false);
+    } catch (error) {
+        console.error('Error al guardar nota:', error);
+        await showAlert('No se pudo guardar la nota: ' + error.message, 'Error');
+    }
+};
 
 // Variable global para almacenar el estado de paginación del histórico
 let historicoPaginationState = {
