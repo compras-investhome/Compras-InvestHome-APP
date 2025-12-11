@@ -3789,9 +3789,9 @@ async function createPedidoEspecialAdminCard(pedido) {
                     </select>
                 </div>
                 <div class="pedido-tienda-select-wrapper">
-                    <label for="${tiendaSelectId}" style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.5rem;">Asignar a:</label>
-                    <select id="${tiendaSelectId}" class="pedido-tienda-select ${pedido.tiendaId ? 'tienda-asignada' : 'tienda-sin-asignar'}" onchange="asignarTiendaPedidoEspecial('${pedido.id}', this.value)">
-                        <option value="" ${!pedido.tiendaId ? 'selected' : ''} class="tienda-sin-asignar">-- Sin asignar --</option>
+                    <label for="${tiendaSelectId}" style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.5rem;">${pedido.tiendaId ? 'Asignado a:' : 'Asignar a:'}</label>
+                    <select id="${tiendaSelectId}" class="pedido-tienda-select ${pedido.tiendaId ? 'tienda-asignada' : 'tienda-sin-asignar'}" ${pedido.tiendaId ? 'disabled' : ''} onchange="asignarTiendaPedidoEspecial('${pedido.id}', this.value)">
+                        ${!pedido.tiendaId ? '<option value="" selected class="tienda-sin-asignar">-- Sin asignar --</option>' : ''}
                         ${tiendasOptions}
                     </select>
                 </div>
@@ -4296,16 +4296,70 @@ async function recargarCardPedidoEspecial(pedidoId) {
 // Función para asignar tienda a pedido especial
 window.asignarTiendaPedidoEspecial = async function(pedidoId, tiendaId) {
     try {
-        const pedido = await db.get('pedidosEspeciales', pedidoId);
-        if (!pedido) {
+        const pedidoEspecial = await db.get('pedidosEspeciales', pedidoId);
+        if (!pedidoEspecial) {
             await showAlert('Pedido no encontrado', 'Error');
             return;
         }
         
-        pedido.tiendaId = tiendaId || null;
-        await db.update('pedidosEspeciales', pedido);
+        // Validar que se haya seleccionado una tienda
+        if (!tiendaId || tiendaId.trim() === '') {
+            await showAlert('Debe seleccionar una tienda para convertir el pedido especial en pedido normal', 'Atención');
+            return;
+        }
         
-        // Recargar la vista
+        // Si ya tiene tienda asignada, no permitir cambiar
+        if (pedidoEspecial.tiendaId) {
+            await showAlert('Este pedido ya ha sido asignado a una tienda y convertido en pedido normal. No se puede desasignar.', 'Atención');
+            // Recargar para mantener el estado
+            await loadPedidosEspecialesAdmin();
+            return;
+        }
+        
+        // Convertir articulos a items
+        const items = Array.isArray(pedidoEspecial.articulos) ? pedidoEspecial.articulos.map(articulo => ({
+            nombre: articulo.nombre || '',
+            designacion: articulo.descripcion || articulo.nombre || '',
+            cantidad: Number(articulo.cantidad) || 0,
+            precio: Number(articulo.precio) || 0,
+            foto: articulo.foto || null,
+            ean: null,
+            referencia: null
+        })) : [];
+        
+        // Crear pedido normal con la estructura correcta
+        const pedidoNormal = {
+            tiendaId: tiendaId,
+            userId: pedidoEspecial.userId || null,
+            usuarioNombre: pedidoEspecial.persona || null,
+            persona: pedidoEspecial.persona || 'Sin especificar',
+            obraId: pedidoEspecial.obraId || null,
+            obraNombreComercial: pedidoEspecial.obraNombre || null,
+            obraDireccionGoogleMaps: null,
+            obraEncargado: null,
+            obraTelefono: null,
+            items: items,
+            estado: pedidoEspecial.estado || 'Nuevo',
+            estadoPago: 'Sin Asignar',
+            estadoLogistico: 'Nuevo',
+            fecha: pedidoEspecial.fechaCreacion ? new Date(pedidoEspecial.fechaCreacion) : new Date(),
+            fechaCreacion: pedidoEspecial.fechaCreacion || new Date().toISOString(),
+            notas: Array.isArray(pedidoEspecial.notas) ? pedidoEspecial.notas : [],
+            precioReal: null,
+            pedidoSistemaPDF: null,
+            transferenciaPDF: null,
+            albaran: null
+        };
+        
+        // Crear el pedido normal en la colección 'pedidos'
+        await db.add('pedidos', pedidoNormal);
+        
+        // Eliminar el pedido especial
+        await db.delete('pedidosEspeciales', pedidoId);
+        
+        await showAlert('Pedido especial convertido en pedido normal y asignado a la tienda correctamente', 'Éxito');
+        
+        // Recargar la vista de pedidos especiales (el pedido ya no aparecerá)
         await loadPedidosEspecialesAdmin();
     } catch (error) {
         console.error('Error al asignar tienda:', error);
