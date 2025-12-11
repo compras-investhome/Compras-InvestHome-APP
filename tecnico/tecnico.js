@@ -3631,10 +3631,13 @@ async function loadHistoricoTecnico() {
             }
         });
         
-        // Filtrar pedidos especiales pagados
+        // Filtrar pedidos especiales pagados o cerrados
+        // Primero de la colección pedidosEspeciales
         const pedidosEspecialesHistoricos = todosPedidosEspeciales.filter(p => {
-            // Solo pedidos especiales pagados
-            if (p.estadoPago !== 'Pagado') {
+            // Incluir pedidos especiales pagados O cerrados
+            const esPagado = p.estadoPago === 'Pagado';
+            const esCerrado = p.estado === 'Cerrado';
+            if (!esPagado && !esCerrado) {
                 return false;
             }
             // Solo pedidos creados por el técnico actual
@@ -3652,8 +3655,35 @@ async function loadHistoricoTecnico() {
             }
         });
         
-        // Combinar ambos tipos de pedidos
-        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos];
+        // También buscar pedidos especiales cerrados que puedan estar en la colección 'pedidos'
+        const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+            // Solo pedidos especiales
+            if (!isPedidoEspecial(p)) {
+                return false;
+            }
+            // Incluir pedidos especiales pagados O cerrados
+            const esPagado = p.estadoPago === 'Pagado';
+            const esCerrado = p.estado === 'Cerrado';
+            if (!esPagado && !esCerrado) {
+                return false;
+            }
+            // Solo pedidos creados por el técnico actual
+            if (p.userId !== currentUser.id) {
+                return false;
+            }
+            // Si tiene obras asignadas: solo pedidos de sus obras
+            // Si no tiene obras asignadas: todos los pedidos creados por él
+            if (obrasAsignadas.length > 0) {
+                // Solo mostrar si la obra está en sus asignadas
+                return p.obraId && obrasAsignadas.includes(p.obraId);
+            } else {
+                // Si no tiene obras asignadas, mostrar todos sus pedidos
+                return true;
+            }
+        });
+        
+        // Combinar ambos tipos de pedidos (normales y especiales de ambas colecciones)
+        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos, ...pedidosEspecialesEnPedidos];
         
         if (todosHistoricos.length === 0) {
             obrasList.innerHTML = '';
@@ -3836,10 +3866,13 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
             }
         });
         
-        // Filtrar pedidos especiales pagados de esta obra
+        // Filtrar pedidos especiales pagados o cerrados de esta obra
+        // Primero de la colección pedidosEspeciales
         const pedidosEspecialesHistoricos = todosPedidosEspeciales.filter(p => {
-            // Solo pedidos especiales pagados
-            if (p.estadoPago !== 'Pagado') {
+            // Incluir pedidos especiales pagados O cerrados
+            const esPagado = p.estadoPago === 'Pagado';
+            const esCerrado = p.estado === 'Cerrado';
+            if (!esPagado && !esCerrado) {
                 return false;
             }
             // Solo pedidos creados por el técnico actual
@@ -3860,8 +3893,38 @@ async function loadPedidosHistoricosPorObraTecnico(obraId, obraNombre) {
             }
         });
         
-        // Combinar ambos tipos de pedidos
-        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos];
+        // También buscar pedidos especiales cerrados que puedan estar en la colección 'pedidos'
+        const pedidosEspecialesEnPedidos = todosPedidos.filter(p => {
+            // Solo pedidos especiales
+            if (!isPedidoEspecial(p)) {
+                return false;
+            }
+            // Incluir pedidos especiales pagados O cerrados
+            const esPagado = p.estadoPago === 'Pagado';
+            const esCerrado = p.estado === 'Cerrado';
+            if (!esPagado && !esCerrado) {
+                return false;
+            }
+            // Solo pedidos creados por el técnico actual
+            if (p.userId !== currentUser.id) {
+                return false;
+            }
+            // Filtrar por obra
+            const obraMatch = obraId === 'sin-obra' ? !p.obraId : p.obraId === obraId;
+            if (!obraMatch) return false;
+            // Si tiene obras asignadas: verificar que la obra esté en sus asignadas
+            // Si no tiene obras asignadas: mostrar todos sus pedidos (sin verificar obra)
+            if (obrasAsignadas.length > 0) {
+                // Solo mostrar si la obra está en sus asignadas
+                return p.obraId && obrasAsignadas.includes(p.obraId);
+            } else {
+                // Si no tiene obras asignadas, mostrar todos sus pedidos
+                return true;
+            }
+        });
+        
+        // Combinar ambos tipos de pedidos (normales y especiales de ambas colecciones)
+        const todosHistoricos = [...pedidosHistoricos, ...pedidosEspecialesHistoricos, ...pedidosEspecialesEnPedidos];
         
         // Ordenar por fecha (más recientes primero)
         todosHistoricos.sort((a, b) => {
