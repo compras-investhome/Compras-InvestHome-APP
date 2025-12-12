@@ -40,7 +40,8 @@ const tecnicoCache = {
     pedidosEspeciales: { data: null, timestamp: 0 },
     obras: { data: null, timestamp: 0 },
     tiendas: { data: null, timestamp: 0 },
-    categorias: { data: null, timestamp: 0 }
+    categorias: { data: null, timestamp: 0 },
+    viewTimestamps: {} // Timestamps de última carga por vista
 };
 
 // TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
@@ -68,6 +69,11 @@ function invalidateCache(collectionName) {
         tecnicoCache[collectionName].timestamp = 0;
         tecnicoCache[collectionName].data = null;
     }
+    // Resetear timestamps de vistas relacionadas
+    if (collectionName === 'pedidos' && tecnicoCache.viewTimestamps) {
+        tecnicoCache.viewTimestamps['tecnico-pedidos-curso'] = 0;
+        tecnicoCache.viewTimestamps['tecnico-historico'] = 0;
+    }
 }
 
 // Invalidar cache de pedidos
@@ -78,6 +84,42 @@ function invalidatePedidosCache() {
 // Invalidar cache de pedidos especiales
 function invalidatePedidosEspecialesCache() {
     invalidateCache('pedidosEspeciales');
+}
+
+// Verificar si hay cambios nuevos en pedidos desde la última carga de una vista
+async function hasPedidosChangesSinceTecnico(viewName, lastTimestamp) {
+    try {
+        if (!currentObra || !currentObra.id) {
+            return true; // Si no hay obra, asumir cambios
+        }
+
+        // Crear función de filtro según la vista
+        let filterFn = null;
+        
+        if (viewName === 'tecnico-pedidos-curso') {
+            filterFn = (p) => {
+                // Filtrar solo pedidos de esta obra
+                if (p.obraId !== currentObra.id) return false;
+                // Pedidos en curso: no entregados
+                const estadoLog = p.estadoLogistico || 'Nuevo';
+                return estadoLog !== 'Entregado';
+            };
+        } else if (viewName === 'tecnico-historico') {
+            filterFn = (p) => {
+                // Filtrar solo pedidos de esta obra
+                if (p.obraId !== currentObra.id) return false;
+                // Histórico: entregados
+                const estadoLog = p.estadoLogistico || 'Nuevo';
+                return estadoLog === 'Entregado';
+            };
+        }
+        
+        // Verificar cambios usando la función de database
+        return await db.hasChangesSince('pedidos', lastTimestamp, filterFn);
+    } catch (error) {
+        console.error('Error al verificar cambios en pedidos:', error);
+        return true; // En caso de error, asumir que hay cambios
+    }
 }
 
 // Función helper para obtener pedidos con cache
@@ -539,7 +581,7 @@ function closeAllModals() {
 
 // ========== CARGA DE VISTAS ==========
 
-function showView(viewName) {
+async function showView(viewName) {
     // Ocultar todas las vistas
     document.querySelectorAll('.admin-content-view').forEach(view => {
         view.classList.remove('active');
@@ -569,14 +611,31 @@ function showView(viewName) {
         }
     });
     
+    // Verificar cambios antes de cargar (solo para vistas de pedidos)
+    const pedidosViews = ['tecnico-pedidos-curso', 'tecnico-historico'];
+    if (pedidosViews.includes(viewName)) {
+        const lastTimestamp = tecnicoCache.viewTimestamps[viewName] || 0;
+        const hasChanges = await hasPedidosChangesSinceTecnico(viewName, lastTimestamp);
+        
+        if (hasChanges) {
+            invalidatePedidosCache();
+        }
+    }
+    
     // Cargar datos según la vista
     if (viewName === 'tecnico-tienda') {
         loadTiendasAdminView();
         updateCartCountAdmin();
     } else if (viewName === 'tecnico-pedidos-curso') {
-        loadPedidosEnCursoTecnico();
+        await loadPedidosEnCursoTecnico();
+        if (pedidosViews.includes(viewName)) {
+            tecnicoCache.viewTimestamps[viewName] = Date.now();
+        }
     } else if (viewName === 'tecnico-historico') {
-        loadHistoricoTecnico();
+        await loadHistoricoTecnico();
+        if (pedidosViews.includes(viewName)) {
+            tecnicoCache.viewTimestamps[viewName] = Date.now();
+        }
     }
 }
 
@@ -4600,7 +4659,7 @@ function setupTecnicoEventListeners() {
             e.stopPropagation();
             const viewName = e.currentTarget.dataset.view;
             if (viewName) {
-                showView(viewName);
+                await showView(viewName);
             }
             });
         });
@@ -4809,6 +4868,14 @@ function setupTecnicoEventListeners() {
     window.addEventListener('pedidoEstadoLogisticoCambiado', async (event) => {
         const { pedidoId } = event.detail;
         
+        // Invalidar cache de pedidos y resetear timestamps
+        invalidatePedidosCache();
+        tecnicoCache.viewTimestamps['tecnico-pedidos-curso'] = 0;
+        tecnicoCache.viewTimestamps['tecnico-historico'] = 0;
+        
+        // Disparar evento genérico de actualización
+        db.dispatchPedidoUpdatedEvent(pedidoId, { estadoLogistico: event.detail.nuevoEstadoLogistico });
+        
         // Verificar si estamos en la vista de pedidos en curso
         const pedidosCursoView = document.getElementById('pedidos-curso-pedidos-view');
         const pedidosCursoObasView = document.getElementById('pedidos-curso-obras-view');
@@ -4956,7 +5023,7 @@ async function initTecnico() {
         setupTecnicoEventListeners();
 
         // Cargar vista inicial
-        showView('tecnico-tienda');
+        await showView('tecnico-tienda');
         // loadTiendas() ya se llama dentro de showView(), no hace falta llamarlo de nuevo
         updateCartCountAdmin();
         

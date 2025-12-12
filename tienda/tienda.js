@@ -14,7 +14,8 @@ const tiendaCache = {
     pedidosByTienda: new Map(), // Map<tiendaId, {data, timestamp}>
     obras: { data: null, timestamp: 0 },
     solicitudesModificacion: new Map(), // Map<tiendaId, {data, timestamp}>
-    solicitudesAnulacion: new Map() // Map<tiendaId, {data, timestamp}>
+    solicitudesAnulacion: new Map(), // Map<tiendaId, {data, timestamp}>
+    tabTimestamps: {} // Timestamps de última carga por pestaña
 };
 
 // TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
@@ -64,6 +65,69 @@ function invalidateAllPedidosCache() {
     tiendaCache.pedidosByTienda.clear();
     tiendaCache.solicitudesModificacion.clear();
     tiendaCache.solicitudesAnulacion.clear();
+}
+
+// Invalidar cache de pedidos de una tienda específica y resetear timestamps
+function invalidatePedidosByTiendaCache(tiendaId) {
+    tiendaCache.pedidosByTienda.delete(tiendaId);
+    // Resetear todos los timestamps de pestañas
+    if (tiendaCache.tabTimestamps) {
+        Object.keys(tiendaCache.tabTimestamps).forEach(tab => {
+            tiendaCache.tabTimestamps[tab] = 0;
+        });
+    }
+}
+
+// Verificar si hay cambios nuevos en pedidos desde la última carga de una pestaña
+async function hasPedidosChangesSince(tabName, lastTimestamp) {
+    try {
+        if (!currentTienda || !currentTienda.id) {
+            return true; // Si no hay tienda, asumir cambios
+        }
+
+        // Crear función de filtro según la pestaña
+        let filterFn = null;
+        
+        if (tabName === 'seleccionar-pago') {
+            filterFn = (p) => {
+                const estadoPago = p.estadoPago || 'Sin Asignar';
+                const tienePedidoReal = Boolean(p.pedidoSistemaPDF);
+                const tienePrecioReal = p.precioReal !== null && p.precioReal !== undefined;
+                const tieneTransferencia = Boolean(p.transferenciaPDF);
+                const estaPagado = estadoPago === 'Pagado' || tieneTransferencia;
+                if (estaPagado) return false;
+                return !(tienePedidoReal && tienePrecioReal && (estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta'));
+            };
+        } else if (tabName === 'pendientes-pago') {
+            filterFn = (p) => {
+                const estadoPago = p.estadoPago || 'Sin Asignar';
+                const tieneTransferencia = Boolean(p.transferenciaPDF);
+                return estadoPago === 'Pendiente de pago' && !tieneTransferencia && Boolean(p.pedidoSistemaPDF);
+            };
+        } else if (tabName === 'pagados') {
+            filterFn = (p) => {
+                const estadoPago = p.estadoPago || 'Sin Asignar';
+                const tieneTransferencia = Boolean(p.transferenciaPDF);
+                return estadoPago === 'Pagado' || tieneTransferencia;
+            };
+        } else if (tabName === 'pago-cuenta') {
+            filterFn = (p) => {
+                return p.estadoPago === 'Pago A cuenta';
+            };
+        }
+        
+        // Verificar cambios usando la función de database
+        return await db.hasChangesSince('pedidos', lastTimestamp, (pedido) => {
+            // Filtrar solo pedidos de esta tienda
+            if (pedido.tiendaId !== currentTienda.id) return false;
+            // Aplicar filtro de pestaña si existe
+            if (filterFn) return filterFn(pedido);
+            return true;
+        });
+    } catch (error) {
+        console.error('Error al verificar cambios en pedidos:', error);
+        return true; // En caso de error, asumir que hay cambios
+    }
 }
 
 // Función helper para obtener pedidos de una tienda con cache
@@ -1887,11 +1951,13 @@ window.updateEstadoPagoTiendaSelect = async function(pedidoId, nuevoEstado, sele
                     await actualizarBadgeCuenta();
                 }
                 
-                // Disparar evento personalizado para que contabilidad se recargue si está abierta
+                // Disparar eventos personalizados para invalidación selectiva
                 if (nuevoEstado === 'Pendiente de pago') {
                     window.dispatchEvent(new CustomEvent('pedidoEstadoCambiado', {
                         detail: { pedidoId, nuevoEstado: 'Pendiente de pago' }
                     }));
+                    // Disparar evento genérico de actualización
+                    db.dispatchPedidoUpdatedEvent(pedidoId, { estadoPago: nuevoEstado });
                 }
             }
         }
@@ -2451,7 +2517,7 @@ window.rechazarSolicitudAnulacion = async function(solicitudId) {
 };
 
 // Funciones de navegación
-function switchTabTienda(tab) {
+async function switchTabTienda(tab) {
     if (!tab) return;
     
     // Actualizar pestañas principales
@@ -2476,17 +2542,43 @@ function switchTabTienda(tab) {
         tabContent.classList.add('active');
     }
     
+    // Verificar cambios antes de cargar (solo para pestañas de pedidos)
+    const pedidosTabs = ['seleccionar-pago', 'pendientes-pago', 'pagados', 'pago-cuenta'];
+    if (pedidosTabs.includes(tab)) {
+        const lastTimestamp = tiendaCache.tabTimestamps[tab] || 0;
+        const hasChanges = await hasPedidosChangesSince(tab, lastTimestamp);
+        
+        if (hasChanges) {
+            // Invalidar cache si hay cambios
+            if (currentTienda && currentTienda.id) {
+                invalidatePedidosByTiendaCache(currentTienda.id);
+            }
+        }
+    }
+    
     // Cargar contenido según la pestaña
     if (tab === 'seleccionar-pago' && typeof loadPedidosSeleccionarPago === 'function') {
-        loadPedidosSeleccionarPago();
+        await loadPedidosSeleccionarPago();
+        if (pedidosTabs.includes(tab)) {
+            tiendaCache.tabTimestamps[tab] = Date.now();
+        }
     } else if (tab === 'modificacion-pedido' && typeof loadModificacionPedidoTienda === 'function') {
-        loadModificacionPedidoTienda();
+        await loadModificacionPedidoTienda();
     } else if (tab === 'pendientes-pago' && typeof loadPedidosPendientesPago === 'function') {
-        loadPedidosPendientesPago();
+        await loadPedidosPendientesPago();
+        if (pedidosTabs.includes(tab)) {
+            tiendaCache.tabTimestamps[tab] = Date.now();
+        }
     } else if (tab === 'pagados' && typeof switchSubTabTienda === 'function') {
-        switchSubTabTienda('pagados', 'pagados-nuevo');
+        await switchSubTabTienda('pagados', 'pagados-nuevo');
+        if (pedidosTabs.includes(tab)) {
+            tiendaCache.tabTimestamps[tab] = Date.now();
+        }
     } else if (tab === 'pago-cuenta' && typeof switchSubTabTienda === 'function') {
-        switchSubTabTienda('pago-cuenta', 'pago-cuenta-nuevo');
+        await switchSubTabTienda('pago-cuenta', 'pago-cuenta-nuevo');
+        if (pedidosTabs.includes(tab)) {
+            tiendaCache.tabTimestamps[tab] = Date.now();
+        }
     }
 }
 
@@ -2606,14 +2698,14 @@ function setupTiendaEventListeners() {
     }
 
     // Tabs principales - delegación de eventos en el documento (más robusto)
-    document.addEventListener('click', (e) => {
+    document.addEventListener('click', async (e) => {
         const tabBtn = e.target.closest('#tienda-gestion-view .tab-btn');
         if (tabBtn && tabBtn.dataset.tab) {
             e.preventDefault();
             e.stopPropagation();
             const tab = tabBtn.dataset.tab;
             if (typeof switchTabTienda === 'function') {
-                switchTabTienda(tab);
+                await switchTabTienda(tab);
             }
         }
     });
@@ -2638,6 +2730,58 @@ function setupTiendaEventListeners() {
         
         if (mainTab) {
             switchSubTabTienda(mainTab, subTab);
+        }
+    });
+
+    // Escuchar eventos de pedido marcado como pagado desde contabilidad
+    window.addEventListener('pedidoMarcadoPagado', async (e) => {
+        const { pedidoId, tiendaId } = e.detail;
+        if (currentTienda && currentTienda.id === tiendaId) {
+            // Invalidar cache de pedidos
+            invalidatePedidosByTiendaCache(tiendaId);
+            
+            // Recargar pestañas relevantes si están activas
+            const activeTab = document.querySelector('#tienda-gestion-view .tab-btn.active');
+            if (activeTab) {
+                const activeTabName = activeTab.dataset.tab;
+                if (activeTabName === 'pendientes-pago' || activeTabName === 'pagados' || activeTabName === 'pago-cuenta') {
+                    await switchTabTienda(activeTabName);
+                } else {
+                    // Solo actualizar badges
+                    await recargarPestañasTiendaRelevantes();
+                }
+            } else {
+                await recargarPestañasTiendaRelevantes();
+            }
+        }
+    });
+
+    // Escuchar eventos genéricos de actualización de pedido
+    window.addEventListener('pedidoActualizado', async (e) => {
+        const { pedidoId, cambios } = e.detail;
+        if (!currentTienda || !currentTienda.id) return;
+        
+        // Obtener el pedido para verificar si pertenece a esta tienda
+        try {
+            const pedido = await db.get('pedidos', pedidoId);
+            if (pedido && pedido.tiendaId === currentTienda.id) {
+                // Si los cambios afectan estadoPago o transferenciaPDF, invalidar cache
+                if (cambios.estadoPago || cambios.transferenciaPDF) {
+                    invalidatePedidosByTiendaCache(currentTienda.id);
+                    
+                    // Recargar pestañas relevantes si están activas
+                    const activeTab = document.querySelector('#tienda-gestion-view .tab-btn.active');
+                    if (activeTab) {
+                        const activeTabName = activeTab.dataset.tab;
+                        const affectedTabs = ['pendientes-pago', 'pagados', 'pago-cuenta', 'seleccionar-pago'];
+                        if (affectedTabs.includes(activeTabName)) {
+                            await switchTabTienda(activeTabName);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error al verificar pedido en pedidoActualizado:', error);
         }
     });
 }

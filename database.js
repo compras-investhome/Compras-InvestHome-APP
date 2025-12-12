@@ -1111,6 +1111,73 @@ class Database {
             return null;
         }
     }
+
+    // ========== SISTEMA DE DETECCIÓN DE CAMBIOS POR TIMESTAMP ==========
+    
+    /**
+     * Verifica si hay cambios nuevos en una colección comparando timestamps
+     * @param {string} storeName - Nombre de la colección
+     * @param {number} lastCacheTimestamp - Timestamp de la última carga del caché
+     * @param {Function} filterFn - Función opcional para filtrar documentos (ej: por estado)
+     * @returns {Promise<boolean>} - true si hay cambios, false si no
+     */
+    async hasChangesSince(storeName, lastCacheTimestamp, filterFn = null) {
+        try {
+            // Si no hay timestamp de caché, asumir que hay cambios
+            if (!lastCacheTimestamp || lastCacheTimestamp === 0) {
+                return true;
+            }
+
+            // Convertir timestamp a Date para comparar
+            const lastCacheDate = new Date(lastCacheTimestamp);
+            
+            // Obtener todos los documentos de la colección
+            const querySnapshot = await getDocs(collection(this.db, storeName));
+            
+            // Verificar si algún documento tiene updatedAt más reciente
+            for (const docSnap of querySnapshot.docs) {
+                const data = docSnap.data();
+                
+                // Aplicar filtro si existe
+                if (filterFn && !filterFn({ id: docSnap.id, ...data })) {
+                    continue;
+                }
+                
+                // Verificar updatedAt
+                if (data.updatedAt) {
+                    const updatedAt = data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt);
+                    if (updatedAt > lastCacheDate) {
+                        return true; // Hay cambios
+                    }
+                }
+                
+                // Si no tiene updatedAt pero tiene createdAt, usar ese
+                if (!data.updatedAt && data.createdAt) {
+                    const createdAt = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                    if (createdAt > lastCacheDate) {
+                        return true; // Hay cambios
+                    }
+                }
+            }
+            
+            return false; // No hay cambios
+        } catch (error) {
+            console.error(`Error al verificar cambios en ${storeName}:`, error);
+            // En caso de error, asumir que hay cambios para ser seguro
+            return true;
+        }
+    }
+
+    /**
+     * Dispara un evento personalizado cuando se actualiza un pedido
+     * @param {string} pedidoId - ID del pedido actualizado
+     * @param {Object} cambios - Objeto con los campos que cambiaron
+     */
+    dispatchPedidoUpdatedEvent(pedidoId, cambios = {}) {
+        window.dispatchEvent(new CustomEvent('pedidoActualizado', {
+            detail: { pedidoId, cambios, timestamp: Date.now() }
+        }));
+    }
 }
 
 // Instancia global de la base de datos

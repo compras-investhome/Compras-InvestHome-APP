@@ -30,7 +30,9 @@ const adminCache = {
     pedidosEspeciales: { data: null, timestamp: 0 },
     obras: { data: null, timestamp: 0 },
     tiendas: { data: null, timestamp: 0 },
-    categorias: { data: null, timestamp: 0 }
+    categorias: { data: null, timestamp: 0 },
+    viewTimestamps: {}, // Timestamps de última carga por vista
+    tabTimestamps: {} // Timestamps de última carga por pestaña (pedidos especiales)
 };
 
 // TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
@@ -68,6 +70,34 @@ function invalidatePedidosCache() {
 // Invalidar cache de pedidos especiales
 function invalidatePedidosEspecialesCache() {
     invalidateCache('pedidosEspeciales');
+}
+
+// Verificar si hay cambios nuevos en pedidos especiales desde la última carga de una pestaña
+async function hasPedidosEspecialesChangesSinceAdmin(tabName, lastTimestamp) {
+    try {
+        // Crear función de filtro según la pestaña
+        let filterFn = null;
+        
+        if (tabName === 'nuevo-especiales') {
+            filterFn = (p) => {
+                return p.estadoPago !== 'Pagado';
+            };
+        } else if (tabName === 'pendientes-admin') {
+            filterFn = (p) => {
+                return p.estadoPago === 'Pendiente de pago' || p.estadoPago === 'Pago A cuenta';
+            };
+        } else if (tabName === 'cerrados-admin') {
+            filterFn = (p) => {
+                return p.estadoPago === 'Pagado';
+            };
+        }
+        
+        // Verificar cambios usando la función de database
+        return await db.hasChangesSince('pedidosEspeciales', lastTimestamp, filterFn);
+    } catch (error) {
+        console.error('Error al verificar cambios en pedidos especiales:', error);
+        return true; // En caso de error, asumir que hay cambios
+    }
 }
 
 // Función helper para obtener pedidos con cache
@@ -517,7 +547,7 @@ window.toggleContabSection = function(contentId, arrowId) {
 };
 
 // Navegación y vistas
-function showAdminView(viewName) {
+async function showAdminView(viewName) {
     // Ocultar todas las vistas
     document.querySelectorAll('.admin-content-view').forEach(view => {
         view.classList.remove('active');
@@ -540,13 +570,28 @@ function showAdminView(viewName) {
         }
     }
     
+    // Verificar cambios antes de cargar para admin-pedidos-especiales
+    if (viewName === 'admin-pedidos-especiales') {
+        const activeTab = document.querySelector('#view-admin-pedidos-especiales .tab-btn.active');
+        if (activeTab) {
+            const tabName = activeTab.dataset.tab;
+            const lastTimestamp = adminCache.tabTimestamps[tabName] || 0;
+            const hasChanges = await hasPedidosEspecialesChangesSinceAdmin(tabName, lastTimestamp);
+            
+            if (hasChanges) {
+                invalidatePedidosEspecialesCache();
+            }
+        }
+    }
+    
     // Cargar datos según la vista
     if (viewName === 'admin-tienda') {
         loadTiendasAdminView();
         updateCartCountAdmin();
     } else if (viewName === 'admin-pedidos-especiales') {
-        loadPedidosEspecialesAdmin();
+        await loadPedidosEspecialesAdmin();
         // Nota: loadPedidosEspecialesAdmin() ya activa la primera tab por defecto
+        adminCache.viewTimestamps[viewName] = Date.now();
     } else if (viewName === 'admin-cuentas') {
         loadCuentasAdmin();
     } else if (viewName === 'admin-historico') {
@@ -1634,15 +1679,15 @@ function setupAdminEventListeners() {
 
     // Admin sidebar navigation
     document.querySelectorAll('.admin-nav-item').forEach(item => {
-        item.addEventListener('click', (e) => {
+        item.addEventListener('click', async (e) => {
             // No hacer nada si es el botón de cerrar sesión
             if (e.currentTarget.id === 'btn-logout-admin') {
                 return;
             }
-            
+
             const viewName = e.currentTarget.dataset.view;
             if (viewName) {
-                showAdminView(viewName);
+                await showAdminView(viewName);
                 
                 // Actualizar estado activo
                 document.querySelectorAll('.admin-nav-item').forEach(btn => {
@@ -1678,9 +1723,9 @@ function setupAdminEventListeners() {
 
     // Tabs de Pedidos Especiales
     document.querySelectorAll('#view-admin-pedidos-especiales .tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             const tab = e.currentTarget.dataset.tab;
-            switchTabPedidosEspeciales(tab);
+            await switchTabPedidosEspeciales(tab);
         });
     });
 
@@ -2064,7 +2109,7 @@ function switchTabUsuarios(tab) {
 }
 
 // Función para cambiar entre tabs de Pedidos Especiales
-function switchTabPedidosEspeciales(tab) {
+async function switchTabPedidosEspeciales(tab) {
     document.querySelectorAll('#view-admin-pedidos-especiales .tab-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.tab === tab) {
@@ -2085,20 +2130,64 @@ function switchTabPedidosEspeciales(tab) {
         targetContent.style.display = 'block';
     }
 
+    // Verificar cambios antes de cargar
+    const pedidosEspecialesTabs = ['nuevo-especiales', 'pendientes-admin', 'cerrados-admin'];
+    if (pedidosEspecialesTabs.includes(tab)) {
+        const lastTimestamp = adminCache.tabTimestamps[tab] || 0;
+        const hasChanges = await hasPedidosEspecialesChangesSinceAdmin(tab, lastTimestamp);
+        
+        if (hasChanges) {
+            invalidatePedidosEspecialesCache();
+        }
+    }
+
     // Cargar datos según el tab
     if (tab === 'nuevo-especiales') {
-        loadNuevoEspeciales();
+        await loadNuevoEspeciales();
+        if (pedidosEspecialesTabs.includes(tab)) {
+            adminCache.tabTimestamps[tab] = Date.now();
+        }
     } else if (tab === 'gestionando-especiales') {
-        loadGestionandoEspeciales();
+        await loadGestionandoEspeciales();
     } else if (tab === 'sin-transporte-especiales') {
         loadSinTransporteEspeciales();
     } else if (tab === 'con-transporte-especiales') {
         loadConTransporteEspeciales();
     } else if (tab === 'online-especiales') {
         loadOnlineEspeciales();
+    } else if (tab === 'pendientes-admin') {
+        await loadPendientesAdmin();
+        if (pedidosEspecialesTabs.includes(tab)) {
+            adminCache.tabTimestamps[tab] = Date.now();
+        }
+    } else if (tab === 'cerrados-admin') {
+        await loadCerradosAdmin();
+        if (pedidosEspecialesTabs.includes(tab)) {
+            adminCache.tabTimestamps[tab] = Date.now();
+        }
     } else if (tab === 'cerrados-especiales') {
         loadCerradosEspeciales();
     }
+}
+
+// Event listeners para actualizaciones en tiempo real
+function setupAdminRealTimeListeners() {
+    // Escuchar eventos genéricos de actualización de pedido especial
+    window.addEventListener('pedidoActualizado', async (e) => {
+        const { pedidoId, cambios } = e.detail;
+        // Si los cambios afectan pedidos especiales, invalidar cache
+        if (cambios.estado || cambios.estadoPago || cambios.documento) {
+            invalidatePedidosEspecialesCache();
+            
+            const activeView = document.querySelector('.admin-content-view.active');
+            if (activeView && activeView.id === 'view-admin-pedidos-especiales') {
+                const activeTab = document.querySelector('#view-admin-pedidos-especiales .tab-btn.active');
+                if (activeTab) {
+                    await switchTabPedidosEspeciales(activeTab.dataset.tab);
+                }
+            }
+        }
+    });
 }
 
 // Abrir modal de pedido especial en admin (modo crear o editar)
@@ -2357,6 +2446,8 @@ async function guardarPedidoEspecial() {
             await db.update('pedidosEspeciales', { id: pedidoId, ...pedidoActualizado });
             // Invalidar cache de pedidos especiales
             invalidatePedidosEspecialesCache();
+            // Disparar evento genérico de actualización
+            db.dispatchPedidoUpdatedEvent(pedidoId, pedidoActualizado);
             await showAlert('Pedido especial actualizado correctamente', 'Éxito');
         } else {
             await db.add('pedidosEspeciales', pedidoEspecial);
@@ -2370,9 +2461,9 @@ async function guardarPedidoEspecial() {
         // Recargar la vista de pedidos especiales
         const activeTab = document.querySelector('#view-admin-pedidos-especiales .tab-btn.active');
         if (activeTab) {
-            switchTabPedidosEspeciales(activeTab.dataset.tab);
+            await switchTabPedidosEspeciales(activeTab.dataset.tab);
         } else if (previousAdminSubView === 'admin-pedidos-especiales') {
-            loadPedidosEspecialesAdmin();
+            await loadPedidosEspecialesAdmin();
         }
     } catch (error) {
         const modal = document.getElementById('modal-pedido-especial');
@@ -2607,7 +2698,7 @@ async function loadPedidosEspecialesAdmin() {
     loadCerradosEspeciales();
     
     // Cargar la primera tab por defecto (esto también carga loadNuevoEspeciales())
-    switchTabPedidosEspeciales('nuevo-especiales');
+    await switchTabPedidosEspeciales('nuevo-especiales');
 }
 
 // Variable global para almacenar el estado de paginación de cuentas
@@ -4860,6 +4951,8 @@ window.cambiarEstadoPagoPedidoEspecial = async function(pedidoId, nuevoEstadoPag
         await db.update('pedidosEspeciales', pedido);
         // Invalidar cache de pedidos especiales
         invalidatePedidosEspecialesCache();
+        // Disparar evento genérico de actualización
+        db.dispatchPedidoUpdatedEvent(pedido.id, { estado: nuevoEstado });
 
         // Recargar la vista
         await loadPedidosEspecialesAdmin();
@@ -4993,19 +5086,21 @@ window.cambiarEstadoPedidoEspecial = async function(pedidoId, nuevoEstado) {
         await db.update('pedidosEspeciales', pedido);
         // Invalidar cache de pedidos especiales
         invalidatePedidosEspecialesCache();
+        // Disparar evento genérico de actualización
+        db.dispatchPedidoUpdatedEvent(pedido.id, { estado: nuevoEstado });
 
         // Si el nuevo estado es "En Espera", no cambiar de pestaña, solo actualizar la vista actual
         if (nuevoEstado === 'En Espera') {
             // Recargar solo la pestaña actual
             const activeTab = document.querySelector('#view-admin-pedidos-especiales .tab-btn.active');
             if (activeTab) {
-                switchTabPedidosEspeciales(activeTab.dataset.tab);
+                await switchTabPedidosEspeciales(activeTab.dataset.tab);
             }
         } else {
             // Para otros estados, recargar todas las tabs para que la card se mueva a la correcta
             const activeTab = document.querySelector('#view-admin-pedidos-especiales .tab-btn.active');
             if (activeTab) {
-                switchTabPedidosEspeciales(activeTab.dataset.tab);
+                await switchTabPedidosEspeciales(activeTab.dataset.tab);
             }
             
             // También recargar las otras tabs en segundo plano para que se actualicen
@@ -5808,9 +5903,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 // Configurar event listeners
                 setupAdminEventListeners();
+                setupAdminRealTimeListeners();
                 
                 // Mostrar vista inicial
-                showAdminView('admin-tienda');
+                await showAdminView('admin-tienda');
             } else {
                 // No es administrador, redirigir al login
                 window.location.href = '../index.html';

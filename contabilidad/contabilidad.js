@@ -22,7 +22,8 @@ const contabilidadCache = {
     pedidosEspeciales: { data: null, timestamp: 0 },
     obras: { data: null, timestamp: 0 },
     tiendas: { data: null, timestamp: 0 },
-    categorias: { data: null, timestamp: 0 }
+    categorias: { data: null, timestamp: 0 },
+    tabTimestamps: {} // Timestamps de última carga por pestaña
 };
 
 // TTL diferenciado: más tiempo para datos estáticos, menos para dinámicos
@@ -60,6 +61,68 @@ function invalidatePedidosCache() {
 // Invalidar cache de pedidos especiales
 function invalidatePedidosEspecialesCache() {
     invalidateCache('pedidosEspeciales');
+}
+
+// Resetear timestamps de pestañas
+function resetTabTimestamps() {
+    if (contabilidadCache.tabTimestamps) {
+        Object.keys(contabilidadCache.tabTimestamps).forEach(tab => {
+            contabilidadCache.tabTimestamps[tab] = 0;
+        });
+    }
+}
+
+// Verificar si hay cambios nuevos en pedidos desde la última carga de una pestaña
+async function hasPedidosChangesSinceContabilidad(tabName, lastTimestamp) {
+    try {
+        // Crear función de filtro según la pestaña
+        let filterFn = null;
+        
+        if (tabName === 'pendientes-pago-contabilidad') {
+            filterFn = (p) => {
+                const estadoPago = p.estadoPago || 'Sin Asignar';
+                const tieneTransferencia = Boolean(p.transferenciaPDF);
+                return estadoPago === 'Pendiente de pago' && !tieneTransferencia && Boolean(p.pedidoSistemaPDF);
+            };
+        } else if (tabName === 'historico-contabilidad') {
+            filterFn = (p) => {
+                return Boolean(p.transferenciaPDF) && Boolean(p.albaran);
+            };
+        } else if (tabName === 'facturas-pendientes-contabilidad') {
+            filterFn = (p) => {
+                const estadoPago = p.estadoPago || 'Sin Asignar';
+                const tieneTransferencia = Boolean(p.transferenciaPDF);
+                const tieneAlbaran = Boolean(p.albaran);
+                return (estadoPago === 'Pagado' || tieneTransferencia) && !tieneAlbaran;
+            };
+        }
+        
+        // Verificar cambios usando la función de database
+        return await db.hasChangesSince('pedidos', lastTimestamp, filterFn);
+    } catch (error) {
+        console.error('Error al verificar cambios en pedidos:', error);
+        return true; // En caso de error, asumir que hay cambios
+    }
+}
+
+// Verificar si hay cambios nuevos en pedidos especiales desde la última carga de una pestaña
+async function hasPedidosEspecialesChangesSince(tabName, lastTimestamp) {
+    try {
+        // Crear función de filtro según la pestaña
+        let filterFn = null;
+        
+        if (tabName === 'pedidos-especiales-contabilidad') {
+            filterFn = (p) => {
+                return p.estadoPago === 'Pagado' && Boolean(p.documento);
+            };
+        }
+        
+        // Verificar cambios usando la función de database
+        return await db.hasChangesSince('pedidosEspeciales', lastTimestamp, filterFn);
+    } catch (error) {
+        console.error('Error al verificar cambios en pedidos especiales:', error);
+        return true; // En caso de error, asumir que hay cambios
+    }
 }
 
 // Función helper para obtener pedidos con cache (retorna EXACTAMENTE lo mismo que db.getAll('pedidos'))
@@ -422,7 +485,7 @@ function reloadActiveContabilidadTab() {
     }
 }
 
-function switchTabContabilidad(tab) {
+async function switchTabContabilidad(tab) {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.tab === tab) {
@@ -434,21 +497,47 @@ function switchTabContabilidad(tab) {
         content.classList.remove('active');
     });
     
+    // Verificar cambios antes de cargar
+    const pedidosTabs = ['pendientes-pago-contabilidad', 'historico-contabilidad', 'facturas-pendientes-contabilidad'];
+    const pedidosEspecialesTabs = ['pedidos-especiales-contabilidad'];
+    
+    if (pedidosTabs.includes(tab)) {
+        const lastTimestamp = contabilidadCache.tabTimestamps[tab] || 0;
+        const hasChanges = await hasPedidosChangesSinceContabilidad(tab, lastTimestamp);
+        
+        if (hasChanges) {
+            invalidatePedidosCache();
+            contabilidadCache.tabTimestamps[tab] = 0;
+        }
+    } else if (pedidosEspecialesTabs.includes(tab)) {
+        const lastTimestamp = contabilidadCache.tabTimestamps[tab] || 0;
+        const hasChanges = await hasPedidosEspecialesChangesSince(tab, lastTimestamp);
+        
+        if (hasChanges) {
+            invalidatePedidosEspecialesCache();
+            contabilidadCache.tabTimestamps[tab] = 0;
+        }
+    }
+    
     if (tab === 'pendientes-pago-contabilidad') {
         document.getElementById('pendientes-pago-contabilidad').classList.add('active');
-        loadPedidosContabilidad();
+        await loadPedidosContabilidad();
+        contabilidadCache.tabTimestamps[tab] = Date.now();
     } else if (tab === 'historico-contabilidad') {
         document.getElementById('historico-contabilidad').classList.add('active');
-        loadPedidosPagadosContabilidad();
+        await loadPedidosPagadosContabilidad();
+        contabilidadCache.tabTimestamps[tab] = Date.now();
     } else if (tab === 'cuentas-contabilidad') {
         document.getElementById('cuentas-contabilidad').classList.add('active');
-        loadCuentasContabilidad();
+        await loadCuentasContabilidad();
     } else if (tab === 'pedidos-especiales-contabilidad') {
         document.getElementById('pedidos-especiales-contabilidad').classList.add('active');
-        loadPedidosEspecialesContabilidad();
+        await loadPedidosEspecialesContabilidad();
+        contabilidadCache.tabTimestamps[tab] = Date.now();
     } else if (tab === 'facturas-pendientes-contabilidad') {
         document.getElementById('facturas-pendientes-contabilidad').classList.add('active');
-        loadFacturasPendientesContabilidad();
+        await loadFacturasPendientesContabilidad();
+        contabilidadCache.tabTimestamps[tab] = Date.now();
     }
 }
 
@@ -1179,6 +1268,16 @@ window.uploadPagoCuenta = async function(pedidoId, file, tiendaId) {
         await db.update('pedidos', pedido);
         // Invalidar cache de pedidos para que se vean los cambios inmediatamente
         invalidatePedidosCache();
+        // Resetear timestamps de pestañas afectadas
+        contabilidadCache.tabTimestamps['pendientes-pago-contabilidad'] = 0;
+        contabilidadCache.tabTimestamps['historico-contabilidad'] = 0;
+        contabilidadCache.tabTimestamps['facturas-pendientes-contabilidad'] = 0;
+        
+        // Disparar eventos para que otros módulos se actualicen
+        db.dispatchPedidoUpdatedEvent(pedidoId, { estadoPago: 'Pagado', transferenciaPDF: true });
+        window.dispatchEvent(new CustomEvent('pedidoMarcadoPagado', {
+            detail: { pedidoId, tiendaId: tiendaId }
+        }));
 
         const tienda = await db.get('tiendas', tiendaId);
         if (tienda && tienda.limiteCuenta) {
@@ -1222,7 +1321,19 @@ window.uploadTransferencia = async function(pedidoId, file) {
         pedido.transferenciaPDF = transferenciaPDF;
         pedido.estadoPago = 'Pagado';
         await db.update('pedidos', pedido);
+        // Invalidar cache de pedidos para que se vean los cambios inmediatamente
+        invalidatePedidosCache();
+        // Resetear timestamps de pestañas afectadas
+        contabilidadCache.tabTimestamps['pendientes-pago-contabilidad'] = 0;
+        contabilidadCache.tabTimestamps['historico-contabilidad'] = 0;
+        contabilidadCache.tabTimestamps['facturas-pendientes-contabilidad'] = 0;
         
+        // Disparar eventos para que otros módulos se actualicen
+        db.dispatchPedidoUpdatedEvent(pedidoId, { estadoPago: 'Pagado', transferenciaPDF: true });
+        window.dispatchEvent(new CustomEvent('pedidoMarcadoPagado', {
+            detail: { pedidoId, tiendaId: pedido.tiendaId }
+        }));
+
         const tienda = await db.get('tiendas', pedido.tiendaId);
         if (tienda && tienda.limiteCuenta && estadoAnterior === 'Pago A cuenta') {
             const gastado = await calcularGastadoCuenta(tienda.id);
@@ -1947,14 +2058,56 @@ function setupContabilidadEventListeners() {
     }
 
     // Tabs principales - delegación de eventos en el documento (más robusto)
-    document.addEventListener('click', (e) => {
+    document.addEventListener('click', async (e) => {
         const tabBtn = e.target.closest('#contabilidad-gestion-view .tab-btn');
         if (tabBtn && tabBtn.dataset.tab) {
             e.preventDefault();
             e.stopPropagation();
             const tab = tabBtn.dataset.tab;
             if (typeof switchTabContabilidad === 'function') {
-                switchTabContabilidad(tab);
+                await switchTabContabilidad(tab);
+            }
+        }
+    });
+
+    // Escuchar eventos de cambio de estado de pedidos desde tienda
+    window.addEventListener('pedidoEstadoCambiado', async (e) => {
+        const { pedidoId, nuevoEstado } = e.detail;
+        if (nuevoEstado === 'Pendiente de pago') {
+            invalidatePedidosCache();
+            contabilidadCache.tabTimestamps['pendientes-pago-contabilidad'] = 0;
+            const activeTab = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
+            if (activeTab && activeTab.dataset.tab === 'pendientes-pago-contabilidad') {
+                await switchTabContabilidad('pendientes-pago-contabilidad');
+            }
+        }
+    });
+
+    // Escuchar eventos de pedido marcado como pagado
+    window.addEventListener('pedidoMarcadoPagado', async (e) => {
+        const { pedidoId, tiendaId } = e.detail;
+        invalidatePedidosCache();
+        resetTabTimestamps();
+        const activeTab = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
+        if (activeTab) {
+            await switchTabContabilidad(activeTab.dataset.tab);
+        }
+    });
+
+    // Escuchar eventos genéricos de actualización de pedido
+    window.addEventListener('pedidoActualizado', async (e) => {
+        const { pedidoId, cambios } = e.detail;
+        // Si los cambios afectan estadoPago o transferenciaPDF, invalidar cache
+        if (cambios.estadoPago || cambios.transferenciaPDF) {
+            invalidatePedidosCache();
+            const affectedTabs = ['pendientes-pago-contabilidad', 'historico-contabilidad', 'facturas-pendientes-contabilidad'];
+            affectedTabs.forEach(tab => {
+                contabilidadCache.tabTimestamps[tab] = 0;
+            });
+            
+            const activeTab = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
+            if (activeTab && affectedTabs.includes(activeTab.dataset.tab)) {
+                await switchTabContabilidad(activeTab.dataset.tab);
             }
         }
     });

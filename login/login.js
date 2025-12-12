@@ -102,7 +102,7 @@ async function updateLoginForm(tipoUsuario) {
                 return;
             }
             
-            // Obtener todas las obras
+            // OPTIMIZACIÓN: Usar caché de getAllObras (ya tiene caché en database.js)
             const todasLasObras = await db.getAllObras();
             
             // Si el usuario tiene obras asignadas, filtrar solo esas
@@ -140,14 +140,16 @@ async function updateLoginForm(tipoUsuario) {
         // Cargar solo tiendas que tienen usuario asociado
         formGroupTienda.style.display = 'block';
         
-        // Obtener todos los usuarios de tipo Tienda
-        const usuariosTienda = await db.getUsuariosByTipo('Tienda');
+        // OPTIMIZACIÓN: Cargar usuarios y tiendas en paralelo y usar caché
+        const [usuariosTienda, todasLasTiendas] = await Promise.all([
+            db.getUsuariosByTipo('Tienda'),
+            db.getAll('tiendas') // Ya usa caché en database.js
+        ]);
         const tiendasIds = new Set(usuariosTienda
             .filter(u => u.tiendaId)
             .map(u => u.tiendaId));
         
         // Obtener las tiendas que tienen usuario asociado
-        const todasLasTiendas = await db.getAll('tiendas');
         const tiendasConUsuario = todasLasTiendas.filter(tienda => 
             tiendasIds.has(tienda.id)
         );
