@@ -1253,6 +1253,96 @@ class Database {
             detail: { pedidoId, cambios, timestamp: Date.now() }
         }));
     }
+
+    /**
+     * Calcula el gastado de cuenta de una tienda basándose en sus pedidos
+     * Esta es la función interna que hace el cálculo real
+     * @param {string} tiendaId - ID de la tienda
+     * @returns {Promise<number>} - Monto gastado en cuenta
+     */
+    async _calcularGastadoCuentaInterno(tiendaId) {
+        const pedidos = await this.getPedidosByTienda(tiendaId);
+        let gastado = 0;
+        
+        for (const pedido of pedidos) {
+            if (pedido.estadoPago === 'Pago A cuenta' && 
+                pedido.estado !== 'Completado' && 
+                pedido.pedidoSistemaPDF && 
+                !pedido.transferenciaPDF) {
+                // Usar precioReal si está disponible (precio que escribe la tienda)
+                // Si no existe, calcular el total de los items como fallback
+                let totalPedido = 0;
+                if (pedido.precioReal !== null && pedido.precioReal !== undefined) {
+                    totalPedido = Number(pedido.precioReal) || 0;
+                } else {
+                    // Fallback: calcular total de items
+                    totalPedido = (pedido.items || []).reduce((total, item) => {
+                        const precioItem = item.precio || 0;
+                        const cantidad = item.cantidad || 0;
+                        return total + (precioItem * cantidad);
+                    }, 0);
+                }
+                gastado += totalPedido;
+            }
+        }
+        
+        return gastado;
+    }
+
+    /**
+     * Actualiza el campo gastadoCuenta en el documento de la tienda
+     * Esta función calcula y guarda el gastado de cuenta
+     * @param {string} tiendaId - ID de la tienda
+     * @returns {Promise<number>} - Monto gastado en cuenta actualizado
+     */
+    async actualizarGastadoCuentaTienda(tiendaId) {
+        try {
+            // Calcular gastado
+            const gastado = await this._calcularGastadoCuentaInterno(tiendaId);
+            
+            // Actualizar en el documento de la tienda
+            const tienda = await this.get('tiendas', tiendaId);
+            if (tienda) {
+                tienda.gastadoCuenta = gastado;
+                tienda.gastadoCuentaActualizado = Date.now();
+                await this.update('tiendas', tienda);
+            }
+            
+            return gastado;
+        } catch (error) {
+            console.error(`Error al actualizar gastado de cuenta para tienda ${tiendaId}:`, error);
+            // En caso de error, calcular sin guardar
+            return await this._calcularGastadoCuentaInterno(tiendaId);
+        }
+    }
+
+    /**
+     * Obtiene el gastado de cuenta de una tienda, usando cache si está disponible
+     * @param {string} tiendaId - ID de la tienda
+     * @param {boolean} usarCache - Si true, usa el campo guardado si es reciente (menos de 5 min)
+     * @returns {Promise<number>} - Monto gastado en cuenta
+     */
+    async getGastadoCuenta(tiendaId, usarCache = true) {
+        try {
+            // Si se solicita usar cache, verificar el campo guardado
+            if (usarCache) {
+                const tienda = await this.get('tiendas', tiendaId);
+                if (tienda?.gastadoCuenta !== undefined && 
+                    tienda?.gastadoCuentaActualizado &&
+                    (Date.now() - tienda.gastadoCuentaActualizado) < 5 * 60 * 1000) {
+                    // El campo existe y es reciente (menos de 5 minutos), usarlo
+                    return tienda.gastadoCuenta;
+                }
+            }
+            
+            // Si no hay cache válido, calcular y actualizar
+            return await this.actualizarGastadoCuentaTienda(tiendaId);
+        } catch (error) {
+            console.error(`Error al obtener gastado de cuenta para tienda ${tiendaId}:`, error);
+            // Fallback: calcular sin guardar
+            return await this._calcularGastadoCuentaInterno(tiendaId);
+        }
+    }
 }
 
 // Instancia global de la base de datos

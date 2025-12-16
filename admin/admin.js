@@ -689,32 +689,10 @@ async function loadTiendasAdminView() {
 }
 
 // Calcular gastado de cuenta
+// OPTIMIZADO: Usa el campo gastadoCuenta guardado en la tienda para evitar múltiples llamadas
 async function calcularGastadoCuenta(tiendaId) {
-    const pedidos = await db.getPedidosByTienda(tiendaId);
-    let gastado = 0;
-    
-    for (const pedido of pedidos) {
-        // Contar pedidos con estadoPago = 'Pago A cuenta' que tengan documento del sistema y no estén completados
-        // NO contar los que tienen transferenciaPDF porque ya están pagados (se descuentan del gastado)
-        if (pedido.estadoPago === 'Pago A cuenta' && pedido.estado !== 'Completado' && pedido.pedidoSistemaPDF && !pedido.transferenciaPDF) {
-            // Usar precioReal si está disponible (precio que escribe la tienda)
-            // Si no existe, calcular el total de los items como fallback
-            let totalPedido = 0;
-            if (pedido.precioReal !== null && pedido.precioReal !== undefined) {
-                totalPedido = Number(pedido.precioReal) || 0;
-            } else {
-                // Fallback: calcular total de items
-                totalPedido = pedido.items.reduce((total, item) => {
-                    const precioItem = item.precio || 0;
-                    const cantidad = item.cantidad || 0;
-                    return total + (precioItem * cantidad);
-                }, 0);
-            }
-            gastado += totalPedido;
-        }
-    }
-    
-    return gastado;
+    // Usar la función centralizada de database.js que maneja cache automáticamente
+    return await db.getGastadoCuenta(tiendaId, true);
 }
 
 async function createTiendaCardAdmin(tienda) {

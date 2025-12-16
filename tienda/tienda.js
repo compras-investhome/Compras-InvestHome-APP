@@ -1864,6 +1864,7 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
             return;
         }
         
+        const estadoAnterior = pedido.estadoPago;
         pedido.estadoPago = nuevoEstado;
         
         // Si se marca como "Pago A cuenta", inicializar estado logístico
@@ -1874,6 +1875,13 @@ window.updateEstadoPagoTienda = async function(pedidoId, nuevoEstado) {
         await db.update('pedidos', pedido);
         // Invalidar cache de pedidos para que se vean los cambios inmediatamente
         invalidatePedidosByTiendaCache(pedido.tiendaId);
+        
+        // Actualizar gastado de cuenta si el estado cambió a/desde "Pago A cuenta"
+        const tienda = await db.get('tiendas', pedido.tiendaId);
+        if (tienda && tienda.tieneCuenta && 
+            (estadoAnterior === 'Pago A cuenta' || nuevoEstado === 'Pago A cuenta')) {
+            await db.actualizarGastadoCuentaTienda(pedido.tiendaId);
+        }
 
         // NO recargar pestañas automáticamente aquí
         // El pedido solo se moverá cuando se adjunte el pedido real
@@ -2050,6 +2058,12 @@ window.guardarPrecioRealTienda = async function(pedidoId, inputId) {
 
         const estadoPago = pedido.estadoPago || 'Sin Asignar';
         const tienePedidoReal = Boolean(pedido.pedidoSistemaPDF);
+        
+        // Actualizar gastado de cuenta si el pedido tiene "Pago A cuenta"
+        const tienda = await db.get('tiendas', pedido.tiendaId);
+        if (tienda && tienda.tieneCuenta && estadoPago === 'Pago A cuenta') {
+            await db.actualizarGastadoCuentaTienda(pedido.tiendaId);
+        }
         
         // Verificar si se cumplen todas las condiciones para mover el pedido
         if ((estadoPago === 'Pendiente de pago' || estadoPago === 'Pago A cuenta') && tienePedidoReal) {
