@@ -4654,7 +4654,7 @@ function setupTecnicoEventListeners() {
             return;
         }
         navItems.forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
             const viewName = e.currentTarget.dataset.view;
