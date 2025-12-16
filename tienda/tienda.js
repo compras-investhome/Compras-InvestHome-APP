@@ -46,7 +46,14 @@ function isCacheValid(collectionName, key = null) {
     }
 }
 
-// Invalidar cache de pedidos por tienda
+// Invalidar todo el cache de pedidos (útil cuando no sabemos la tienda)
+function invalidateAllPedidosCache() {
+    tiendaCache.pedidosByTienda.clear();
+    tiendaCache.solicitudesModificacion.clear();
+    tiendaCache.solicitudesAnulacion.clear();
+}
+
+// Invalidar cache de pedidos de una tienda específica y resetear timestamps
 function invalidatePedidosByTiendaCache(tiendaId) {
     if (tiendaCache.pedidosByTienda.has(tiendaId)) {
         tiendaCache.pedidosByTienda.delete(tiendaId);
@@ -58,18 +65,6 @@ function invalidatePedidosByTiendaCache(tiendaId) {
     if (tiendaCache.solicitudesAnulacion.has(tiendaId)) {
         tiendaCache.solicitudesAnulacion.delete(tiendaId);
     }
-}
-
-// Invalidar todo el cache de pedidos (útil cuando no sabemos la tienda)
-function invalidateAllPedidosCache() {
-    tiendaCache.pedidosByTienda.clear();
-    tiendaCache.solicitudesModificacion.clear();
-    tiendaCache.solicitudesAnulacion.clear();
-}
-
-// Invalidar cache de pedidos de una tienda específica y resetear timestamps
-function invalidatePedidosByTiendaCache(tiendaId) {
-    tiendaCache.pedidosByTienda.delete(tiendaId);
     // Resetear todos los timestamps de pestañas
     if (tiendaCache.tabTimestamps) {
         Object.keys(tiendaCache.tabTimestamps).forEach(tab => {
@@ -621,7 +616,7 @@ async function loadPedidosPendientesPago() {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const pedidos = await db.getPedidosByTienda(tiendaId);
+    const pedidos = await getPedidosByTiendaCached(tiendaId);
     
     // Pedidos con estadoPago = "Pendiente de pago", pedido real adjunto y precio real asignado
     const pedidosPendientes = pedidos.filter(p => {
@@ -724,7 +719,7 @@ async function loadPedidosPagoCuentaTienda(estadoLogistico) {
     if (!currentTienda) return;
     
     const tiendaId = currentTienda.id;
-    const pedidos = await db.getPedidosByTienda(tiendaId);
+    const pedidos = await getPedidosByTiendaCached(tiendaId);
     
     // Pedidos con estadoPago = "Pago A cuenta", pedido real adjunto y precio real asignado
     // EXCLUIR pedidos que tengan factura adjuntada Y estado entregado

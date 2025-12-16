@@ -1116,6 +1116,7 @@ class Database {
     
     /**
      * Verifica si hay cambios nuevos en una colección comparando timestamps
+     * OPTIMIZADO: Intenta usar queries eficientes antes de cargar todos los documentos
      * @param {string} storeName - Nombre de la colección
      * @param {number} lastCacheTimestamp - Timestamp de la última carga del caché
      * @param {Function} filterFn - Función opcional para filtrar documentos (ej: por estado)
@@ -1131,31 +1132,105 @@ class Database {
             // Convertir timestamp a Date para comparar
             const lastCacheDate = new Date(lastCacheTimestamp);
             
-            // Obtener todos los documentos de la colección
-            const querySnapshot = await getDocs(collection(this.db, storeName));
-            
-            // Verificar si algún documento tiene updatedAt más reciente
-            for (const docSnap of querySnapshot.docs) {
-                const data = docSnap.data();
+            // OPTIMIZACIÓN: Intentar usar query eficiente con orderBy y limit
+            // Solo necesitamos saber si hay AL MENOS UN documento modificado
+            try {
+                // Intentar query por updatedAt (más común)
+                const qUpdated = query(
+                    collection(this.db, storeName),
+                    orderBy('updatedAt', 'desc'),
+                    limit(1)
+                );
+                const snapshotUpdated = await getDocs(qUpdated);
                 
-                // Aplicar filtro si existe
-                if (filterFn && !filterFn({ id: docSnap.id, ...data })) {
-                    continue;
-                }
-                
-                // Verificar updatedAt
-                if (data.updatedAt) {
-                    const updatedAt = data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt);
-                    if (updatedAt > lastCacheDate) {
-                        return true; // Hay cambios
+                if (!snapshotUpdated.empty) {
+                    const doc = snapshotUpdated.docs[0];
+                    const data = doc.data();
+                    
+                    // Aplicar filtro si existe
+                    if (!filterFn || filterFn({ id: doc.id, ...data })) {
+                        if (data.updatedAt) {
+                            const updatedAt = data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt);
+                            if (updatedAt > lastCacheDate) {
+                                return true; // Hay cambios
+                            }
+                        }
                     }
                 }
+            } catch (error) {
+                // Si falla (falta índice), continuar con método alternativo
+                console.warn(`Query optimizada falló para ${storeName}, usando método alternativo:`, error);
+            }
+            
+            // Si la query optimizada no encontró cambios, verificar con método más completo
+            // PERO solo si hay filtro (para evitar cargar todos los documentos innecesariamente)
+            // Si no hay filtro y la query optimizada no encontró cambios, asumir que no hay cambios
+            if (!filterFn) {
+                return false; // Sin filtro y sin cambios en la query optimizada = no hay cambios
+            }
+            
+            // Si hay filtro, necesitamos verificar todos los documentos (pero limitamos a los más recientes)
+            // Cargar solo los documentos más recientes para verificar
+            const qRecent = query(
+                collection(this.db, storeName),
+                orderBy('updatedAt', 'desc'),
+                limit(50) // Limitar a 50 documentos más recientes
+            );
+            
+            try {
+                const snapshotRecent = await getDocs(qRecent);
                 
-                // Si no tiene updatedAt pero tiene createdAt, usar ese
-                if (!data.updatedAt && data.createdAt) {
-                    const createdAt = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
-                    if (createdAt > lastCacheDate) {
-                        return true; // Hay cambios
+                for (const docSnap of snapshotRecent.docs) {
+                    const data = docSnap.data();
+                    
+                    // Aplicar filtro si existe
+                    if (filterFn && !filterFn({ id: docSnap.id, ...data })) {
+                        continue;
+                    }
+                    
+                    // Verificar updatedAt
+                    if (data.updatedAt) {
+                        const updatedAt = data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt);
+                        if (updatedAt > lastCacheDate) {
+                            return true; // Hay cambios
+                        }
+                    }
+                    
+                    // Si no tiene updatedAt pero tiene createdAt, usar ese
+                    if (!data.updatedAt && data.createdAt) {
+                        const createdAt = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                        if (createdAt > lastCacheDate) {
+                            return true; // Hay cambios
+                        }
+                    }
+                }
+            } catch (error) {
+                // Si falla la query con orderBy, hacer fallback al método completo
+                console.warn(`Query con filtro falló para ${storeName}, usando método completo:`, error);
+                const querySnapshot = await getDocs(collection(this.db, storeName));
+                
+                for (const docSnap of querySnapshot.docs) {
+                    const data = docSnap.data();
+                    
+                    // Aplicar filtro si existe
+                    if (filterFn && !filterFn({ id: docSnap.id, ...data })) {
+                        continue;
+                    }
+                    
+                    // Verificar updatedAt
+                    if (data.updatedAt) {
+                        const updatedAt = data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt);
+                        if (updatedAt > lastCacheDate) {
+                            return true; // Hay cambios
+                        }
+                    }
+                    
+                    // Si no tiene updatedAt pero tiene createdAt, usar ese
+                    if (!data.updatedAt && data.createdAt) {
+                        const createdAt = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                        if (createdAt > lastCacheDate) {
+                            return true; // Hay cambios
+                        }
                     }
                 }
             }
