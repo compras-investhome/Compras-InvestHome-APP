@@ -2562,6 +2562,8 @@ async function switchTabTienda(tab) {
             if (currentTienda && currentTienda.id) {
                 invalidatePedidosByTiendaCache(currentTienda.id);
             }
+            // Resetear timestamp para forzar recarga completa
+            tiendaCache.tabTimestamps[tab] = 0;
         }
     }
     
@@ -2765,6 +2767,34 @@ function setupTiendaEventListeners() {
         }
     });
 
+    // Escuchar eventos de pedido creado
+    window.addEventListener('pedidoCreado', async (e) => {
+        const { pedidoId, pedidoData } = e.detail;
+        if (!currentTienda || !currentTienda.id) return;
+        
+        // Si el pedido pertenece a esta tienda, invalidar cache y recargar
+        if (pedidoData && pedidoData.tiendaId === currentTienda.id) {
+            // Invalidar cache de pedidos
+            invalidatePedidosByTiendaCache(currentTienda.id);
+            
+            // Resetear timestamps de todas las pestañas para forzar recarga
+            const pedidosTabs = ['seleccionar-pago', 'pendientes-pago', 'pagados', 'pago-cuenta'];
+            pedidosTabs.forEach(tab => {
+                tiendaCache.tabTimestamps[tab] = 0;
+            });
+            
+            // Recargar pestaña activa si es una de pedidos
+            const activeTab = document.querySelector('#tienda-gestion-view .tab-btn.active');
+            if (activeTab) {
+                const activeTabName = activeTab.dataset.tab;
+                const affectedTabs = ['pendientes-pago', 'pagados', 'pago-cuenta', 'seleccionar-pago'];
+                if (affectedTabs.includes(activeTabName)) {
+                    await switchTabTienda(activeTabName);
+                }
+            }
+        }
+    });
+
     // Escuchar eventos genéricos de actualización de pedido
     window.addEventListener('pedidoActualizado', async (e) => {
         const { pedidoId, cambios } = e.detail;
@@ -2778,11 +2808,16 @@ function setupTiendaEventListeners() {
                 if (cambios.estadoPago || cambios.transferenciaPDF) {
                     invalidatePedidosByTiendaCache(currentTienda.id);
                     
+                    // Resetear timestamps de pestañas afectadas
+                    const affectedTabs = ['pendientes-pago', 'pagados', 'pago-cuenta', 'seleccionar-pago'];
+                    affectedTabs.forEach(tab => {
+                        tiendaCache.tabTimestamps[tab] = 0;
+                    });
+                    
                     // Recargar pestañas relevantes si están activas
                     const activeTab = document.querySelector('#tienda-gestion-view .tab-btn.active');
                     if (activeTab) {
                         const activeTabName = activeTab.dataset.tab;
-                        const affectedTabs = ['pendientes-pago', 'pagados', 'pago-cuenta', 'seleccionar-pago'];
                         if (affectedTabs.includes(activeTabName)) {
                             await switchTabTienda(activeTabName);
                         }

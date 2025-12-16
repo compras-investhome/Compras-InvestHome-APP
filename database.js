@@ -266,6 +266,12 @@ class Database {
         // Invalidar cache de getAll para esta colección
         this.getAllCache.delete(storeName);
         
+        // Si es un pedido, disparar evento para que otros módulos se actualicen
+        if (storeName === 'pedidos') {
+            // Pasar los datos originales (data) más el ID, no docData que puede tener serverTimestamp sin resolver
+            this.dispatchPedidoCreatedEvent(docRef.id, { ...data, id: docRef.id });
+        }
+        
         console.log(`[DB] Creado ${storeName} con ID: ${docRef.id}`);
         return docRef.id;
     }
@@ -1251,6 +1257,17 @@ class Database {
     dispatchPedidoUpdatedEvent(pedidoId, cambios = {}) {
         window.dispatchEvent(new CustomEvent('pedidoActualizado', {
             detail: { pedidoId, cambios, timestamp: Date.now() }
+        }));
+    }
+
+    /**
+     * Dispara un evento personalizado cuando se crea un pedido
+     * @param {string} pedidoId - ID del pedido creado
+     * @param {Object} pedidoData - Datos del pedido creado
+     */
+    dispatchPedidoCreatedEvent(pedidoId, pedidoData = {}) {
+        window.dispatchEvent(new CustomEvent('pedidoCreado', {
+            detail: { pedidoId, pedidoData, timestamp: Date.now() }
         }));
     }
 

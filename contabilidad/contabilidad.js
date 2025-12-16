@@ -507,6 +507,7 @@ async function switchTabContabilidad(tab) {
         
         if (hasChanges) {
             invalidatePedidosCache();
+            // Resetear timestamp para forzar recarga completa
             contabilidadCache.tabTimestamps[tab] = 0;
         }
     } else if (pedidosEspecialesTabs.includes(tab)) {
@@ -515,6 +516,7 @@ async function switchTabContabilidad(tab) {
         
         if (hasChanges) {
             invalidatePedidosEspecialesCache();
+            // Resetear timestamp para forzar recarga completa
             contabilidadCache.tabTimestamps[tab] = 0;
         }
     }
@@ -2080,6 +2082,29 @@ function setupContabilidadEventListeners() {
         const activeTab = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
         if (activeTab) {
             await switchTabContabilidad(activeTab.dataset.tab);
+        }
+    });
+
+    // Escuchar eventos de pedido creado
+    window.addEventListener('pedidoCreado', async (e) => {
+        const { pedidoId, pedidoData } = e.detail;
+        
+        // Invalidar cache de pedidos cuando se crea uno nuevo
+        invalidatePedidosCache();
+        
+        // Resetear timestamps de todas las pestañas de pedidos para forzar recarga
+        const pedidosTabs = ['pendientes-pago-contabilidad', 'historico-contabilidad', 'facturas-pendientes-contabilidad'];
+        pedidosTabs.forEach(tab => {
+            contabilidadCache.tabTimestamps[tab] = 0;
+        });
+        
+        // Recargar pestaña activa si es una de pedidos
+        const activeTab = document.querySelector('#contabilidad-gestion-view .tab-btn.active');
+        if (activeTab) {
+            const activeTabName = activeTab.dataset.tab;
+            if (pedidosTabs.includes(activeTabName)) {
+                await switchTabContabilidad(activeTabName);
+            }
         }
     });
 
